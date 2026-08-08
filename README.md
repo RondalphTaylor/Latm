@@ -173,6 +173,12 @@ cmd /c npm run build
 
 `.github/workflows/ci.yml` runs on pull requests and pushes to `main`. It checks backend tests, linting, formatting, typing, and migrations; frontend linting, typing, and production build; and Docker Compose configuration. CI uses only a temporary PostgreSQL service and paper mode.
 
+## Git publication workflow
+
+After each completed and verified phase—or another coherent, independently reviewable change—stage only the files that belong to that change, create a focused local commit, and push the resulting commit to the configured GitHub remote. Do not leave completed work only in the local repository.
+
+Use concise conventional commit messages where practical. Keep unrelated changes in separate commits, never commit secrets or generated caches, and do not push changes while relevant validation is failing. Direct pushes are appropriate for this repository's current single-owner workflow; use a feature branch and pull request when branch protection, collaboration, review requirements, or the risk of the change makes that safer. If remote authentication or authorization is unavailable, stop and request the required access instead of silently leaving the commit unpublished.
+
 ## Repository structure
 
 ```text
