@@ -1,0 +1,1 @@
+"""LATM backend application package."""

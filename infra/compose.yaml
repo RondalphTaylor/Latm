@@ -1,0 +1,102 @@
+name: latm
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-latm}
+      POSTGRES_USER: ${POSTGRES_USER:-latm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-latm}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ../backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-latm}:${POSTGRES_PASSWORD:-latm}@db:5432/${POSTGRES_DB:-latm}
+      TRADING_MODE: ${TRADING_MODE:-paper}
+      PREDICTION_MARKET_PROVIDER: ${PREDICTION_MARKET_PROVIDER:-kalshi}
+      KALSHI_API_BASE_URL: ${KALSHI_API_BASE_URL:-https://external-api.kalshi.com/trade-api/v2}
+      PROVIDER_REQUEST_TIMEOUT_SECONDS: ${PROVIDER_REQUEST_TIMEOUT_SECONDS:-10}
+      PROVIDER_MAX_RETRIES: ${PROVIDER_MAX_RETRIES:-2}
+      PROVIDER_MAX_PAGES: ${PROVIDER_MAX_PAGES:-50}
+      SPORTS_DATA_PROVIDER: ${SPORTS_DATA_PROVIDER:-balldontlie}
+      BALLDONTLIE_API_KEY: ${BALLDONTLIE_API_KEY:-}
+      BALLDONTLIE_API_BASE_URL: ${BALLDONTLIE_API_BASE_URL:-https://api.balldontlie.io/v1}
+      SPORTS_PROVIDER_MAX_PAGES: ${SPORTS_PROVIDER_MAX_PAGES:-10}
+      SPORTS_PROVIDER_REQUEST_INTERVAL_SECONDS: ${SPORTS_PROVIDER_REQUEST_INTERVAL_SECONDS:-12.1}
+      MATCHING_MIN_CONFIDENCE: ${MATCHING_MIN_CONFIDENCE:-0.90}
+      MATCHING_AMBIGUITY_MARGIN: ${MATCHING_AMBIGUITY_MARGIN:-0.10}
+      MATCHING_TIME_WINDOW_HOURS: ${MATCHING_TIME_WINDOW_HOURS:-36}
+    command:
+      - sh
+      - -c
+      - alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ../backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    init: true
+
+  frontend:
+    build:
+      context: ../frontend
+      target: development
+    environment:
+      TRADING_MODE: ${TRADING_MODE:-paper}
+    command:
+      - npm
+      - run
+      - dev
+      - --
+      - --hostname
+      - 0.0.0.0
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    volumes:
+      - ../frontend:/app
+      - frontend_node_modules:/app/node_modules
+      - frontend_next:/app/.next
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://localhost:3000').then((response) => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    init: true
+
+volumes:
+  postgres_data:
+  frontend_node_modules:
+  frontend_next:
