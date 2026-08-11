@@ -126,6 +126,32 @@ The local database still has no BALLDONTLIE events because no API key is configu
 
 The base forecast is independent research output. A high probability is not a trade recommendation or approval, and `TRADING_MODE=paper` remains the only execution setting.
 
+## Phase 5: Opportunity Detection
+
+**Status:** Complete
+**Completed:** 2026-08-11
+
+Phase 5 introduced the first deterministic market-versus-model comparison pipeline without adding position sizing, risk approval, or execution.
+
+Completed opportunity capabilities:
+
+- provider-neutral raw-edge V1 using `model_probability - direct_side_ask_probability`
+- independent YES and NO evaluation from direct executable asks, with no bid, last-price, midpoint, complement, or cross-snapshot substitution
+- conservative binary event-winner outcome orientation against the two matched event teams, with explicit rejection of propositions and ambiguous semantics
+- newest-snapshot-first selection for match decisions, prices, and exact-current-version operational Elo forecasts, preventing fallback to older favorable evidence
+- active-market, eligible-match, upcoming-event, timestamp, freshness, semantic event-change, probability-bound, and internally consistent book gates; observation-only refreshes do not invalidate forecasts
+- configurable 3-point `WATCH` and 8-point `TRADE_CANDIDATE` thresholds, 15-minute price freshness, and 24-hour forecast freshness
+- fingerprinted effective policy versions and six-decimal signed edge calculations
+- append-only `opportunities` records with exact source IDs and snapshots, mapping and input fingerprints, threshold configuration, ages, validity deadlines, and research classifications
+- stable semantic UUIDs and idempotent exact reruns; changed prices, forecasts, matches, orientations, or policies preserve history
+- bounded local-only run, current/latest/history list, detail, and per-market history APIs with audited status and skip counts; current results suppress expired or superseded records even without a replacement
+
+Migration `0006_opportunities` was applied to PostgreSQL and Alembic reported no schema drift. The complete backend suite passed with 176 tests, including PostgreSQL transaction tests proving separate YES/NO persistence, exact-rerun idempotence, append-on-price-change history, suppression by a newer ineligible match, and current-list invalidation. Ruff, strict mypy, and dependency validation also passed.
+
+The current local database has no event matches or operational forecasts, and its existing market prices are stale, so a live local opportunity run safely produces no records. Fixture-backed PostgreSQL validation exercised the complete market-to-opportunity path.
+
+`TRADE_CANDIDATE` is a research label only. It cannot size a position, create or approve a trade, access an account, bypass a risk engine, or execute an order. `TRADING_MODE=paper` remains the only execution setting.
+
 ## Next phase
 
-Phase 5 should compare current independent base probabilities against persisted prediction-market prices and record auditable YES/NO opportunity candidates. It must not place trades or bypass future risk controls.
+Phase 6 should introduce a simulated bankroll and versioned position-sizing proposals. It must consume opportunity outputs through explicit safety boundaries and still must not implement real-money trading.

@@ -4,7 +4,7 @@ from decimal import Decimal
 from enum import StrEnum
 from functools import lru_cache
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -55,6 +55,34 @@ class Settings(BaseSettings):
         default=Decimal("0.10"), ge=Decimal("0"), le=Decimal("1")
     )
     matching_time_window_hours: int = Field(default=36, ge=1, le=168)
+    opportunity_watch_min_raw_edge: Decimal = Field(
+        default=Decimal("0.03"),
+        ge=Decimal("0"),
+        le=Decimal("1"),
+        decimal_places=6,
+    )
+    opportunity_trade_candidate_min_raw_edge: Decimal = Field(
+        default=Decimal("0.08"),
+        ge=Decimal("0"),
+        le=Decimal("1"),
+        decimal_places=6,
+    )
+    opportunity_max_market_price_age_seconds: int = Field(
+        default=900,
+        ge=1,
+        le=86400,
+    )
+    opportunity_max_operational_forecast_age_seconds: int = Field(
+        default=86400,
+        ge=1,
+        le=604800,
+    )
+
+    @model_validator(mode="after")
+    def validate_opportunity_thresholds(self) -> Settings:
+        if self.opportunity_watch_min_raw_edge >= self.opportunity_trade_candidate_min_raw_edge:
+            raise ValueError("opportunity watch threshold must be below trade-candidate threshold")
+        return self
 
 
 @lru_cache

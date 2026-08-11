@@ -1,6 +1,6 @@
 # LATM Prediction Market Platform
 
-An auditable prediction-market research platform focused initially on NBA markets. The current MVP ingests read-only Kalshi market data and authenticated BALLDONTLIE NBA data, deterministically links supported single-game contracts to normalized events, and generates versioned event-level Elo base forecasts from local game history.
+An auditable prediction-market research platform focused initially on NBA markets. The current MVP ingests read-only Kalshi market data and authenticated BALLDONTLIE NBA data, deterministically links supported single-game contracts to normalized events, generates versioned event-level Elo base forecasts from local game history, and records research-only YES/NO raw-edge opportunities from fresh local snapshots.
 
 > **Trading safety:** the only supported execution mode is `paper`. The Kalshi adapter accesses public production market data without credentials, while the BALLDONTLIE key authorizes sports-data reads only. Neither adapter contains order placement, financial-account access, or live-trading implementation.
 
@@ -119,6 +119,29 @@ Invoke-RestMethod "http://localhost:8000/forecasts/model-versions"
 
 Identical model, event, and training inputs reproduce the same probabilities and semantic fingerprints and do not create duplicates. Corrected or newly backfilled prior results append a new snapshot instead of overwriting history. The current historical replay uses scheduled game time because the normalized schema does not yet preserve when each historical result first became available; it is suitable for deterministic model evaluation, not a claim of contemporaneous data availability.
 
+## Opportunity detection
+
+Compare the newest eligible local market, match, event, and operational forecast snapshots:
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8000/opportunities/run?start_date=2026-08-01&end_date=2026-08-07"
+```
+
+Inspect current classifications, complete history, or one market:
+
+```powershell
+Invoke-RestMethod "http://localhost:8000/opportunities?latest_only=true"
+Invoke-RestMethod "http://localhost:8000/opportunities?latest_only=false&current_only=false&status=watch&direction=yes"
+Invoke-RestMethod "http://localhost:8000/opportunities/<opportunity-uuid>"
+Invoke-RestMethod "http://localhost:8000/markets/<market-uuid>/opportunities"
+```
+
+Raw-edge V1 compares the independent team-win probability with that contract side's direct executable ask: `raw_edge = model_probability - side_ask_probability`. It evaluates YES and NO independently, records edges to six decimal places, and defaults to `IGNORE` below 3 percentage points, `WATCH` from 3 to below 8 points, and `TRADE_CANDIDATE` at 8 points or more. Thresholds and freshness limits are configurable through the `OPPORTUNITY_*` settings and are fingerprinted into every effective strategy version.
+
+The engine never substitutes bids, last prices, midpoints, complements, older snapshots, or a different forecast-model version. It skips stale, future, internally inconsistent, boundary-priced, unmatched, postponed, started, closed, semantically changed, or ambiguously oriented inputs and reports skip counts. An observation-only sports refresh does not invalidate a forecast, while a schedule, team, or status change requires regeneration. Identical semantic inputs are idempotent; a changed price, forecast, match, orientation, or policy appends history.
+
+`GET /opportunities` defaults to `current_only=true`: expired records or records superseded by a newer price, match, or same-model forecast are suppressed even when the newer source cannot produce a replacement. Use `current_only=false` for audit history. `TRADE_CANDIDATE` is only a research classification; it is not a proposal, approval, order, or execution instruction.
+
 ## Backend development
 
 Backend packaging uses the standard PEP 621 `pyproject.toml` format with bounded dependency ranges and pip/venv. This keeps Phase 0's bootstrap toolchain small and works identically on the host, in Docker, and in CI without requiring Poetry or another package manager.
@@ -188,4 +211,4 @@ infra/compose.yaml    Backend, frontend, and PostgreSQL development stack
 docs/                 Product, architecture, safety, and progress documentation
 ```
 
-See `AGENTS.md`, `ARCHITECTURE.md`, and `ROADMAP.md` for project constraints and phased scope. Opportunity detection and all trading behavior remain intentionally unimplemented. The next roadmap target is Phase 5.
+See `AGENTS.md`, `ARCHITECTURE.md`, and `ROADMAP.md` for project constraints and phased scope. Position sizing and all trading behavior remain intentionally unimplemented. The next roadmap target is Phase 6.

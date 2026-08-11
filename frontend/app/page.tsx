@@ -15,8 +15,8 @@ export default function HomePage() {
         <p className="eyebrow">LATM</p>
         <h1 id="status-title">Application is running</h1>
         <p className="summary">
-          The Phase 4 MVP is online with deterministic NBA Elo forecasting and its safe default
-          mode.
+          The Phase 5 MVP is online with auditable NBA raw-edge opportunity detection and its
+          safe default mode.
         </p>
 
         <dl className="status-list">
@@ -34,6 +34,10 @@ export default function HomePage() {
           <div>
             <dt>Base model</dt>
             <dd>NBA Elo V1</dd>
+          </div>
+          <div>
+            <dt>Opportunity strategy</dt>
+            <dd>Directional raw edge V1</dd>
           </div>
         </dl>
 

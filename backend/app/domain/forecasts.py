@@ -110,6 +110,7 @@ class BaseForecast(BaseModel):
     model_name: str = Field(min_length=1, max_length=50)
     model_version: str = Field(min_length=1, max_length=100)
     configuration_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_event_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
     training_data_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
     input_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
     purpose: ForecastPurpose

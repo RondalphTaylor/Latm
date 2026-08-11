@@ -9,6 +9,7 @@ from app.api.forecasts import router as forecasts_router
 from app.api.health import router as health_router
 from app.api.markets import router as markets_router
 from app.api.matching import router as matching_router
+from app.api.opportunities import router as opportunities_router
 from app.api.sports import router as sports_router
 from app.db.session import dispose_engine
 
@@ -24,7 +25,7 @@ def create_app() -> FastAPI:
     """Build and configure the FastAPI application."""
     application = FastAPI(
         title="LATM API",
-        version="0.5.0",
+        version="0.6.0",
         lifespan=lifespan,
     )
     application.include_router(health_router)
@@ -32,6 +33,7 @@ def create_app() -> FastAPI:
     application.include_router(sports_router)
     application.include_router(matching_router)
     application.include_router(forecasts_router)
+    application.include_router(opportunities_router)
     return application
 
 

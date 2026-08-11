@@ -207,6 +207,7 @@ class ForecastRepository:
         features: dict[str, object] = {
             "model_configuration": configuration.model_dump(mode="json"),
             "configuration_fingerprint": forecast.configuration_fingerprint,
+            "source_event_fingerprint": forecast.source_event_fingerprint,
             "training_data_fingerprint": forecast.training_data_fingerprint,
             "home_team_rating": str(forecast.home_team_rating),
             "away_team_rating": str(forecast.away_team_rating),

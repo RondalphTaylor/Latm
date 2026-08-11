@@ -16,6 +16,7 @@ from app.models import (  # noqa: F401
     MarketOutcomeRecord,
     MarketPriceRecord,
     ModelVersionRecord,
+    OpportunityRecord,
     PredictionMarketRecord,
     Provider,
     SportsEventRecord,

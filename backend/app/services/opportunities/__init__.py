@@ -1,0 +1,1 @@
+"""Deterministic opportunity detection services."""

@@ -760,6 +760,16 @@ The system should make the method versioned and reproducible.
 
 The opportunity engine compares internal forecasts with market prices.
 
+The Phase 5 implementation is a deterministic, provider-neutral raw-edge engine. It consumes only locally persisted normalized data and the exact current `nba_elo` operational model identity. For each supported binary event-winner contract it resolves YES and NO to the matched event teams, then evaluates each side independently:
+
+```text
+raw_edge = model_team_win_probability - direct_side_ask_probability
+```
+
+Only direct `yes_ask` and `no_ask` values are supported. Bids, last prices, midpoints, cross-snapshot fields, and inferred complements are not substituted. The newest match, price, and forecast snapshots are selected before safety checks, so stale or ineligible current data cannot fall back to older favorable evidence.
+
+Runs require an active market, a latest eligible match, an upcoming scheduled non-postponed event, a fresh internally consistent price book, a fresh operational forecast from the exact configured model version, and an unambiguous outcome-to-team mapping. Forecasts store a semantic event fingerprint over schedule, teams, and status; observation-only refresh timestamps are excluded. Every accepted side stores the exact source identifiers and snapshot, mapping and policy fingerprints, price and forecast ages, a conservative validity deadline, the signed six-decimal edge, and its classification.
+
 Input:
 
 ```text
@@ -787,13 +797,13 @@ An opportunity may include:
 * suggested direction
 * opportunity status
 
-Possible statuses:
+Phase 5 statuses are:
 
 * IGNORE
 * WATCH
-* TRADE
+* TRADE_CANDIDATE
 
-The opportunity engine does not execute trades.
+Thresholds and freshness limits are typed configuration and are fingerprinted into the effective strategy version. Opportunity rows are append-only and semantically idempotent: an exact rerun creates no duplicate, while a changed source snapshot or policy appends history. The default list is current-only and suppresses expired rows or rows whose price, match, or same-model forecast is no longer newest; audit history remains available explicitly. Latest history is partitioned by market, direction, strategy version, and model version so version filters do not resurrect stale statuses or hide the requested model's latest row. `TRADE_CANDIDATE` conveys no trading authority. The opportunity engine has no provider call, order, portfolio, approval, risk, or execution path.
 
 ---
 
@@ -1151,6 +1161,10 @@ GET /forecasts/{id}
 
 GET /opportunities
 
+GET /opportunities/{id}
+
+GET /markets/{id}/opportunities
+
 GET /positions
 
 GET /trades
@@ -1167,6 +1181,8 @@ POST /approvals/{id}/approve
 
 POST /approvals/{id}/reject
 ```
+
+The current research mutation is `POST /opportunities/run`, a bounded local-only comparison run. It writes audit records but cannot create a trade.
 
 API design should use typed request and response schemas.
 

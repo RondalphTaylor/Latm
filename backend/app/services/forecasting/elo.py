@@ -44,6 +44,26 @@ def effective_model_version(configuration: EloConfiguration) -> str:
     return f"{configuration.code_version}+cfg.{fingerprint[:12]}"
 
 
+def source_event_fingerprint(
+    *,
+    event_id: UUID,
+    scheduled_start_time: datetime,
+    home_team_id: UUID,
+    away_team_id: UUID,
+    event_status: str,
+) -> str:
+    """Hash forecast-relevant event semantics, excluding observation time."""
+    return _canonical_hash(
+        {
+            "event_id": str(event_id),
+            "scheduled_start_time": scheduled_start_time.isoformat(),
+            "home_team_id": str(home_team_id),
+            "away_team_id": str(away_team_id),
+            "event_status": event_status,
+        }
+    )
+
+
 class EloForecastModel:
     """Leakage-free deterministic NBA Elo V1 implementation."""
 
@@ -191,6 +211,13 @@ class EloForecastModel:
             home_probability = self.home_win_probability(home_rating, away_rating)
             away_probability = Decimal("1.000000") - home_probability
             training_fingerprint = training_hasher.hexdigest()
+            event_fingerprint = source_event_fingerprint(
+                event_id=target.event_id,
+                scheduled_start_time=target.scheduled_start_time,
+                home_team_id=target.home_team_id,
+                away_team_id=target.away_team_id,
+                event_status=target.event_status,
+            )
             input_fingerprint = _canonical_hash(
                 {
                     "target": {
@@ -198,8 +225,10 @@ class EloForecastModel:
                         "scheduled_start_time": target.scheduled_start_time.isoformat(),
                         "home_team_id": str(target.home_team_id),
                         "away_team_id": str(target.away_team_id),
+                        "event_status": target.event_status,
                         "purpose": target.purpose.value,
                     },
+                    "source_event_fingerprint": event_fingerprint,
                     "configuration_fingerprint": self.configuration_fingerprint,
                     "training_data_fingerprint": training_fingerprint,
                     "home_team_rating": str(home_rating),
@@ -223,6 +252,7 @@ class EloForecastModel:
                     model_name=self.configuration.model_name,
                     model_version=self.model_version,
                     configuration_fingerprint=self.configuration_fingerprint,
+                    source_event_fingerprint=event_fingerprint,
                     training_data_fingerprint=training_fingerprint,
                     input_fingerprint=input_fingerprint,
                     purpose=target.purpose,

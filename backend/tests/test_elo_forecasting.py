@@ -52,16 +52,18 @@ def target(
     cutoff: datetime | None = None,
     home_id: UUID = HOME_ID,
     away_id: UUID = AWAY_ID,
+    event_status: str = "final",
+    source_last_seen_at: datetime | None = None,
 ) -> ForecastTargetInput:
     return ForecastTargetInput(
         event_id=TARGET_ID,
         scheduled_start_time=start,
         home_team_id=home_id,
         away_team_id=away_id,
-        event_status="final",
+        event_status=event_status,
         purpose=ForecastPurpose.HISTORICAL_REPLAY,
         history_cutoff=cutoff or start,
-        source_last_seen_at=start + timedelta(hours=3),
+        source_last_seen_at=source_last_seen_at or start + timedelta(hours=3),
     )
 
 
@@ -155,6 +157,24 @@ def test_semantic_fingerprints_ignore_generation_time_but_change_with_history() 
     assert first.generated_at != rerun.generated_at
     assert changed.input_fingerprint != first.input_fingerprint
     assert changed.home_win_probability != first.home_win_probability
+
+
+def test_event_fingerprint_ignores_refresh_time_but_tracks_semantic_changes() -> None:
+    original_target = target()
+    refreshed_target = target(
+        source_last_seen_at=original_target.source_last_seen_at + timedelta(hours=1)
+    )
+    changed_target = target(event_status="scheduled")
+    model = EloForecastModel()
+
+    original = model.forecast_many((original_target,), ())[0]
+    refreshed = model.forecast_many((refreshed_target,), ())[0]
+    changed = model.forecast_many((changed_target,), ())[0]
+
+    assert original.source_event_fingerprint == refreshed.source_event_fingerprint
+    assert original.input_fingerprint == refreshed.input_fingerprint
+    assert changed.source_event_fingerprint != original.source_event_fingerprint
+    assert changed.input_fingerprint != original.input_fingerprint
 
 
 def test_effective_version_fingerprints_every_configuration_value() -> None:

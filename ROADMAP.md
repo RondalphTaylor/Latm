@@ -410,7 +410,7 @@ Phase 4 is complete when:
 
 # Phase 5: Opportunity Detection
 
-**Implementation status:** Next.
+**Implementation status:** Complete on 2026-08-11. The shipped raw-edge V1 records separate YES and NO comparisons using fresh direct asks, independent current-version Elo forecasts, configurable thresholds, conservative input gating, and append-only audit history.
 
 ## Goal
 

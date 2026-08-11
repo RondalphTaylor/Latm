@@ -27,6 +27,10 @@ def test_trading_mode_defaults_to_paper(monkeypatch: pytest.MonkeyPatch) -> None
     assert settings.matching_min_confidence == Decimal("0.90")
     assert settings.matching_ambiguity_margin == Decimal("0.10")
     assert settings.matching_time_window_hours == 36
+    assert settings.opportunity_watch_min_raw_edge == Decimal("0.03")
+    assert settings.opportunity_trade_candidate_min_raw_edge == Decimal("0.08")
+    assert settings.opportunity_max_market_price_age_seconds == 900
+    assert settings.opportunity_max_operational_forecast_age_seconds == 86400
 
 
 def test_database_url_can_be_loaded_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -85,6 +89,45 @@ def test_invalid_matching_policy_is_rejected(
     value: str,
 ) -> None:
     monkeypatch.setenv(name, value)
+
+    with pytest.raises(ValidationError):
+        Settings(database_url=TEST_DATABASE_URL, _env_file=None)
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("OPPORTUNITY_WATCH_MIN_RAW_EDGE", "-0.01"),
+        ("OPPORTUNITY_TRADE_CANDIDATE_MIN_RAW_EDGE", "1.01"),
+        ("OPPORTUNITY_MAX_MARKET_PRICE_AGE_SECONDS", "0"),
+        ("OPPORTUNITY_MAX_OPERATIONAL_FORECAST_AGE_SECONDS", "604801"),
+    ],
+)
+def test_invalid_opportunity_policy_value_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
+    value: str,
+) -> None:
+    monkeypatch.setenv(name, value)
+
+    with pytest.raises(ValidationError):
+        Settings(database_url=TEST_DATABASE_URL, _env_file=None)
+
+
+def test_opportunity_thresholds_must_be_strictly_ordered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPPORTUNITY_WATCH_MIN_RAW_EDGE", "0.08")
+    monkeypatch.setenv("OPPORTUNITY_TRADE_CANDIDATE_MIN_RAW_EDGE", "0.08")
+
+    with pytest.raises(ValidationError, match="watch threshold"):
+        Settings(database_url=TEST_DATABASE_URL, _env_file=None)
+
+
+def test_opportunity_thresholds_fit_persisted_six_decimal_precision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPPORTUNITY_WATCH_MIN_RAW_EDGE", "0.0300001")
 
     with pytest.raises(ValidationError):
         Settings(database_url=TEST_DATABASE_URL, _env_file=None)
