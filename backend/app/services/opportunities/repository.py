@@ -238,12 +238,14 @@ class OpportunityRepository:
         *,
         latest_only: bool,
         current_only: bool,
+        current_at: datetime | None,
         status: OpportunityStatus | None,
         direction: OpportunityDirection | None,
         market_id: UUID | None,
         sports_event_id: UUID | None,
         model_name: str | None,
         model_version: str | None,
+        opportunity_id: UUID | None,
         limit: int,
         offset: int,
     ) -> list[OpportunityRecord]:
@@ -275,6 +277,7 @@ class OpportunityRepository:
             joinedload(OpportunityRecord.model_version)
         )
         if current_only:
+            current_time = current_at if current_at is not None else func.now()
             latest_price_id = (
                 select(MarketPriceRecord.id)
                 .where(MarketPriceRecord.market_id == OpportunityRecord.market_id)
@@ -316,18 +319,18 @@ class OpportunityRepository:
                     SportsEventRecord.id == OpportunityRecord.sports_event_id,
                 )
                 .where(
-                    OpportunityRecord.valid_until >= func.now(),
+                    OpportunityRecord.valid_until >= current_time,
                     OpportunityRecord.market_price_id == latest_price_id,
                     OpportunityRecord.market_event_match_id == latest_match_id,
                     OpportunityRecord.base_forecast_id == latest_forecast_id,
                     PredictionMarketRecord.status.in_(("active", "open")),
                     or_(
                         PredictionMarketRecord.close_time.is_(None),
-                        PredictionMarketRecord.close_time > func.now(),
+                        PredictionMarketRecord.close_time > current_time,
                     ),
                     SportsEventRecord.status == "scheduled",
                     SportsEventRecord.postponed.is_(False),
-                    SportsEventRecord.scheduled_start_time > func.now(),
+                    SportsEventRecord.scheduled_start_time > current_time,
                 )
             )
         if status is not None:
@@ -342,6 +345,8 @@ class OpportunityRepository:
             statement = statement.where(ModelVersionRecord.model_name == model_name)
         if model_version is not None:
             statement = statement.where(ModelVersionRecord.model_version == model_version)
+        if opportunity_id is not None:
+            statement = statement.where(OpportunityRecord.id == opportunity_id)
         statement = (
             statement.order_by(OpportunityRecord.evaluated_at.desc(), OpportunityRecord.id.desc())
             .limit(limit)

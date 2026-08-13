@@ -134,12 +134,14 @@ def test_list_detail_and_market_history_expose_audit_fields() -> None:
     assert repository.arguments == {
         "latest_only": False,
         "current_only": False,
+        "current_at": None,
         "status": None,
         "direction": None,
         "market_id": MARKET_ID,
         "sports_event_id": None,
         "model_name": None,
         "model_version": None,
+        "opportunity_id": None,
         "limit": 100,
         "offset": 0,
     }

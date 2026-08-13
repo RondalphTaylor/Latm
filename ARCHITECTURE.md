@@ -860,6 +860,10 @@ The position-sizing engine proposes a size.
 
 The risk engine determines whether that proposal is allowed.
 
+Phase 6 implements a deterministic provider-neutral `raw_edge_bands` V1. It accepts only current, unexpired Phase 5 `TRADE_CANDIDATE` rows and an immutable paper-portfolio snapshot. Before persistence, it revalidates opportunity currentness, the semantic event fingerprint, and YES/NO team orientation. The default bands allocate 2% of available bankroll at a raw edge from 0.08 to below 0.12, 5% from 0.12 to below 0.18, and 8% at 0.18 or above. Capital is floored to cents and the stored exposure is calculated from the actual floored capital.
+
+The effective thresholds, fractions, formula, policy fingerprint, exact opportunity identity, source snapshot, and portfolio snapshot are stored with every immutable `position_size_proposals` row. Exact semantic reruns are idempotent; a changed policy creates a new historical proposal. Confidence is explicitly `not_available`. A proposal is advisory and remains `awaiting_risk`; it has no provider-specific quantity and cannot reserve funds, mutate a balance, approve risk, create a trade, or execute.
+
 Conceptually:
 
 ```text
@@ -1018,6 +1022,16 @@ The portfolio model should support both paper and future live accounts.
 
 Paper and live portfolios must remain clearly separated.
 
+Phase 6 exposes only active USD paper portfolios. Creation is idempotent by client key and produces one immutable sequence-zero snapshot. The canonical accounting equations are:
+
+```text
+current_bankroll = starting_bankroll + realized_pnl
+cash_balance = current_bankroll - committed_capital
+available_bankroll = cash_balance - reserved_capital
+```
+
+The initial snapshot sets current bankroll, cash, and available bankroll equal to the configured starting bankroll, with reserved capital, committed capital, and realized P&L at zero. Position sizing reads this snapshot but never appends another snapshot or changes any balance. Later risk and paper-execution phases own reservation and balance transitions.
+
 ---
 
 # 26. Evaluation Architecture
@@ -1085,6 +1099,12 @@ evidence_items
 
 opportunities
 
+portfolios
+
+portfolio_snapshots
+
+position_size_proposals
+
 proposed_trades
 
 risk_decisions
@@ -1092,8 +1112,6 @@ risk_decisions
 trades
 
 positions
-
-portfolio_snapshots
 
 model_versions
 
@@ -1165,6 +1183,16 @@ GET /opportunities/{id}
 
 GET /markets/{id}/opportunities
 
+GET /portfolios
+
+GET /portfolios/{id}
+
+GET /portfolios/{id}/snapshots
+
+GET /position-size-proposals
+
+GET /position-size-proposals/{id}
+
 GET /positions
 
 GET /trades
@@ -1182,7 +1210,7 @@ POST /approvals/{id}/approve
 POST /approvals/{id}/reject
 ```
 
-The current research mutation is `POST /opportunities/run`, a bounded local-only comparison run. It writes audit records but cannot create a trade.
+The current local mutations are `POST /opportunities/run`, idempotent paper-only `POST /portfolios`, and bounded `POST /position-sizing/run`. They write audit records but cannot approve risk, reserve capital, create a trade, or execute.
 
 API design should use typed request and response schemas.
 

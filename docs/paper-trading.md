@@ -81,6 +81,16 @@ The portfolio should track:
 * historical peak value
 * drawdown
 
+Phase 6 establishes the first, deliberately narrower accounting slice. It creates active USD paper portfolios with immutable sequence-zero snapshots and the following canonical equations:
+
+```text
+current_bankroll = starting_bankroll + realized_pnl
+cash_balance = current_bankroll - committed_capital
+available_bankroll = cash_balance - reserved_capital
+```
+
+At creation, current bankroll, cash, and available bankroll equal the starting bankroll, while committed capital, reserved capital, and realized P&L are zero. Phase 6 sizing proposals do not reserve capital or append balance snapshots. Open positions, unrealized P&L, drawdown, settlement, and balance mutations remain later paper-execution work.
+
 Example:
 
 ```text
@@ -248,6 +258,8 @@ A proposed trade should include:
 * timestamp
 
 The proposed trade should then pass through the risk engine.
+
+Phase 6 stops one boundary earlier and stores `position_size_proposals`, not proposed trades. These records contain provider-neutral proposed capital and actual exposure against one exact portfolio snapshot. They remain `awaiting_risk`, contain no contract quantity, and cannot reach execution. Phase 7 may transform a still-valid sizing proposal into a risk decision; Phase 8 owns simulated order and portfolio effects.
 
 ---
 

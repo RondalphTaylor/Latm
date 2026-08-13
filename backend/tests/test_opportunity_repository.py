@@ -79,12 +79,14 @@ def test_latest_list_ranks_before_status_and_model_filters() -> None:
         repository.list_opportunities(
             latest_only=True,
             current_only=True,
+            current_at=None,
             status=OpportunityStatus.WATCH,
             direction=OpportunityDirection.YES,
             market_id=UUID("30000000-0000-0000-0000-000000000001"),
             sports_event_id=None,
             model_name="nba_elo",
             model_version=None,
+            opportunity_id=None,
             limit=25,
             offset=2,
         )

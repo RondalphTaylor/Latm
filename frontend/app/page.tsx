@@ -15,8 +15,8 @@ export default function HomePage() {
         <p className="eyebrow">LATM</p>
         <h1 id="status-title">Application is running</h1>
         <p className="summary">
-          The Phase 5 MVP is online with auditable NBA raw-edge opportunity detection and its
-          safe default mode.
+          The Phase 6 MVP is online with auditable NBA opportunity detection, paper portfolio
+          accounting, and advisory position sizing in its safe default mode.
         </p>
 
         <dl className="status-list">
@@ -38,6 +38,14 @@ export default function HomePage() {
           <div>
             <dt>Opportunity strategy</dt>
             <dd>Directional raw edge V1</dd>
+          </div>
+          <div>
+            <dt>Default paper bankroll</dt>
+            <dd>$1,000</dd>
+          </div>
+          <div>
+            <dt>Position sizing</dt>
+            <dd>Raw-edge bands V1</dd>
           </div>
         </dl>
 

@@ -7,6 +7,11 @@ from app.models.markets import (
 )
 from app.models.matching import MarketEventMatchRecord
 from app.models.opportunities import OpportunityRecord
+from app.models.portfolio import (
+    PortfolioRecord,
+    PortfolioSnapshotRecord,
+    PositionSizeProposalRecord,
+)
 from app.models.sports import SportsEventRecord, TeamRecord
 from app.models.system_metadata import SystemMetadata
 
@@ -16,6 +21,9 @@ __all__ = [
     "MarketPriceRecord",
     "ModelVersionRecord",
     "OpportunityRecord",
+    "PortfolioRecord",
+    "PortfolioSnapshotRecord",
+    "PositionSizeProposalRecord",
     "MarketEventMatchRecord",
     "PredictionMarketRecord",
     "Provider",

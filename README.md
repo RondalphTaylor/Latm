@@ -1,6 +1,6 @@
 # LATM Prediction Market Platform
 
-An auditable prediction-market research platform focused initially on NBA markets. The current MVP ingests read-only Kalshi market data and authenticated BALLDONTLIE NBA data, deterministically links supported single-game contracts to normalized events, generates versioned event-level Elo base forecasts from local game history, and records research-only YES/NO raw-edge opportunities from fresh local snapshots.
+An auditable prediction-market research platform focused initially on NBA markets. The current MVP ingests read-only Kalshi market data and authenticated BALLDONTLIE NBA data, deterministically links supported single-game contracts to normalized events, generates versioned event-level Elo base forecasts from local game history, records research-only YES/NO raw-edge opportunities, and produces versioned advisory capital allocations against an isolated paper bankroll.
 
 > **Trading safety:** the only supported execution mode is `paper`. The Kalshi adapter accesses public production market data without credentials, while the BALLDONTLIE key authorizes sports-data reads only. Neither adapter contains order placement, financial-account access, or live-trading implementation.
 
@@ -142,6 +142,28 @@ The engine never substitutes bids, last prices, midpoints, complements, older sn
 
 `GET /opportunities` defaults to `current_only=true`: expired records or records superseded by a newer price, match, or same-model forecast are suppressed even when the newer source cannot produce a replacement. Use `current_only=false` for audit history. `TRADE_CANDIDATE` is only a research classification; it is not a proposal, approval, order, or execution instruction.
 
+## Paper portfolio and position sizing
+
+Create or idempotently retrieve the default paper portfolio, then size current Phase 5 candidates:
+
+```powershell
+$portfolio = Invoke-RestMethod -Method Post -ContentType "application/json" -Body '{}' "http://localhost:8000/portfolios"
+Invoke-RestMethod -Method Post "http://localhost:8000/position-sizing/run?portfolio_id=$($portfolio.id)"
+```
+
+Inspect balances, immutable snapshots, and advisory proposal history:
+
+```powershell
+Invoke-RestMethod "http://localhost:8000/portfolios"
+Invoke-RestMethod "http://localhost:8000/portfolios/<portfolio-uuid>/snapshots"
+Invoke-RestMethod "http://localhost:8000/position-size-proposals?portfolio_id=<portfolio-uuid>"
+Invoke-RestMethod "http://localhost:8000/position-size-proposals/<proposal-uuid>"
+```
+
+Rules V1 allocates 2% of available bankroll at an 8% raw edge, 5% at 12%, and 8% at 18% or more. Capital is floored to cents and every effective policy is fingerprinted into its strategy version. The default paper bankroll is `$1,000.00`; settings are configurable through `PAPER_STARTING_BANKROLL` and `POSITION_SIZING_*` variables.
+
+Phase 6 proposals are provider-neutral capital amounts in `awaiting_risk` state. They do not represent provider contract quantity, reserve funds, change balances, approve risk, create a trade, or execute an order. Only current, unexpired `TRADE_CANDIDATE` opportunities may be sized, and source currentness plus event and outcome orientation are revalidated before persistence.
+
 ## Backend development
 
 Backend packaging uses the standard PEP 621 `pyproject.toml` format with bounded dependency ranges and pip/venv. This keeps Phase 0's bootstrap toolchain small and works identically on the host, in Docker, and in CI without requiring Poetry or another package manager.
@@ -211,4 +233,4 @@ infra/compose.yaml    Backend, frontend, and PostgreSQL development stack
 docs/                 Product, architecture, safety, and progress documentation
 ```
 
-See `AGENTS.md`, `ARCHITECTURE.md`, and `ROADMAP.md` for project constraints and phased scope. Position sizing and all trading behavior remain intentionally unimplemented. The next roadmap target is Phase 6.
+See `AGENTS.md`, `ARCHITECTURE.md`, and `ROADMAP.md` for project constraints and phased scope. Risk approval and all execution behavior remain intentionally unimplemented. The next roadmap target is Phase 7.

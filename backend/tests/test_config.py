@@ -31,6 +31,14 @@ def test_trading_mode_defaults_to_paper(monkeypatch: pytest.MonkeyPatch) -> None
     assert settings.opportunity_trade_candidate_min_raw_edge == Decimal("0.08")
     assert settings.opportunity_max_market_price_age_seconds == 900
     assert settings.opportunity_max_operational_forecast_age_seconds == 86400
+    assert settings.paper_starting_bankroll == Decimal("1000.00")
+    assert settings.position_sizing_candidate_min_raw_edge == Decimal("0.08")
+    assert settings.position_sizing_strong_min_raw_edge == Decimal("0.12")
+    assert settings.position_sizing_very_strong_min_raw_edge == Decimal("0.18")
+    assert settings.position_sizing_candidate_exposure_fraction == Decimal("0.02")
+    assert settings.position_sizing_strong_exposure_fraction == Decimal("0.05")
+    assert settings.position_sizing_very_strong_exposure_fraction == Decimal("0.08")
+    assert settings.position_sizing_max_exposure_fraction == Decimal("0.08")
 
 
 def test_database_url_can_be_loaded_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -130,4 +138,34 @@ def test_opportunity_thresholds_fit_persisted_six_decimal_precision(
     monkeypatch.setenv("OPPORTUNITY_WATCH_MIN_RAW_EDGE", "0.0300001")
 
     with pytest.raises(ValidationError):
+        Settings(database_url=TEST_DATABASE_URL, _env_file=None)
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("PAPER_STARTING_BANKROLL", "0"),
+        ("PAPER_STARTING_BANKROLL", "1000.001"),
+        ("POSITION_SIZING_CANDIDATE_MIN_RAW_EDGE", "-0.01"),
+        ("POSITION_SIZING_MAX_EXPOSURE_FRACTION", "0.10"),
+        ("POSITION_SIZING_STRONG_EXPOSURE_FRACTION", "0.1234567"),
+    ],
+)
+def test_invalid_portfolio_and_sizing_settings_are_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
+    value: str,
+) -> None:
+    monkeypatch.setenv(name, value)
+
+    with pytest.raises(ValidationError):
+        Settings(database_url=TEST_DATABASE_URL, _env_file=None)
+
+
+def test_position_sizing_settings_must_be_strictly_ordered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("POSITION_SIZING_STRONG_MIN_RAW_EDGE", "0.08")
+
+    with pytest.raises(ValidationError, match="edge bands"):
         Settings(database_url=TEST_DATABASE_URL, _env_file=None)

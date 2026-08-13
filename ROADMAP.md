@@ -501,6 +501,8 @@ Phase 5 is complete when:
 
 # Phase 6: Portfolio and Position Sizing
 
+**Implementation status:** Complete on 2026-08-11. The shipped paper portfolio and raw-edge sizing V1 use immutable accounting snapshots, configurable 2%/5%/8% allocation bands, exact current-candidate revalidation, and append-only advisory proposals that cannot reserve capital or execute.
+
 ## Goal
 
 Create a simulated portfolio and determine how much capital should be allocated to each opportunity.

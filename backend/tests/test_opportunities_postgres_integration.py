@@ -318,24 +318,28 @@ async def _run_integration() -> None:
                 current = await repository.list_opportunities(
                     latest_only=True,
                     current_only=True,
+                    current_at=None,
                     status=None,
                     direction=None,
                     market_id=MARKET_ID,
                     sports_event_id=None,
                     model_name=None,
                     model_version=None,
+                    opportunity_id=None,
                     limit=10,
                     offset=0,
                 )
                 history = await repository.list_opportunities(
                     latest_only=False,
                     current_only=False,
+                    current_at=None,
                     status=None,
                     direction=None,
                     market_id=MARKET_ID,
                     sports_event_id=None,
                     model_name=None,
                     model_version=None,
+                    opportunity_id=None,
                     limit=10,
                     offset=0,
                 )

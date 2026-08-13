@@ -152,6 +152,31 @@ The current local database has no event matches or operational forecasts, and it
 
 `TRADE_CANDIDATE` is a research label only. It cannot size a position, create or approve a trade, access an account, bypass a risk engine, or execute an order. `TRADING_MODE=paper` remains the only execution setting.
 
+## Phase 6: Portfolio and Position Sizing
+
+**Status:** Complete
+**Completed:** 2026-08-11
+
+Phase 6 introduced isolated paper-bankroll accounting and deterministic capital-allocation advice without adding approval or execution.
+
+Completed portfolio and sizing capabilities:
+
+- active USD paper portfolios with configurable starting bankroll, stable identities, idempotent creation keys, and no accepted live-mode input
+- immutable sequence-zero accounting snapshots with explicit starting, current, cash, reserved, committed, available, and realized-P&L values
+- canonical balance equations enforced in typed domain models and PostgreSQL constraints
+- provider-neutral `raw_edge_bands` V1 allocating 2%, 5%, or 8% of available bankroll at exact 8%, 12%, and 18% raw-edge boundaries
+- cent-flooring of proposed capital and actual-exposure calculation from the floored amount
+- strict strategy-policy validation requiring the sizing cap to remain below the future 10% risk-escalation boundary
+- consumption of only current, unexpired Phase 5 `TRADE_CANDIDATE` records, with explicit-time currentness, event-fingerprint, and outcome-orientation revalidation
+- append-only `position_size_proposals` with exact source and portfolio snapshot identity, policy values, fingerprints, reasons, and audit payloads
+- stable semantic proposal IDs and exact-rerun idempotence; changed effective policies append comparable history
+- typed create/list/detail/snapshot/run/proposal APIs and a Phase 6 status-page update
+- automated unit, repository, API, and PostgreSQL transaction coverage for boundaries, rounding, invariants, history, currentness, and no balance mutation
+
+Migration `0007_portfolio_sizing` was applied to PostgreSQL and Alembic reported no schema drift. The complete backend suite passed with 202 tests, and all four PostgreSQL transaction suites passed against the migrated database. Phase 6 fixture validation proved portfolio and proposal idempotence, append-on-policy-change history, stale-opportunity rejection after a newer price, and unchanged balances. Ruff, strict mypy, frontend lint/type checking, the production build, and the production dependency audit also passed.
+
+Every proposal remains `awaiting_risk` with confidence explicitly unavailable. It has no provider-specific quantity and cannot reserve capital, approve a trade, access an account, or execute. `TRADING_MODE=paper` remains the only execution setting.
+
 ## Next phase
 
-Phase 6 should introduce a simulated bankroll and versioned position-sizing proposals. It must consume opportunity outputs through explicit safety boundaries and still must not implement real-money trading.
+Phase 7 should introduce a deterministic risk engine that revalidates each sizing proposal and records `REJECT`, `AUTO_APPROVE`, or `REQUIRE_HUMAN_APPROVAL` decisions. It must remain paper-only and must not execute trades.

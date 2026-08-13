@@ -96,12 +96,14 @@ async def list_opportunities(
     records = await repository.list_opportunities(
         latest_only=latest_only,
         current_only=current_only,
+        current_at=None,
         status=opportunity_status,
         direction=direction,
         market_id=market_id,
         sports_event_id=sports_event_id,
         model_name=model_name,
         model_version=model_version,
+        opportunity_id=None,
         limit=limit,
         offset=offset,
     )
@@ -135,12 +137,14 @@ async def list_market_opportunities(
     records = await repository.list_opportunities(
         latest_only=latest_only,
         current_only=current_only,
+        current_at=None,
         status=opportunity_status,
         direction=direction,
         market_id=market_id,
         sports_event_id=None,
         model_name=None,
         model_version=None,
+        opportunity_id=None,
         limit=limit,
         offset=offset,
     )

@@ -148,6 +148,16 @@ Paper and live bankrolls must remain completely separate.
 
 A live account must never use paper balances for risk calculations.
 
+For the Phase 6 paper portfolio, the exact stored denominator is:
+
+```text
+current_bankroll = starting_bankroll + realized_pnl
+cash_balance = current_bankroll - committed_capital
+available_bankroll = cash_balance - reserved_capital
+```
+
+Position sizing reads one immutable snapshot of these values. Its advisory proposals do not reserve or commit any amount; the future risk and execution layers must revalidate the source snapshot before changing portfolio state.
+
 ---
 
 # 6. Proposed Exposure
@@ -321,6 +331,24 @@ Very strong opportunity:
 These ranges are conceptual and should remain configurable.
 
 The system should not intentionally target 40% positions during normal operation.
+
+The implemented Phase 6 `raw_edge_bands` V1 makes the conceptual policy exact and more conservative:
+
+```text
+Raw edge below 0.08
+→ no proposal
+
+Raw edge 0.08 to below 0.12
+→ target 2% of available bankroll
+
+Raw edge 0.12 to below 0.18
+→ target 5% of available bankroll
+
+Raw edge 0.18 or greater
+→ target 8% of available bankroll
+```
+
+Capital is floored to cents and actual exposure is recomputed from the floored amount. The configured maximum is 8% and configuration validation requires it to remain strictly below the Phase 7 10% escalation boundary. Confidence is not inferred; it is recorded as unavailable. These allocations have no approval authority.
 
 ---
 

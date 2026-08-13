@@ -77,11 +77,56 @@ class Settings(BaseSettings):
         ge=1,
         le=604800,
     )
+    paper_starting_bankroll: Decimal = Field(
+        default=Decimal("1000.00"),
+        gt=Decimal("0"),
+        max_digits=18,
+        decimal_places=2,
+    )
+    position_sizing_candidate_min_raw_edge: Decimal = Field(
+        default=Decimal("0.08"), ge=Decimal("0"), le=Decimal("1"), decimal_places=6
+    )
+    position_sizing_strong_min_raw_edge: Decimal = Field(
+        default=Decimal("0.12"), ge=Decimal("0"), le=Decimal("1"), decimal_places=6
+    )
+    position_sizing_very_strong_min_raw_edge: Decimal = Field(
+        default=Decimal("0.18"), ge=Decimal("0"), le=Decimal("1"), decimal_places=6
+    )
+    position_sizing_candidate_exposure_fraction: Decimal = Field(
+        default=Decimal("0.02"), gt=Decimal("0"), lt=Decimal("0.10"), decimal_places=6
+    )
+    position_sizing_strong_exposure_fraction: Decimal = Field(
+        default=Decimal("0.05"), gt=Decimal("0"), lt=Decimal("0.10"), decimal_places=6
+    )
+    position_sizing_very_strong_exposure_fraction: Decimal = Field(
+        default=Decimal("0.08"), gt=Decimal("0"), lt=Decimal("0.10"), decimal_places=6
+    )
+    position_sizing_max_exposure_fraction: Decimal = Field(
+        default=Decimal("0.08"), gt=Decimal("0"), lt=Decimal("0.10"), decimal_places=6
+    )
 
     @model_validator(mode="after")
     def validate_opportunity_thresholds(self) -> Settings:
         if self.opportunity_watch_min_raw_edge >= self.opportunity_trade_candidate_min_raw_edge:
             raise ValueError("opportunity watch threshold must be below trade-candidate threshold")
+        return self
+
+    @model_validator(mode="after")
+    def validate_position_sizing_policy(self) -> Settings:
+        if not (
+            self.position_sizing_candidate_min_raw_edge
+            < self.position_sizing_strong_min_raw_edge
+            < self.position_sizing_very_strong_min_raw_edge
+        ):
+            raise ValueError("position-sizing edge bands must be strictly increasing")
+        if not (
+            self.position_sizing_candidate_exposure_fraction
+            < self.position_sizing_strong_exposure_fraction
+            < self.position_sizing_very_strong_exposure_fraction
+            <= self.position_sizing_max_exposure_fraction
+            < Decimal("0.10")
+        ):
+            raise ValueError("position-sizing exposure bands must increase and remain below 10%")
         return self
 
 
