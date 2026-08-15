@@ -225,9 +225,7 @@ class PositionSizeProposal(BaseModel):
     raw_edge: Decimal = Field(ge=Decimal("0"), le=Decimal("1"), decimal_places=6)
     available_bankroll: PositiveMoney
     target_exposure_fraction: Fraction
-    proposed_exposure_fraction: Decimal = Field(
-        gt=Decimal("0"), lt=Decimal("0.10"), decimal_places=10
-    )
+    proposed_exposure_fraction: Decimal = Field(gt=Decimal("0"), le=Decimal("1"), decimal_places=10)
     proposed_capital: PositiveMoney
     strategy_name: str = Field(min_length=1, max_length=50)
     strategy_version: str = Field(min_length=1, max_length=100)
@@ -268,6 +266,15 @@ class PositionSizeProposal(BaseModel):
             raise ValueError("proposed exposure must reflect cent-rounded capital")
         if self.proposed_exposure_fraction > self.target_exposure_fraction:
             raise ValueError("actual exposure cannot exceed its target")
+        if self.target_exposure_fraction > self.max_exposure_fraction:
+            raise ValueError("target exposure cannot exceed the proposal policy maximum")
+        if not (
+            self.candidate_exposure_fraction
+            < self.strong_exposure_fraction
+            < self.very_strong_exposure_fraction
+            <= self.max_exposure_fraction
+        ):
+            raise ValueError("proposal exposure bands must be ordered")
         if self.proposed_at > self.opportunity_valid_until:
             raise ValueError("position-size proposal cannot outlive its opportunity")
         return self

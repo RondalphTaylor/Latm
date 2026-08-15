@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from app.domain.portfolio import (
     PortfolioSnapshot,
     PortfolioSnapshotReason,
+    PositionSizeProposal,
     PositionSizingInput,
     PositionSizingPolicy,
 )
@@ -180,6 +181,32 @@ def test_snapshot_accounting_and_policy_bounds_are_validated() -> None:
         PositionSizingPolicy(strong_min_raw_edge=Decimal("0.08"))
     with pytest.raises(ValidationError, match="below 10%"):
         PositionSizingPolicy(max_exposure_fraction=Decimal("0.10"))
+
+
+def test_proposal_representation_supports_future_risk_escalation_bands() -> None:
+    baseline = (
+        RulesPositionSizer(PositionSizingPolicy())
+        .evaluate(sizing_input(raw_edge=Decimal("0.180000")))
+        .proposal
+    )
+    assert baseline is not None
+
+    future_strategy_proposal = PositionSizeProposal.model_validate(
+        {
+            **baseline.model_dump(mode="python"),
+            "target_exposure_fraction": Decimal("0.40"),
+            "proposed_exposure_fraction": Decimal("0.4000000000"),
+            "proposed_capital": Decimal("400.00"),
+            "candidate_exposure_fraction": Decimal("0.10"),
+            "strong_exposure_fraction": Decimal("0.20"),
+            "very_strong_exposure_fraction": Decimal("0.40"),
+            "max_exposure_fraction": Decimal("0.40"),
+        }
+    )
+
+    assert future_strategy_proposal.proposed_exposure_fraction == Decimal("0.4000000000")
+    with pytest.raises(ValidationError, match="below 10%"):
+        PositionSizingPolicy(max_exposure_fraction=Decimal("0.40"))
 
 
 def test_expired_or_inconsistent_opportunity_input_is_rejected() -> None:

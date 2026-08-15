@@ -22,6 +22,7 @@ from app.models import (  # noqa: F401
     PositionSizeProposalRecord,
     PredictionMarketRecord,
     Provider,
+    RiskDecisionRecord,
     SportsEventRecord,
     SystemMetadata,
     TeamRecord,

@@ -15,8 +15,8 @@ export default function HomePage() {
         <p className="eyebrow">LATM</p>
         <h1 id="status-title">Application is running</h1>
         <p className="summary">
-          The Phase 6 MVP is online with auditable NBA opportunity detection, paper portfolio
-          accounting, and advisory position sizing in its safe default mode.
+          The Phase 7 MVP is online with auditable NBA research, paper portfolio accounting,
+          advisory position sizing, and deterministic risk decisions in its safe default mode.
         </p>
 
         <dl className="status-list">
@@ -47,9 +47,13 @@ export default function HomePage() {
             <dt>Position sizing</dt>
             <dd>Raw-edge bands V1</dd>
           </div>
+          <div>
+            <dt>Risk policy</dt>
+            <dd>Deterministic MVP V1</dd>
+          </div>
         </dl>
 
-        <p className="safety-note">Live trading is not enabled.</p>
+        <p className="safety-note">No order execution is enabled.</p>
       </section>
     </main>
   );

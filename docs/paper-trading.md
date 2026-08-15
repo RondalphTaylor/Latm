@@ -259,7 +259,9 @@ A proposed trade should include:
 
 The proposed trade should then pass through the risk engine.
 
-Phase 6 stops one boundary earlier and stores `position_size_proposals`, not proposed trades. These records contain provider-neutral proposed capital and actual exposure against one exact portfolio snapshot. They remain `awaiting_risk`, contain no contract quantity, and cannot reach execution. Phase 7 may transform a still-valid sizing proposal into a risk decision; Phase 8 owns simulated order and portfolio effects.
+Phase 6 stops one boundary earlier and stores `position_size_proposals`, not proposed trades. These records contain provider-neutral proposed capital and actual exposure against one exact portfolio snapshot. They remain `awaiting_risk`, contain no contract quantity, and cannot reach execution.
+
+Phase 7 revalidates those records and stores immutable `risk_decisions`. An automatic approval is a short-lived risk authorization, not a paper trade: it does not reserve capital, append a balance snapshot, or authorize a stale future execution. Human-escalated decisions also remain pending evidence because Phase 7 has no approval-action workflow. Phase 8 owns simulated order creation, final source revalidation, reservation, fills, positions, and portfolio effects.
 
 ---
 

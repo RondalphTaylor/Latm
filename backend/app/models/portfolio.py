@@ -174,7 +174,7 @@ class PositionSizeProposalRecord(Base):
             "AND proposed_exposure_fraction > 0 "
             "AND proposed_exposure_fraction <= target_exposure_fraction "
             "AND target_exposure_fraction <= max_exposure_fraction "
-            "AND max_exposure_fraction < 0.10",
+            "AND max_exposure_fraction <= 1",
             name="ck_position_size_proposals_exposure",
         ),
         CheckConstraint(

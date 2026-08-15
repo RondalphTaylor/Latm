@@ -12,11 +12,13 @@ from app.models.portfolio import (
     PortfolioSnapshotRecord,
     PositionSizeProposalRecord,
 )
+from app.models.risk import RiskDecisionRecord
 from app.models.sports import SportsEventRecord, TeamRecord
 from app.models.system_metadata import SystemMetadata
 
 __all__ = [
     "BaseForecastRecord",
+    "MarketEventMatchRecord",
     "MarketOutcomeRecord",
     "MarketPriceRecord",
     "ModelVersionRecord",
@@ -24,7 +26,7 @@ __all__ = [
     "PortfolioRecord",
     "PortfolioSnapshotRecord",
     "PositionSizeProposalRecord",
-    "MarketEventMatchRecord",
+    "RiskDecisionRecord",
     "PredictionMarketRecord",
     "Provider",
     "SportsEventRecord",

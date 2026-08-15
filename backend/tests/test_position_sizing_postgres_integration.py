@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.domain.forecasts import EloConfiguration
 from app.domain.portfolio import PositionSizingPolicy
+from app.domain.risk import RiskDecisionType, RiskPolicy
 from app.models.forecasts import BaseForecastRecord, ModelVersionRecord
 from app.models.markets import (
     MarketOutcomeRecord,
@@ -30,8 +31,11 @@ from app.services.forecasting.elo import (
 from app.services.forecasting.repository import model_version_record_id
 from app.services.opportunities.repository import OpportunityRepository
 from app.services.opportunities.service import OpportunityDetectionService
+from app.services.position_sizing.engine import RulesPositionSizer
 from app.services.position_sizing.repository import PositionSizingRepository
 from app.services.position_sizing.service import PaperPortfolioService, PositionSizingService
+from app.services.risk.repository import RiskRepository
+from app.services.risk.service import RiskService
 
 pytestmark = pytest.mark.skipif(
     os.getenv("RUN_DATABASE_INTEGRATION_TESTS") != "1",
@@ -318,6 +322,38 @@ async def _run_integration() -> None:
                     limit=10,
                     offset=0,
                 )
+                proposals_before_policy_change = await repository.list_proposals(
+                    portfolio_id=portfolio.portfolio.id,
+                    opportunity_id=candidate.id,
+                    market_id=None,
+                    direction=None,
+                    strategy_version=None,
+                    limit=10,
+                    offset=0,
+                )
+                first_proposal = proposals_before_policy_change[0]
+                risk_repository = RiskRepository(session)
+                risk_service = RiskService(
+                    repository=risk_repository,
+                    policy=RiskPolicy(),
+                    runtime_trading_mode="paper",
+                    active_sizing_strategy_version=(
+                        RulesPositionSizer(PositionSizingPolicy()).strategy_version
+                    ),
+                    clock=lambda: NOW,
+                )
+                first_risk = await risk_service.run(
+                    proposal_id=first_proposal.id,
+                    portfolio_id=None,
+                    limit=10,
+                    offset=0,
+                )
+                identical_risk = await risk_service.run(
+                    proposal_id=first_proposal.id,
+                    portfolio_id=None,
+                    limit=10,
+                    offset=0,
+                )
                 changed_policy = await PositionSizingService(
                     repository=repository,
                     policy=PositionSizingPolicy(candidate_exposure_fraction=Decimal("0.030000")),
@@ -328,8 +364,40 @@ async def _run_integration() -> None:
                     limit=10,
                     offset=0,
                 )
+                proposals_after_policy_change = await repository.list_proposals(
+                    portfolio_id=portfolio.portfolio.id,
+                    opportunity_id=candidate.id,
+                    market_id=None,
+                    direction=None,
+                    strategy_version=None,
+                    limit=10,
+                    offset=0,
+                )
+                changed_proposal = next(
+                    item for item in proposals_after_policy_change if item.id != first_proposal.id
+                )
+                duplicate_risk = await risk_service.run(
+                    proposal_id=changed_proposal.id,
+                    portfolio_id=None,
+                    limit=10,
+                    offset=0,
+                )
                 session.add(_price(NEW_PRICE_ID, NOW + timedelta(minutes=1), "0.54"))
                 await session.commit()
+                stale_risk = await RiskService(
+                    repository=risk_repository,
+                    policy=RiskPolicy(),
+                    runtime_trading_mode="paper",
+                    active_sizing_strategy_version=(
+                        RulesPositionSizer(PositionSizingPolicy()).strategy_version
+                    ),
+                    clock=lambda: NOW + timedelta(minutes=2),
+                ).run(
+                    proposal_id=first_proposal.id,
+                    portfolio_id=None,
+                    limit=10,
+                    offset=0,
+                )
                 invalidated = await PositionSizingService(
                     repository=repository,
                     clock=lambda: NOW + timedelta(minutes=2),
@@ -354,13 +422,30 @@ async def _run_integration() -> None:
                     offset=0,
                 )
                 current_portfolio = await repository.get_portfolio(portfolio.portfolio.id)
+                risk_history = await risk_repository.list_decisions(
+                    latest_only=False,
+                    unexpired_only=False,
+                    current_at=NOW + timedelta(minutes=2),
+                    proposal_id=None,
+                    portfolio_id=portfolio.portfolio.id,
+                    market_id=None,
+                    decision=None,
+                    risk_policy_version=None,
+                    limit=10,
+                    offset=0,
+                )
 
                 assert opportunity_run.persisted == 2
                 assert created.created is True
                 assert identical_portfolio.created is False
                 assert first.persisted == 1
                 assert identical.persisted == 0
+                assert first_risk.decision_counts == {"auto_approve": 1}
+                assert first_risk.persisted == 1
+                assert identical_risk.persisted == 0
                 assert changed_policy.persisted == 1
+                assert duplicate_risk.decision_counts == {"reject": 1}
+                assert stale_risk.decision_counts == {"reject": 1}
                 assert invalidated.generated == 0
                 assert invalidated.skip_counts == {"opportunity_not_current_trade_candidate": 1}
                 assert len(proposals) == 2
@@ -370,6 +455,14 @@ async def _run_integration() -> None:
                 }
                 assert {item.state for item in proposals} == {"awaiting_risk"}
                 assert len(snapshots) == 1
+                assert len(risk_history) == 3
+                assert {item.decision for item in risk_history} == {
+                    RiskDecisionType.AUTO_APPROVE.value,
+                    RiskDecisionType.REJECT.value,
+                }
+                stale_decision = risk_history[0]
+                assert "current_trade_candidate" in stale_decision.failed_rules
+                assert "current_market_price" in stale_decision.failed_rules
                 assert current_portfolio is not None
                 assert current_portfolio.snapshot.available_bankroll == Decimal("1000.00")
                 assert current_portfolio.snapshot.reserved_capital == Decimal("0.00")

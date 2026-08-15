@@ -850,6 +850,12 @@ The risk engine is deterministic.
 
 LLM output may be one input to confidence calculations, but an LLM must not override risk rules.
 
+Phase 7 implements `mvp_risk` V1 as a pure rules engine over an exact Phase 6 proposal and authoritative current state. It evaluates all ordered hard checks and records every result. Any hard failure produces `REJECT`. A fully valid exposure strictly below 10% produces `AUTO_APPROVE`; exposure from exactly 10% through exactly 40% produces `REQUIRE_HUMAN_APPROVAL` because calibrated confidence is unavailable; exposure above 40% also requires human approval.
+
+The service locks the proposal's paper portfolio while it loads the latest snapshot and calculates aggregate unexpired automatic authorizations and duplicate economic intent. `risk_decisions` rows are append-only, policy-versioned, source-linked, and semantically idempotent. Non-rejected records use fixed five-minute UTC authorization windows bounded by source freshness, opportunity validity, market close, and event start. Rejected records have no authorization expiry.
+
+An `AUTO_APPROVE` result is risk authorization evidence only. It does not reserve capital or mutate portfolio accounting, and there is no human-approval action or execution route in Phase 7. The Phase 8 execution boundary must revalidate the risk record, latest price, forecast, match, opportunity, proposal, portfolio snapshot, duplicate intent, and available bankroll atomically before simulated execution. Adjusted edge and calibrated confidence are unavailable; liquidity and existing executed-position exposure are explicitly not evaluated yet.
+
 ---
 
 # 20. Position Sizing
@@ -1030,7 +1036,7 @@ cash_balance = current_bankroll - committed_capital
 available_bankroll = cash_balance - reserved_capital
 ```
 
-The initial snapshot sets current bankroll, cash, and available bankroll equal to the configured starting bankroll, with reserved capital, committed capital, and realized P&L at zero. Position sizing reads this snapshot but never appends another snapshot or changes any balance. Later risk and paper-execution phases own reservation and balance transitions.
+The initial snapshot sets current bankroll, cash, and available bankroll equal to the configured starting bankroll, with reserved capital, committed capital, and realized P&L at zero. Position sizing reads this snapshot but never appends another snapshot or changes any balance. Phase 7 risk evaluation also leaves balances untouched; Phase 8 paper execution owns reservation and balance transitions.
 
 ---
 

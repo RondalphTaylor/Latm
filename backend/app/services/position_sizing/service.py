@@ -36,6 +36,55 @@ from app.services.position_sizing.repository import (
 _JSON_OBJECT_ADAPTER = TypeAdapter(dict[str, JsonValue])
 
 
+def opportunity_semantic_skip_reason(context: CurrentOpportunityContext) -> str | None:
+    """Return why mutable event/orientation semantics no longer match an opportunity."""
+    opportunity, market, event, forecast = (
+        context.opportunity,
+        context.market,
+        context.event,
+        context.forecast,
+    )
+    current_event_fingerprint = source_event_fingerprint(
+        event_id=event.id,
+        scheduled_start_time=event.scheduled_start_time,
+        home_team_id=event.home_team_id,
+        away_team_id=event.away_team_id,
+        event_status=event.status,
+    )
+    if forecast.input_features.get("source_event_fingerprint") != current_event_fingerprint:
+        return "event_changed_since_opportunity"
+    orientation = resolve_outcome_orientation(
+        home_team=OpportunityTeamInput(
+            id=event.home_team.id,
+            abbreviation=event.home_team.abbreviation,
+            city=event.home_team.city,
+            name=event.home_team.name,
+            full_name=event.home_team.full_name,
+        ),
+        away_team=OpportunityTeamInput(
+            id=event.away_team.id,
+            abbreviation=event.away_team.abbreviation,
+            city=event.away_team.city,
+            name=event.away_team.name,
+            full_name=event.away_team.full_name,
+        ),
+        outcomes=tuple(
+            OpportunityOutcomeInput(id=item.id, side=item.side, label=item.label)
+            for item in market.outcomes
+        ),
+        market_title=market.title,
+        market_type=market.market_type,
+    )
+    if (
+        orientation is None
+        or orientation.input_fingerprint != opportunity.orientation_fingerprint
+        or orientation.yes_team_id != opportunity.yes_team_id
+        or orientation.no_team_id != opportunity.no_team_id
+    ):
+        return "opportunity_orientation_changed"
+    return None
+
+
 class PortfolioCreationResult(BaseModel):
     """Idempotent portfolio creation result."""
 
@@ -180,7 +229,7 @@ class PositionSizingService:
         if opportunity_id is not None and not contexts:
             skips["opportunity_not_current_trade_candidate"] += 1
         for context in contexts:
-            semantic_skip = self._semantic_skip_reason(context)
+            semantic_skip = opportunity_semantic_skip_reason(context)
             if semantic_skip is not None:
                 skips[semantic_skip] += 1
                 continue
@@ -236,54 +285,6 @@ class PositionSizingService:
             band_counts=dict(sorted(bands.items())),
             skip_counts=dict(sorted(skips.items())),
         )
-
-    @staticmethod
-    def _semantic_skip_reason(context: CurrentOpportunityContext) -> str | None:
-        opportunity, market, event, forecast = (
-            context.opportunity,
-            context.market,
-            context.event,
-            context.forecast,
-        )
-        current_event_fingerprint = source_event_fingerprint(
-            event_id=event.id,
-            scheduled_start_time=event.scheduled_start_time,
-            home_team_id=event.home_team_id,
-            away_team_id=event.away_team_id,
-            event_status=event.status,
-        )
-        if forecast.input_features.get("source_event_fingerprint") != current_event_fingerprint:
-            return "event_changed_since_opportunity"
-        orientation = resolve_outcome_orientation(
-            home_team=OpportunityTeamInput(
-                id=event.home_team.id,
-                abbreviation=event.home_team.abbreviation,
-                city=event.home_team.city,
-                name=event.home_team.name,
-                full_name=event.home_team.full_name,
-            ),
-            away_team=OpportunityTeamInput(
-                id=event.away_team.id,
-                abbreviation=event.away_team.abbreviation,
-                city=event.away_team.city,
-                name=event.away_team.name,
-                full_name=event.away_team.full_name,
-            ),
-            outcomes=tuple(
-                OpportunityOutcomeInput(id=item.id, side=item.side, label=item.label)
-                for item in market.outcomes
-            ),
-            market_title=market.title,
-            market_type=market.market_type,
-        )
-        if (
-            orientation is None
-            or orientation.input_fingerprint != opportunity.orientation_fingerprint
-            or orientation.yes_team_id != opportunity.yes_team_id
-            or orientation.no_team_id != opportunity.no_team_id
-        ):
-            return "opportunity_orientation_changed"
-        return None
 
     @staticmethod
     def _snapshot_domain(record: PortfolioSnapshotRecord) -> PortfolioSnapshot:

@@ -1513,6 +1513,29 @@ Minimum checks:
 
 The initial MVP should err on the conservative side.
 
+## Implemented Phase 7 policy
+
+Phase 7 makes this policy exact. It evaluates the proposal and all authoritative current sources without short-circuiting so every failed hard rule is logged in a stable order. Any failure results in `REJECT` and no authorization expiry.
+
+The exposure boundaries are inclusive only on the conservative side:
+
+```text
+exposure < 0.10
+=> AUTO_APPROVE when every hard check passes
+
+0.10 <= exposure <= 0.40
+=> REQUIRE_HUMAN_APPROVAL because confidence is unavailable
+
+exposure > 0.40
+=> REQUIRE_HUMAN_APPROVAL
+```
+
+Hard checks cover paper-only mode, active portfolio and sizing policy, exact latest portfolio snapshot, canonical accounting, individual and aggregate available bankroll, current opportunity and source consistency, event and outcome semantics, open market and pregame state, latest eligible match with at least 0.90 confidence, latest price no older than 15 minutes, latest operational forecast no older than 24 hours, reproducible raw edge of at least 0.08, and duplicate economic intent.
+
+Non-rejected records expire at the earliest of their fixed five-minute authorization-window boundary, opportunity expiry, source-freshness deadline, market close, or event start. Rejected records remain immutable history and are semantically idempotent until an observed input or policy changes. `AUTO_APPROVE` does not reserve or execute capital. Phase 8 must revalidate before execution.
+
+Phase 7 records its known limitations rather than inferring unavailable data: adjusted edge and calibrated confidence are `not_available`; liquidity is `not_evaluated_phase7`; executed positions do not exist before Phase 8. No human-approval action is implemented yet.
+
 ---
 
 # 61. Second Risk Milestone

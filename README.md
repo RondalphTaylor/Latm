@@ -1,6 +1,6 @@
 # LATM Prediction Market Platform
 
-An auditable prediction-market research platform focused initially on NBA markets. The current MVP ingests read-only Kalshi market data and authenticated BALLDONTLIE NBA data, deterministically links supported single-game contracts to normalized events, generates versioned event-level Elo base forecasts from local game history, records research-only YES/NO raw-edge opportunities, and produces versioned advisory capital allocations against an isolated paper bankroll.
+An auditable prediction-market research platform focused initially on NBA markets. The current MVP ingests read-only Kalshi market data and authenticated BALLDONTLIE NBA data, deterministically links supported single-game contracts to normalized events, generates versioned event-level Elo base forecasts from local game history, records research-only YES/NO raw-edge opportunities, produces versioned advisory capital allocations against an isolated paper bankroll, and records deterministic paper-only risk decisions.
 
 > **Trading safety:** the only supported execution mode is `paper`. The Kalshi adapter accesses public production market data without credentials, while the BALLDONTLIE key authorizes sports-data reads only. Neither adapter contains order placement, financial-account access, or live-trading implementation.
 
@@ -164,6 +164,28 @@ Rules V1 allocates 2% of available bankroll at an 8% raw edge, 5% at 12%, and 8%
 
 Phase 6 proposals are provider-neutral capital amounts in `awaiting_risk` state. They do not represent provider contract quantity, reserve funds, change balances, approve risk, create a trade, or execute an order. Only current, unexpired `TRADE_CANDIDATE` opportunities may be sized, and source currentness plus event and outcome orientation are revalidated before persistence.
 
+## Risk decisions
+
+Revalidate one proposal or a bounded proposal set against the deterministic Phase 7 policy:
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8000/risk-decisions/run?proposal_id=<proposal-uuid>"
+Invoke-RestMethod -Method Post "http://localhost:8000/risk-decisions/run?portfolio_id=<portfolio-uuid>"
+```
+
+Inspect the latest decision view, unexpired authorization records, or immutable history:
+
+```powershell
+Invoke-RestMethod "http://localhost:8000/risk-decisions?latest_only=true"
+Invoke-RestMethod "http://localhost:8000/risk-decisions?unexpired_only=true"
+Invoke-RestMethod "http://localhost:8000/risk-decisions/<risk-decision-uuid>"
+Invoke-RestMethod "http://localhost:8000/position-size-proposals/<proposal-uuid>/risk-decisions"
+```
+
+The MVP policy rejects any failed hard check. It returns `AUTO_APPROVE` only when exposure is strictly below 10%; exactly 10% through exactly 40% requires human approval because calibrated confidence is unavailable; above 40% also requires human approval. Decisions revalidate paper mode, the active portfolio and sizing strategy, the latest portfolio snapshot, accounting and aggregate authorized capital, current opportunity semantics, open market/event state, match confidence, price and forecast freshness, raw edge, and duplicate intent.
+
+Non-rejected decisions expire within a fixed five-minute authorization window and may expire sooner with their source evidence. `unexpired_only` means only that the stored authorization time has not elapsed; Phase 8 must still revalidate every mutable source before simulated execution. Phase 7 does not implement a human-approval action, reserve capital, create an order, mutate balances, call a provider, or execute a trade. Adjusted edge and calibrated confidence are unavailable, and liquidity plus existing executed-position exposure remain explicitly unevaluated.
+
 ## Backend development
 
 Backend packaging uses the standard PEP 621 `pyproject.toml` format with bounded dependency ranges and pip/venv. This keeps Phase 0's bootstrap toolchain small and works identically on the host, in Docker, and in CI without requiring Poetry or another package manager.
@@ -233,4 +255,4 @@ infra/compose.yaml    Backend, frontend, and PostgreSQL development stack
 docs/                 Product, architecture, safety, and progress documentation
 ```
 
-See `AGENTS.md`, `ARCHITECTURE.md`, and `ROADMAP.md` for project constraints and phased scope. Risk approval and all execution behavior remain intentionally unimplemented. The next roadmap target is Phase 7.
+See `AGENTS.md`, `ARCHITECTURE.md`, and `ROADMAP.md` for project constraints and phased scope. Risk authorization evidence is implemented, while human approval actions and all execution behavior remain intentionally unavailable. The next roadmap target is Phase 8.

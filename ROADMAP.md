@@ -569,6 +569,8 @@ Phase 6 is complete when:
 
 # Phase 7: Risk Engine
 
+**Status:** Complete (2026-08-15)
+
 ## Goal
 
 Deterministically approve, reject, or escalate proposed trades.
@@ -1457,7 +1459,7 @@ At completion report:
 The current project target is:
 
 ```text
-Phase 4
+Phase 8
 ```
 
 Completed foundations:
@@ -1470,6 +1472,14 @@ Phase 1
 Phase 2
 
 Phase 3
+
+Phase 4
+
+Phase 5
+
+Phase 6
+
+Phase 7
 ```
 
 The project should not begin with AI agents or real trading.

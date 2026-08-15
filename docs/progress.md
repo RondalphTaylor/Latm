@@ -177,6 +177,29 @@ Migration `0007_portfolio_sizing` was applied to PostgreSQL and Alembic reported
 
 Every proposal remains `awaiting_risk` with confidence explicitly unavailable. It has no provider-specific quantity and cannot reserve capital, approve a trade, access an account, or execute. `TRADING_MODE=paper` remains the only execution setting.
 
+## Phase 7: Risk Engine
+
+**Status:** Complete
+**Completed:** 2026-08-15
+
+Phase 7 introduced deterministic, paper-only risk authorization over immutable Phase 6 position-size proposals without adding approval actions or execution.
+
+Completed risk capabilities:
+
+- versioned `mvp_risk` V1 with ordered, structured hard checks and complete failure evidence
+- exact exposure escalation: below 10% may auto-approve, exactly 10% through 40% requires human approval while confidence is unavailable, and above 40% requires human approval
+- revalidation of paper mode, active strategy and portfolio, latest accounting snapshot, aggregate unexpired authorizations, current opportunity semantics, market and event state, eligible match confidence, latest price and forecast freshness, raw edge, and duplicate economic intent
+- append-only `risk_decisions` linked to the exact proposal and observed source records, with stable semantic IDs, effective-policy fingerprints, full check results, audit snapshots, and explicit limitations
+- fixed five-minute authorization windows bounded by source validity, with rejected decisions carrying no authorization expiry
+- portfolio-row locking around aggregate authorization, duplicate-intent evaluation, and decision persistence
+- typed run, list, detail, unexpired-view, and per-proposal history APIs with no approval or execution endpoint
+- structural support for future larger proposals while retaining the active Phase 6 sizing policy's strict below-10% cap
+- configuration through `RISK_*` settings and a Phase 7 status-page update
+
+Migration `0008_risk_engine` was applied to PostgreSQL and Alembic reported no schema drift. The complete backend suite passed with 239 non-database tests and all four PostgreSQL transaction suites (243 tests total). Phase 7 fixture validation proved risk-decision retry idempotence, duplicate-intent rejection, append-on-source-change history, stale authorization rejection after a newer price, and unchanged portfolio balances. Ruff, strict mypy, frontend lint/type checking, the production build, and production dependency validation also passed.
+
+An `AUTO_APPROVE` decision is short-lived risk authorization evidence only. It does not reserve capital, mutate a balance, create an order, or execute. Adjusted edge and calibrated confidence remain unavailable; liquidity and existing executed-position exposure remain unevaluated. There is no human-approval action in Phase 7.
+
 ## Next phase
 
-Phase 7 should introduce a deterministic risk engine that revalidates each sizing proposal and records `REJECT`, `AUTO_APPROVE`, or `REQUIRE_HUMAN_APPROVAL` decisions. It must remain paper-only and must not execute trades.
+Phase 8 should implement paper execution that consumes only a still-valid automatic authorization, revalidates every mutable input and portfolio limit atomically, simulates fills, and records the resulting order, position, and portfolio transitions. It must not add live trading.
