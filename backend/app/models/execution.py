@@ -5,6 +5,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -168,33 +169,68 @@ class PaperTradeRecord(Base):
 
 
 class PaperPositionRecord(Base):
-    """Entry-only open paper position created from exactly one filled trade."""
+    """Current paper-position projection reconstructed from immutable events."""
 
     __tablename__ = "positions"
     __table_args__ = (
         UniqueConstraint("opening_trade_id", name="uq_positions_opening_trade"),
         CheckConstraint("execution_mode = 'paper'", name="ck_positions_paper_only"),
         CheckConstraint("direction IN ('yes', 'no')", name="ck_positions_direction"),
-        CheckConstraint("status = 'open'", name="ck_positions_status"),
-        CheckConstraint("quantity >= 1", name="ck_positions_quantity"),
+        CheckConstraint(
+            "status IN ('open', 'closed', 'settled')",
+            name="ck_positions_status",
+        ),
+        CheckConstraint(
+            "initial_quantity >= 1 AND quantity >= 0 AND disposed_quantity >= 0 "
+            "AND initial_quantity = quantity + disposed_quantity",
+            name="ck_positions_quantity",
+        ),
+        CheckConstraint("version >= 0", name="ck_positions_version"),
         CheckConstraint(
             "average_entry_price > 0 AND average_entry_price < 1 "
-            "AND mark_price >= 0 AND mark_price < 1",
+            "AND mark_price >= 0 AND mark_price <= 1",
             name="ck_positions_prices",
         ),
         CheckConstraint(
-            "mark_basis IN ('directional_bid', 'directional_ask_fallback')",
+            "mark_basis IN ('directional_bid', 'directional_ask_fallback', "
+            "'exit_execution', 'settlement_payout')",
             name="ck_positions_mark_basis",
         ),
         CheckConstraint(
-            "gross_cost_basis >= 0 AND entry_fees >= 0 "
+            "original_gross_cost_basis >= 0 AND original_entry_fees >= 0 "
+            "AND original_total_cost_basis = original_gross_cost_basis "
+            "+ original_entry_fees "
+            "AND gross_cost_basis >= 0 AND entry_fees >= 0 "
             "AND total_cost_basis = gross_cost_basis + entry_fees "
+            "AND gross_cost_basis <= original_gross_cost_basis "
+            "AND entry_fees <= original_entry_fees "
+            "AND total_cost_basis <= original_total_cost_basis "
             "AND market_value >= 0 "
-            "AND unrealized_pnl = market_value - total_cost_basis "
-            "AND realized_pnl = 0",
+            "AND unrealized_pnl = market_value - total_cost_basis",
             name="ck_positions_accounting",
         ),
-        CheckConstraint("length(input_fingerprint) = 64", name="ck_positions_fingerprint"),
+        CheckConstraint(
+            "(status = 'open' AND quantity >= 1 AND total_cost_basis > 0 "
+            "AND closed_at IS NULL AND settled_at IS NULL "
+            "AND market_resolution_id IS NULL "
+            "AND mark_basis IN ('directional_bid', 'directional_ask_fallback')) OR "
+            "(status = 'closed' AND quantity = 0 AND gross_cost_basis = 0 "
+            "AND entry_fees = 0 AND total_cost_basis = 0 "
+            "AND market_value = 0 AND unrealized_pnl = 0 "
+            "AND closed_at IS NOT NULL AND settled_at IS NULL "
+            "AND market_resolution_id IS NULL AND mark_basis = 'exit_execution') OR "
+            "(status = 'settled' AND quantity = 0 AND gross_cost_basis = 0 "
+            "AND entry_fees = 0 AND total_cost_basis = 0 "
+            "AND market_value = 0 AND unrealized_pnl = 0 "
+            "AND closed_at IS NULL AND settled_at IS NOT NULL "
+            "AND market_resolution_id IS NOT NULL "
+            "AND mark_basis = 'settlement_payout')",
+            name="ck_positions_lifecycle",
+        ),
+        CheckConstraint(
+            "length(input_fingerprint) = 64 AND length(projection_fingerprint) = 64",
+            name="ck_positions_fingerprint",
+        ),
         Index(
             "uq_positions_open_portfolio_market",
             "portfolio_id",
@@ -224,8 +260,14 @@ class PaperPositionRecord(Base):
     execution_mode: Mapped[str] = mapped_column(String(10), nullable=False)
     direction: Mapped[str] = mapped_column(String(10), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
+    initial_quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    disposed_quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
     average_entry_price: Mapped[Decimal] = mapped_column(Numeric(7, 6), nullable=False)
+    original_gross_cost_basis: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    original_entry_fees: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    original_total_cost_basis: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     gross_cost_basis: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     entry_fees: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     total_cost_basis: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
@@ -234,6 +276,281 @@ class PaperPositionRecord(Base):
     market_value: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     unrealized_pnl: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     realized_pnl: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    latest_base_forecast_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("base_forecasts.id", ondelete="RESTRICT")
+    )
+    market_resolution_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("market_resolutions.id", ondelete="RESTRICT")
+    )
     input_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    projection_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PositionEventRecord(Base):
+    """Append-only monitoring decision and any resulting paper-position transition."""
+
+    __tablename__ = "position_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "position_id",
+            "policy_version",
+            "input_fingerprint",
+            name="uq_position_events_semantic_input",
+        ),
+        CheckConstraint("execution_mode = 'paper'", name="ck_position_events_paper_only"),
+        CheckConstraint(
+            "decision IN ('hold', 'reduce', 'close', 'settle')",
+            name="ck_position_events_decision",
+        ),
+        CheckConstraint(
+            "status_before = 'open' AND status_after IN ('open', 'closed', 'settled')",
+            name="ck_position_events_statuses",
+        ),
+        CheckConstraint(
+            "position_version_before >= 0 AND "
+            "((state_changed = true "
+            "AND position_version_after = position_version_before + 1) OR "
+            "(state_changed = false "
+            "AND position_version_after = position_version_before "
+            "AND position_projection_fingerprint_after "
+            "= position_projection_fingerprint_before))",
+            name="ck_position_events_versions",
+        ),
+        CheckConstraint(
+            "quantity_before >= 1 AND action_quantity >= 0 "
+            "AND action_quantity <= quantity_before "
+            "AND quantity_after = quantity_before - action_quantity",
+            name="ck_position_events_quantities",
+        ),
+        CheckConstraint(
+            "gross_cost_basis_before >= 0 AND entry_fees_before >= 0 "
+            "AND total_cost_basis_before = gross_cost_basis_before + entry_fees_before "
+            "AND allocated_gross_cost_basis >= 0 AND allocated_entry_fees >= 0 "
+            "AND allocated_total_cost_basis = allocated_gross_cost_basis "
+            "+ allocated_entry_fees "
+            "AND gross_cost_basis_after >= 0 AND entry_fees_after >= 0 "
+            "AND total_cost_basis_after = gross_cost_basis_after + entry_fees_after "
+            "AND gross_cost_basis_before = allocated_gross_cost_basis "
+            "+ gross_cost_basis_after "
+            "AND entry_fees_before = allocated_entry_fees + entry_fees_after "
+            "AND total_cost_basis_before = allocated_total_cost_basis "
+            "+ total_cost_basis_after",
+            name="ck_position_events_cost_basis",
+        ),
+        CheckConstraint(
+            "realized_pnl_cumulative = realized_pnl_before + realized_pnl_increment",
+            name="ck_position_events_realized_pnl",
+        ),
+        CheckConstraint(
+            "after_mark_price >= 0 AND after_mark_price <= 1 "
+            "AND after_mark_basis IN ('directional_bid', 'directional_ask_fallback', "
+            "'exit_execution', 'settlement_payout') AND after_market_value >= 0 "
+            "AND after_unrealized_pnl = after_market_value - total_cost_basis_after",
+            name="ck_position_events_after_mark",
+        ),
+        CheckConstraint(
+            "(state_changed = true AND portfolio_snapshot_after_id IS NOT NULL) OR "
+            "(state_changed = false AND portfolio_snapshot_after_id IS NULL)",
+            name="ck_position_events_snapshot_effect",
+        ),
+        CheckConstraint(
+            "jsonb_array_length(check_results) > 0 AND "
+            "((all_required_checks_passed = true "
+            "AND jsonb_array_length(failed_rules) = 0) OR "
+            "(all_required_checks_passed = false "
+            "AND jsonb_array_length(failed_rules) > 0))",
+            name="ck_position_events_check_results",
+        ),
+        CheckConstraint(
+            "(reference_price IS NULL OR (reference_price >= 0 AND reference_price <= 1)) "
+            "AND (exit_price IS NULL OR (exit_price >= 0 AND exit_price < 1)) "
+            "AND (model_probability IS NULL OR "
+            "(model_probability >= 0 AND model_probability <= 1)) "
+            "AND (hold_edge IS NULL OR (hold_edge >= -1 AND hold_edge <= 1)) "
+            "AND (exit_slippage_bps IS NULL OR exit_slippage_bps >= 0) "
+            "AND (exit_slippage_amount_per_contract IS NULL "
+            "OR exit_slippage_amount_per_contract >= 0) "
+            "AND (exit_fee_bps IS NULL OR exit_fee_bps >= 0)",
+            name="ck_position_events_market_values",
+        ),
+        CheckConstraint(
+            "(decision = 'hold' AND action_quantity = 0 "
+            "AND quantity_after = quantity_before AND status_after = 'open' "
+            "AND after_mark_basis IN ('directional_bid', 'directional_ask_fallback') "
+            "AND allocated_total_cost_basis = 0 AND reference_price IS NULL "
+            "AND exit_price IS NULL AND exit_slippage_bps IS NULL "
+            "AND exit_slippage_amount_per_contract IS NULL "
+            "AND reference_gross_proceeds IS NULL AND slippage_cost IS NULL "
+            "AND gross_proceeds IS NULL AND exit_fee_bps IS NULL "
+            "AND exit_fee_amount IS NULL "
+            "AND net_proceeds IS NULL AND settlement_payout_per_contract IS NULL "
+            "AND realized_pnl_increment = 0) OR "
+            "(decision = 'reduce' AND action_quantity > 0 "
+            "AND action_quantity < quantity_before AND status_after = 'open' "
+            "AND after_mark_basis IN ('directional_bid', 'directional_ask_fallback') "
+            "AND reference_price IS NOT NULL AND exit_price IS NOT NULL "
+            "AND exit_slippage_bps IS NOT NULL "
+            "AND exit_slippage_amount_per_contract IS NOT NULL "
+            "AND reference_gross_proceeds IS NOT NULL "
+            "AND slippage_cost IS NOT NULL AND gross_proceeds IS NOT NULL "
+            "AND exit_fee_bps IS NOT NULL "
+            "AND exit_fee_amount IS NOT NULL AND net_proceeds IS NOT NULL "
+            "AND settlement_payout_per_contract IS NULL "
+            "AND market_resolution_id IS NULL) OR "
+            "(decision = 'close' AND action_quantity = quantity_before "
+            "AND quantity_after = 0 AND status_after = 'closed' "
+            "AND after_mark_basis = 'exit_execution' "
+            "AND reference_price IS NOT NULL AND exit_price IS NOT NULL "
+            "AND exit_slippage_bps IS NOT NULL "
+            "AND exit_slippage_amount_per_contract IS NOT NULL "
+            "AND reference_gross_proceeds IS NOT NULL "
+            "AND slippage_cost IS NOT NULL AND gross_proceeds IS NOT NULL "
+            "AND exit_fee_bps IS NOT NULL "
+            "AND exit_fee_amount IS NOT NULL AND net_proceeds IS NOT NULL "
+            "AND settlement_payout_per_contract IS NULL "
+            "AND market_resolution_id IS NULL) OR "
+            "(decision = 'settle' AND action_quantity = quantity_before "
+            "AND quantity_after = 0 AND status_after = 'settled' "
+            "AND after_mark_basis = 'settlement_payout' "
+            "AND exit_price IS NULL AND exit_slippage_bps IS NULL "
+            "AND exit_slippage_amount_per_contract IS NULL "
+            "AND reference_gross_proceeds IS NULL AND slippage_cost IS NULL "
+            "AND exit_fee_bps IS NULL AND exit_fee_amount IS NULL "
+            "AND settlement_payout_per_contract IS NOT NULL "
+            "AND reference_price = settlement_payout_per_contract "
+            "AND gross_proceeds IS NOT NULL AND net_proceeds = gross_proceeds "
+            "AND market_resolution_id IS NOT NULL)",
+            name="ck_position_events_decision_shape",
+        ),
+        CheckConstraint(
+            "(decision = 'hold') OR "
+            "(decision IN ('reduce', 'close') "
+            "AND reference_gross_proceeds >= 0 AND slippage_cost >= 0 "
+            "AND exit_slippage_amount_per_contract = reference_price - exit_price "
+            "AND reference_gross_proceeds = gross_proceeds + slippage_cost "
+            "AND gross_proceeds >= 0 AND exit_fee_amount >= 0 "
+            "AND net_proceeds = gross_proceeds - exit_fee_amount "
+            "AND realized_pnl_increment = net_proceeds - allocated_total_cost_basis) OR "
+            "(decision = 'settle' AND settlement_payout_per_contract >= 0 "
+            "AND settlement_payout_per_contract <= 1 "
+            "AND gross_proceeds = settlement_payout_per_contract * action_quantity "
+            "AND realized_pnl_increment = net_proceeds - allocated_total_cost_basis)",
+            name="ck_position_events_proceeds",
+        ),
+        CheckConstraint(
+            "(decision IN ('hold', 'reduce') AND quantity_after >= 1 "
+            "AND total_cost_basis_after > 0) OR "
+            "(decision IN ('close', 'settle') AND quantity_after = 0 "
+            "AND gross_cost_basis_after = 0 AND entry_fees_after = 0 "
+            "AND total_cost_basis_after = 0 AND after_market_value = 0 "
+            "AND after_unrealized_pnl = 0)",
+            name="ck_position_events_terminal_state",
+        ),
+        CheckConstraint(
+            "length(policy_fingerprint) = 64 AND length(input_fingerprint) = 64 "
+            "AND length(position_projection_fingerprint_before) = 64 "
+            "AND length(position_projection_fingerprint_after) = 64",
+            name="ck_position_events_fingerprints",
+        ),
+        CheckConstraint(
+            "evaluated_at <= recorded_at "
+            "AND (executed_at IS NULL OR evaluated_at <= executed_at) "
+            "AND ((decision = 'hold' AND executed_at IS NULL) "
+            "OR (decision <> 'hold' AND executed_at IS NOT NULL))",
+            name="ck_position_events_times",
+        ),
+        Index("ix_position_events_position_evaluated", "position_id", "evaluated_at"),
+        Index("ix_position_events_portfolio_evaluated", "portfolio_id", "evaluated_at"),
+        Index("ix_position_events_market_evaluated", "market_id", "evaluated_at"),
+        Index("ix_position_events_decision_evaluated", "decision", "evaluated_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    position_id: Mapped[UUID] = mapped_column(
+        ForeignKey("positions.id", ondelete="RESTRICT"), nullable=False
+    )
+    opening_trade_id: Mapped[UUID] = mapped_column(
+        ForeignKey("trades.id", ondelete="RESTRICT"), nullable=False
+    )
+    portfolio_id: Mapped[UUID] = mapped_column(
+        ForeignKey("portfolios.id", ondelete="RESTRICT"), nullable=False
+    )
+    market_id: Mapped[UUID] = mapped_column(
+        ForeignKey("markets.id", ondelete="RESTRICT"), nullable=False
+    )
+    outcome_team_id: Mapped[UUID] = mapped_column(
+        ForeignKey("teams.id", ondelete="RESTRICT"), nullable=False
+    )
+    market_price_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("market_prices.id", ondelete="RESTRICT")
+    )
+    base_forecast_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("base_forecasts.id", ondelete="RESTRICT")
+    )
+    market_resolution_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("market_resolutions.id", ondelete="RESTRICT")
+    )
+    portfolio_snapshot_before_id: Mapped[UUID] = mapped_column(
+        ForeignKey("portfolio_snapshots.id", ondelete="RESTRICT"), nullable=False
+    )
+    portfolio_snapshot_after_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("portfolio_snapshots.id", ondelete="RESTRICT")
+    )
+    execution_mode: Mapped[str] = mapped_column(String(10), nullable=False)
+    decision: Mapped[str] = mapped_column(String(20), nullable=False)
+    reason_code: Mapped[str] = mapped_column(String(100), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    all_required_checks_passed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    state_changed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    failed_rules: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    check_results: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False)
+    position_version_before: Mapped[int] = mapped_column(Integer, nullable=False)
+    position_version_after: Mapped[int] = mapped_column(Integer, nullable=False)
+    status_before: Mapped[str] = mapped_column(String(20), nullable=False)
+    status_after: Mapped[str] = mapped_column(String(20), nullable=False)
+    quantity_before: Mapped[int] = mapped_column(Integer, nullable=False)
+    action_quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    quantity_after: Mapped[int] = mapped_column(Integer, nullable=False)
+    gross_cost_basis_before: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    entry_fees_before: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    total_cost_basis_before: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    allocated_gross_cost_basis: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    allocated_entry_fees: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    allocated_total_cost_basis: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    gross_cost_basis_after: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    entry_fees_after: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    total_cost_basis_after: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    reference_price: Mapped[Decimal | None] = mapped_column(Numeric(7, 6))
+    exit_price: Mapped[Decimal | None] = mapped_column(Numeric(7, 6))
+    exit_slippage_bps: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
+    exit_slippage_amount_per_contract: Mapped[Decimal | None] = mapped_column(Numeric(7, 6))
+    reference_gross_proceeds: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
+    slippage_cost: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
+    gross_proceeds: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
+    exit_fee_bps: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
+    exit_fee_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
+    net_proceeds: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
+    settlement_payout_per_contract: Mapped[Decimal | None] = mapped_column(Numeric(7, 6))
+    model_probability: Mapped[Decimal | None] = mapped_column(Numeric(7, 6))
+    hold_edge: Mapped[Decimal | None] = mapped_column(Numeric(8, 6))
+    after_mark_price: Mapped[Decimal] = mapped_column(Numeric(7, 6), nullable=False)
+    after_mark_basis: Mapped[str] = mapped_column(String(40), nullable=False)
+    after_market_value: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    after_unrealized_pnl: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    realized_pnl_before: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    realized_pnl_increment: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    realized_pnl_cumulative: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    policy_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    policy_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    policy_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    input_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    position_projection_fingerprint_before: Mapped[str] = mapped_column(String(64), nullable=False)
+    position_projection_fingerprint_after: Mapped[str] = mapped_column(String(64), nullable=False)
+    evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    audit_snapshot: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)

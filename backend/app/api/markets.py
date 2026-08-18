@@ -85,7 +85,7 @@ async def list_markets(
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[MarketResponse]:
-    """List persisted normalized markets with their latest price."""
+    """List normalized markets with their latest price and official resolution."""
     records = await repository.list_markets(
         nba_only=nba_only,
         provider_name=provider,
@@ -101,7 +101,7 @@ async def get_market(
     market_id: UUID,
     repository: Annotated[MarketRepository, Depends(get_market_repository)],
 ) -> MarketResponse:
-    """Return one persisted normalized market by its stable internal ID."""
+    """Return one normalized market, including its latest official resolution."""
     record = await repository.get_market(market_id)
     if record is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="market not found")

@@ -125,6 +125,90 @@ def test_normalization_accepts_missing_optional_price_fields() -> None:
     assert [outcome.label for outcome in normalized.outcomes] == ["Yes", "No"]
 
 
+@pytest.mark.parametrize("terminal_status", ["settled", "finalized"])
+def test_normalizes_explicit_consistent_official_binary_resolution(
+    terminal_status: str,
+) -> None:
+    payload = market_payload()
+    payload.update(
+        {
+            "status": terminal_status,
+            "result": "yes",
+            "settlement_value_dollars": "1.000000",
+            "settlement_ts": "2026-08-01T12:30:00Z",
+        }
+    )
+
+    normalized = normalize_kalshi_market(
+        KalshiMarketPayload.model_validate(payload),
+        event=None,
+        retrieved_at=datetime(2026, 8, 1, 13, tzinfo=UTC),
+    )
+
+    assert normalized.resolution is not None
+    assert normalized.resolution.result.value == "yes"
+    assert normalized.resolution.yes_payout == Decimal("1.000000")
+    assert normalized.resolution.no_payout == Decimal("0.000000")
+    assert normalized.resolution.source == "official_provider"
+
+
+def test_normalizes_explicit_no_result_with_zero_yes_payout() -> None:
+    payload = market_payload()
+    payload.update(
+        {
+            "status": "finalized",
+            "result": "no",
+            "settlement_value_dollars": "0.000000",
+            "settlement_ts": "2026-08-01T12:30:00Z",
+        }
+    )
+
+    normalized = normalize_kalshi_market(
+        KalshiMarketPayload.model_validate(payload),
+        event=None,
+        retrieved_at=datetime(2026, 8, 1, 13, tzinfo=UTC),
+    )
+
+    assert normalized.resolution is not None
+    assert normalized.resolution.result.value == "no"
+    assert normalized.resolution.yes_payout == Decimal("0.000000")
+    assert normalized.resolution.no_payout == Decimal("1.000000")
+
+
+@pytest.mark.parametrize(
+    ("updates", "extra"),
+    [
+        ({"status": "open", "result": "yes", "settlement_value_dollars": "1"}, {}),
+        ({"status": "finalized", "result": "scalar", "settlement_value_dollars": "0.5"}, {}),
+        ({"status": "finalized", "result": "yes"}, {}),
+        (
+            {"status": "finalized", "result": "yes", "settlement_value_dollars": "0"},
+            {},
+        ),
+        (
+            {"status": "finalized"},
+            {"home_score": 120, "away_score": 110, "winner": "yes"},
+        ),
+    ],
+)
+def test_unsupported_or_incomplete_terminal_data_has_no_normalized_resolution(
+    updates: dict[str, object],
+    extra: dict[str, object],
+) -> None:
+    payload = market_payload()
+    payload.update(updates)
+    payload.update(extra)
+    payload.setdefault("settlement_ts", "2026-08-01T12:30:00Z")
+
+    normalized = normalize_kalshi_market(
+        KalshiMarketPayload.model_validate(payload),
+        event=None,
+        retrieved_at=datetime(2026, 8, 1, 13, tzinfo=UTC),
+    )
+
+    assert normalized.resolution is None
+
+
 def test_nested_market_without_title_uses_event_title() -> None:
     payload = event_payload()
     markets = payload["markets"]

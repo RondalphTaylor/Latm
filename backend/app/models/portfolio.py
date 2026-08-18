@@ -101,7 +101,8 @@ class PortfolioSnapshotRecord(Base):
             name="ck_portfolio_snapshots_total_capital",
         ),
         CheckConstraint(
-            "reason IN ('created', 'paper_entry_filled')",
+            "reason IN ('created', 'paper_entry_filled', 'paper_position_marked', "
+            "'paper_position_reduced', 'paper_position_closed', 'paper_position_settled')",
             name="ck_portfolio_snapshots_reason",
         ),
         CheckConstraint(

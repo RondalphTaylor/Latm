@@ -1,8 +1,9 @@
-from app.models.execution import PaperPositionRecord, PaperTradeRecord
+from app.models.execution import PaperPositionRecord, PaperTradeRecord, PositionEventRecord
 from app.models.forecasts import BaseForecastRecord, ModelVersionRecord
 from app.models.markets import (
     MarketOutcomeRecord,
     MarketPriceRecord,
+    MarketResolutionRecord,
     PredictionMarketRecord,
     Provider,
 )
@@ -21,9 +22,11 @@ __all__ = [
     "BaseForecastRecord",
     "PaperPositionRecord",
     "PaperTradeRecord",
+    "PositionEventRecord",
     "MarketEventMatchRecord",
     "MarketOutcomeRecord",
     "MarketPriceRecord",
+    "MarketResolutionRecord",
     "ModelVersionRecord",
     "OpportunityRecord",
     "PortfolioRecord",

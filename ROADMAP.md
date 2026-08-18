@@ -751,6 +751,10 @@ The system should support:
 
 Increasing positions may be added later.
 
+The implemented V1 is provider-free and paper-only. A bounded external caller invokes monitoring; no scheduler or order API is introduced. It uses the direct held-side bid, the latest same-model operational forecast, a versioned hold threshold and reduction fraction, conservative exit slippage and fees, and cumulative original-basis allocation. Every semantic decision is append-only and idempotent.
+
+Official standard-binary provider resolutions are normalized into append-only records before settlement. Terminal status or an NBA score alone is insufficient. Missing, unsupported, or conflicting payout evidence records a pending HOLD with no financial mutation.
+
 ## Acceptance Criteria
 
 Phase 9 is complete when:
@@ -761,6 +765,8 @@ Phase 9 is complete when:
 * realized P&L is calculated
 * resolved markets settle positions
 * position history remains auditable
+
+Implemented limitations: no increases, opposing entries, in-play forecast exits, manual override, provider order submission, scalar/void settlement, resolution correction, order-book depth, partial fills, market impact, or live trading.
 
 ---
 

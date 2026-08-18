@@ -21,7 +21,7 @@ From the repository root in PowerShell:
 Copy-Item .env.example .env
 ```
 
-The committed example contains local-development values only. Keep real credentials in `.env`; Git ignores that file. `DATABASE_URL` is required by the backend, while a missing `TRADING_MODE` defaults safely to `paper`. Any other trading-mode value is rejected. `PAPER_SLIPPAGE_BPS` and `PAPER_FEE_BPS` configure the versioned Phase 8 simulation assumptions and default to `25.00` and `10.00`. If a default host port is already occupied, change `POSTGRES_PORT`, `BACKEND_PORT`, or `FRONTEND_PORT` in `.env`; when changing `POSTGRES_PORT`, update the port in the host-side `DATABASE_URL` as well.
+The committed example contains local-development values only. Keep real credentials in `.env`; Git ignores that file. `DATABASE_URL` is required by the backend, while a missing `TRADING_MODE` defaults safely to `paper`. Any other trading-mode value is rejected. `PAPER_SLIPPAGE_BPS` and `PAPER_FEE_BPS` configure the versioned Phase 8 entry assumptions. Phase 9 adds `POSITION_MONITOR_MIN_HOLD_EDGE`, `POSITION_MONITOR_REDUCE_FRACTION`, the two monitoring freshness limits, and distinct `PAPER_EXIT_SLIPPAGE_BPS` / `PAPER_EXIT_FEE_BPS` assumptions. If a default host port is already occupied, change `POSTGRES_PORT`, `BACKEND_PORT`, or `FRONTEND_PORT` in `.env`; when changing `POSTGRES_PORT`, update the port in the host-side `DATABASE_URL` as well.
 
 ## Start the development stack
 
@@ -194,7 +194,7 @@ Consume one explicit, still-current automatic authorization as a paper entry att
 $execution = Invoke-RestMethod -Method Post "http://localhost:8000/paper-execution/run?risk_decision_id=<risk-decision-uuid>"
 ```
 
-Inspect terminal execution history and entry-only open positions:
+Inspect terminal entry history and current position projections:
 
 ```powershell
 Invoke-RestMethod "http://localhost:8000/trades?portfolio_id=<portfolio-uuid>"
@@ -213,9 +213,23 @@ execution_price = ceil_0.000001(directional_ask + PAPER_SLIPPAGE_BPS / 10000)
 
 The engine chooses the largest whole-contract quantity whose gross cost plus the configured flat estimated fee fits inside the authorized capital. Gross cost and nonzero fees round up to cents; the resulting post-cost adjusted edge must still qualify. Initial value uses the same snapshot's directional bid when available, otherwise the directional ask is retained as an explicit fallback mark. A fill atomically creates one immutable trade, one `OPEN` position, and one linked portfolio snapshot; a rejected attempt records its checks but creates neither a position nor a balance transition.
 
-Entry snapshots extend the ledger with open-position value, unrealized P&L, total portfolio value, and the previous-snapshot link. The all-in cost basis, including entry fees, moves from available cash to committed capital. Realized P&L and current bankroll do not change on entry. Phase 8 permits only one open position per portfolio and market, so increases and opposing entries are rejected until position-management semantics exist.
+Entry snapshots extend the ledger with open-position value, unrealized P&L, total portfolio value, and the previous-snapshot link. The all-in cost basis, including entry fees, moves from available cash to committed capital. Realized P&L and current bankroll do not change on entry. Only one open position per portfolio and market is allowed; after that position closes or settles, a separately approved later entry may open a new one.
 
-Phase 8 intentionally excludes human approval actions, exits, reductions, settlement, recurring repricing, order-book depth, liquidity sizing, partial fills, execution latency, provider-specific fees, and every live-trading path. Those positions become inputs to Phase 9 monitoring and exit work.
+Phase 8 intentionally excludes human approval actions, exits, reductions, settlement, recurring repricing, order-book depth, liquidity sizing, partial fills, execution latency, provider-specific fees, and every live-trading path.
+
+## Position monitoring, exits, and settlement
+
+Phase 9 reevaluates either one explicit position or a bounded set of open positions through `POST /position-monitoring/run`. The endpoint is intended for recurring external invocation; it does not add a scheduler or provider order call. Each semantic source set produces one immutable `position_events` row, so an exact retry replays the prior HOLD, REDUCE, CLOSE, or SETTLE result instead of disposing quantity twice. `GET /position-events`, `GET /position-events/{id}`, and `GET /positions/{id}/events` expose the full audit history.
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8000/position-monitoring/run?position_id=<position-uuid>"
+Invoke-RestMethod -Method Post "http://localhost:8000/position-monitoring/run?portfolio_id=<portfolio-uuid>&limit=100"
+Invoke-RestMethod "http://localhost:8000/positions/<position-uuid>/events"
+```
+
+Early exits require a fresh direct bid for the held side, the latest operational forecast from the opening model lineage, a current event match, an open market, and a pregame event. The exit simulator subtracts fixed absolute binary-price slippage, floors gross proceeds to cents, rounds a nonzero fee up to cents, and allocates original entry basis cumulatively so partial reductions are path-independent. The initial policy closes nonpositive remaining edge, reduces positive edge below the configured hold threshold, and otherwise records HOLD. Position increases remain unsupported.
+
+Settlement uses a separate hard boundary. Kalshi data is normalized into append-only `market_resolutions` only when a terminal `settled` or `finalized` standard-binary payload supplies a consistent official YES/NO result, explicit payout, and settlement timestamp. A sports score, raw JSON extra, terminal status alone, unsupported scalar result, or conflicting resolution never moves money. Closed markets without a validated payout record an awaiting-resolution HOLD. A valid settlement has no simulated slippage or exit fee and atomically updates the position projection, immutable event, and next portfolio snapshot.
 
 ## Backend development
 

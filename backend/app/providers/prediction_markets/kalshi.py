@@ -9,6 +9,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError, field_validator
 
 from app.domain.markets import (
+    BinaryMarketResolution,
     MarketOutcome,
     MarketPrice,
     MarketStatusFilter,
@@ -50,6 +51,9 @@ class KalshiMarketPayload(BaseModel):
     volume_24h_fp: Decimal | None = None
     open_interest_fp: Decimal | None = None
     liquidity_dollars: Decimal | None = None
+    result: str | None = None
+    settlement_value_dollars: Decimal | None = None
+    settlement_ts: datetime | None = None
 
     @field_validator(
         "yes_bid_dollars",
@@ -61,6 +65,7 @@ class KalshiMarketPayload(BaseModel):
         "volume_24h_fp",
         "open_interest_fp",
         "liquidity_dollars",
+        "settlement_value_dollars",
         mode="before",
     )
     @classmethod
@@ -105,6 +110,48 @@ class KalshiMarketResponse(BaseModel):
 def _json_dict(model: BaseModel) -> dict[str, JsonValue]:
     value = model.model_dump(mode="json")
     return {str(key): item for key, item in value.items()}
+
+
+def _normalize_binary_resolution(
+    market: KalshiMarketPayload,
+    *,
+    retrieved_at: datetime,
+) -> BinaryMarketResolution | None:
+    """Return only an explicit official standard-binary terminal payout."""
+    status = market.status.strip().lower() if market.status is not None else None
+    market_type = market.market_type.strip().lower()
+    result = market.result.strip().lower() if market.result is not None else None
+    payout = market.settlement_value_dollars
+    settled_at = market.settlement_ts
+    if (
+        status not in {"settled", "finalized"}
+        or market_type != "binary"
+        or result not in {OutcomeSide.YES.value, OutcomeSide.NO.value}
+        or payout is None
+        or settled_at is None
+        or settled_at.tzinfo is None
+        or settled_at.utcoffset() is None
+        or settled_at > retrieved_at
+    ):
+        return None
+    winning_side = OutcomeSide(result)
+    expected_yes_payout = Decimal("1") if winning_side is OutcomeSide.YES else Decimal("0")
+    if payout != expected_yes_payout:
+        return None
+    return BinaryMarketResolution(
+        result=winning_side,
+        yes_payout=payout,
+        no_payout=Decimal("1") - payout,
+        settled_at=settled_at,
+        retrieved_at=retrieved_at,
+        source_snapshot={
+            "provider_status": status,
+            "provider_market_type": market_type,
+            "provider_result": result,
+            "provider_settlement_value_dollars": str(payout),
+            "provider_settlement_ts": settled_at.isoformat(),
+        },
+    )
 
 
 def normalize_kalshi_market(
@@ -182,6 +229,7 @@ def normalize_kalshi_market(
             ),
         ),
         price=price,
+        resolution=_normalize_binary_resolution(market, retrieved_at=retrieved_at),
         raw_data=raw_data,
         retrieved_at=retrieved_at,
     )

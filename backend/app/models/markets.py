@@ -6,6 +6,7 @@ from uuid import UUID
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
@@ -85,6 +86,15 @@ class PredictionMarketRecord(Base):
         lazy="selectin",
         order_by=lambda: MarketPriceRecord.retrieved_at.desc(),
     )
+    resolutions: Mapped[list[MarketResolutionRecord]] = relationship(
+        back_populates="market",
+        lazy="selectin",
+        order_by=lambda: (
+            MarketResolutionRecord.settled_at.desc(),
+            MarketResolutionRecord.retrieved_at.desc(),
+            MarketResolutionRecord.id.desc(),
+        ),
+    )
 
 
 class MarketOutcomeRecord(Base):
@@ -141,3 +151,58 @@ class MarketPriceRecord(Base):
     retrieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     market: Mapped[PredictionMarketRecord] = relationship(back_populates="prices")
+
+
+class MarketResolutionRecord(Base):
+    """Append-only official settlement for a standard binary market."""
+
+    __tablename__ = "market_resolutions"
+    __table_args__ = (
+        UniqueConstraint(
+            "market_id",
+            "input_fingerprint",
+            name="uq_market_resolutions_semantic_input",
+        ),
+        CheckConstraint("result IN ('yes', 'no')", name="ck_market_resolutions_result"),
+        CheckConstraint(
+            "resolution_type = 'standard_binary' AND source = 'official_provider'",
+            name="ck_market_resolutions_source",
+        ),
+        CheckConstraint(
+            "yes_payout >= 0 AND yes_payout <= 1 "
+            "AND no_payout >= 0 AND no_payout <= 1 "
+            "AND yes_payout + no_payout = 1 "
+            "AND ((result = 'yes' AND yes_payout = 1 AND no_payout = 0) "
+            "OR (result = 'no' AND yes_payout = 0 AND no_payout = 1))",
+            name="ck_market_resolutions_binary_payout",
+        ),
+        CheckConstraint(
+            "settled_at <= retrieved_at",
+            name="ck_market_resolutions_times",
+        ),
+        CheckConstraint(
+            "length(input_fingerprint) = 64",
+            name="ck_market_resolutions_fingerprint",
+        ),
+        Index(
+            "ix_market_resolutions_market_settled",
+            "market_id",
+            "settled_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    market_id: Mapped[UUID] = mapped_column(
+        ForeignKey("markets.id", ondelete="RESTRICT"), nullable=False
+    )
+    result: Mapped[str] = mapped_column(String(10), nullable=False)
+    yes_payout: Mapped[Decimal] = mapped_column(Numeric(7, 6), nullable=False)
+    no_payout: Mapped[Decimal] = mapped_column(Numeric(7, 6), nullable=False)
+    resolution_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    source: Mapped[str] = mapped_column(String(30), nullable=False)
+    settled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    retrieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    input_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_snapshot: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+
+    market: Mapped[PredictionMarketRecord] = relationship(back_populates="resolutions")

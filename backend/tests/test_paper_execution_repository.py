@@ -5,6 +5,7 @@ from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy import Table
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.execution import PaperPositionRecord, PaperTradeRecord
@@ -13,13 +14,13 @@ from app.services.execution.repository import PaperExecutionRepository
 
 
 def test_execution_models_expose_single_use_and_open_intent_backstops() -> None:
-    trade_constraints = {
-        item.name for item in PaperTradeRecord.__table__.constraints if item.name is not None
-    }
+    trade_table = cast(Table, PaperTradeRecord.__table__)
+    position_table = cast(Table, PaperPositionRecord.__table__)
+    trade_constraints = {item.name for item in trade_table.constraints if item.name is not None}
     position_constraints = {
-        item.name for item in PaperPositionRecord.__table__.constraints if item.name is not None
+        item.name for item in position_table.constraints if item.name is not None
     }
-    position_indexes = {item.name for item in PaperPositionRecord.__table__.indexes}
+    position_indexes = {item.name for item in position_table.indexes}
 
     assert "uq_trades_risk_decision" in trade_constraints
     assert "ck_trades_terminal_state" in trade_constraints

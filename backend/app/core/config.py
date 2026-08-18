@@ -125,6 +125,34 @@ class Settings(BaseSettings):
     paper_fee_bps: Decimal = Field(
         default=Decimal("10.00"), ge=Decimal("0"), le=Decimal("10000"), decimal_places=2
     )
+    position_monitor_min_hold_edge: Decimal = Field(
+        default=Decimal("0.03"),
+        ge=Decimal("0"),
+        le=Decimal("1"),
+        decimal_places=6,
+    )
+    position_monitor_reduce_fraction: Decimal = Field(
+        default=Decimal("0.50"),
+        gt=Decimal("0"),
+        lt=Decimal("1"),
+        decimal_places=6,
+    )
+    position_monitor_max_market_price_age_seconds: int = Field(
+        default=900,
+        ge=1,
+        le=86400,
+    )
+    position_monitor_max_operational_forecast_age_seconds: int = Field(
+        default=86400,
+        ge=1,
+        le=604800,
+    )
+    paper_exit_slippage_bps: Decimal = Field(
+        default=Decimal("25.00"), ge=Decimal("0"), le=Decimal("10000"), decimal_places=2
+    )
+    paper_exit_fee_bps: Decimal = Field(
+        default=Decimal("10.00"), ge=Decimal("0"), le=Decimal("10000"), decimal_places=2
+    )
 
     @model_validator(mode="after")
     def validate_opportunity_thresholds(self) -> Settings:

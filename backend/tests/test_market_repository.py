@@ -9,12 +9,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ClauseElement, Executable
 
 from app.domain.markets import (
+    BinaryMarketResolution,
     MarketOutcome,
     MarketPrice,
     OutcomeSide,
     PredictionMarket,
 )
-from app.services.markets.repository import MarketRepository, market_record_id
+from app.services.markets.repository import (
+    MarketRepository,
+    market_record_id,
+    market_resolution_fingerprint,
+    market_resolution_record_id,
+)
 
 
 class RecordingSession:
@@ -98,3 +104,40 @@ def test_upsert_batches_large_market_sets_below_driver_parameter_limit() -> None
     assert persisted == 501
     assert session.commits == 1
     assert len(session.statements) == 6
+
+
+def test_upsert_appends_official_resolution_by_stable_semantic_identity() -> None:
+    session = RecordingSession()
+    repository = MarketRepository(cast(AsyncSession, session))
+    observed_at = datetime(2026, 8, 2, 2, tzinfo=UTC)
+    settled_at = datetime(2026, 8, 2, 1, tzinfo=UTC)
+    market = normalized_market().model_copy(
+        update={
+            "status": "finalized",
+            "price": None,
+            "resolution": BinaryMarketResolution(
+                result=OutcomeSide.YES,
+                yes_payout=Decimal("1"),
+                no_payout=Decimal("0"),
+                settled_at=settled_at,
+                retrieved_at=observed_at,
+                source_snapshot={"provider_result": "yes"},
+            ),
+            "retrieved_at": observed_at,
+        }
+    )
+
+    persisted = asyncio.run(repository.upsert_markets([market]))
+    persisted_again = asyncio.run(repository.upsert_markets([market]))
+
+    fingerprint = market_resolution_fingerprint(market)
+    assert persisted == persisted_again == 1
+    assert fingerprint is not None
+    market_id = market_record_id("kalshi", market.provider_market_id)
+    assert market_resolution_record_id(market_id, fingerprint) == market_resolution_record_id(
+        market_id, fingerprint
+    )
+    assert len(session.statements) == 8
+    resolution_sql = str(session.statements[3])
+    assert "INSERT INTO market_resolutions" in resolution_sql
+    assert "uq_market_resolutions_semantic_input" in resolution_sql

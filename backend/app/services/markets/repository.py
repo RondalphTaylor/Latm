@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Sequence
 from itertools import batched
 from uuid import UUID, uuid5
@@ -13,6 +15,7 @@ from app.domain.markets import PredictionMarket
 from app.models.markets import (
     MarketOutcomeRecord,
     MarketPriceRecord,
+    MarketResolutionRecord,
     PredictionMarketRecord,
     Provider,
 )
@@ -35,6 +38,33 @@ def outcome_record_id(market_id: UUID, provider_outcome_id: str) -> UUID:
 def price_record_id(market_id: UUID, retrieved_at_iso: str) -> UUID:
     """Return an idempotent ID for one market observation timestamp."""
     return uuid5(_LATM_MARKET_NAMESPACE, f"price:{market_id}:{retrieved_at_iso}")
+
+
+def market_resolution_fingerprint(market: PredictionMarket) -> str | None:
+    """Hash one explicit official settlement without observation time."""
+    resolution = market.resolution
+    if resolution is None:
+        return None
+    payload = {
+        "provider_name": market.provider_name,
+        "provider_market_id": market.provider_market_id,
+        "result": resolution.result.value,
+        "yes_payout": str(resolution.yes_payout),
+        "no_payout": str(resolution.no_payout),
+        "resolution_type": resolution.resolution_type,
+        "source": resolution.source,
+        "settled_at": resolution.settled_at.isoformat(),
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def market_resolution_record_id(market_id: UUID, input_fingerprint: str) -> UUID:
+    """Return a stable ID for one provider settlement assertion."""
+    return uuid5(
+        _LATM_MARKET_NAMESPACE,
+        f"resolution:{market_id}:{input_fingerprint}",
+    )
 
 
 class MarketRepository:
@@ -107,6 +137,15 @@ class MarketRepository:
                 price_insert.on_conflict_do_nothing(constraint="uq_market_prices_observation")
             )
 
+    async def _insert_resolution_values(self, values: list[dict[str, object]]) -> None:
+        for batch in batched(values, _UPSERT_BATCH_SIZE, strict=False):
+            resolution_insert = insert(MarketResolutionRecord).values(list(batch))
+            await self._session.execute(
+                resolution_insert.on_conflict_do_nothing(
+                    constraint="uq_market_resolutions_semantic_input"
+                )
+            )
+
     async def upsert_markets(self, markets: Sequence[PredictionMarket]) -> int:
         """Upsert market identities and append distinct price observations."""
         if not markets:
@@ -124,6 +163,7 @@ class MarketRepository:
         market_values: list[dict[str, object]] = []
         outcome_values: list[dict[str, object]] = []
         price_values: list[dict[str, object]] = []
+        resolution_values: list[dict[str, object]] = []
         for market in markets:
             market_id = market_record_id(market.provider_name, market.provider_market_id)
             market_values.append(
@@ -179,6 +219,27 @@ class MarketRepository:
                         "retrieved_at": market.price.retrieved_at,
                     }
                 )
+            resolution = market.resolution
+            resolution_fingerprint = market_resolution_fingerprint(market)
+            if resolution is not None and resolution_fingerprint is not None:
+                resolution_values.append(
+                    {
+                        "id": market_resolution_record_id(
+                            market_id,
+                            resolution_fingerprint,
+                        ),
+                        "market_id": market_id,
+                        "result": resolution.result.value,
+                        "yes_payout": resolution.yes_payout,
+                        "no_payout": resolution.no_payout,
+                        "resolution_type": resolution.resolution_type,
+                        "source": resolution.source,
+                        "settled_at": resolution.settled_at,
+                        "retrieved_at": resolution.retrieved_at,
+                        "input_fingerprint": resolution_fingerprint,
+                        "source_snapshot": resolution.source_snapshot,
+                    }
+                )
 
         try:
             await self._upsert_providers(provider_values)
@@ -187,6 +248,8 @@ class MarketRepository:
                 await self._upsert_outcome_values(outcome_values)
             if price_values:
                 await self._insert_price_values(price_values)
+            if resolution_values:
+                await self._insert_resolution_values(resolution_values)
             await self._session.commit()
         except Exception:
             await self._session.rollback()
@@ -208,6 +271,7 @@ class MarketRepository:
             .options(
                 selectinload(PredictionMarketRecord.outcomes),
                 selectinload(PredictionMarketRecord.prices),
+                selectinload(PredictionMarketRecord.resolutions),
             )
             .order_by(PredictionMarketRecord.occurrence_time, PredictionMarketRecord.title)
             .limit(limit)
@@ -230,6 +294,7 @@ class MarketRepository:
             .options(
                 selectinload(PredictionMarketRecord.outcomes),
                 selectinload(PredictionMarketRecord.prices),
+                selectinload(PredictionMarketRecord.resolutions),
             )
         )
         result = await self._session.scalars(statement)

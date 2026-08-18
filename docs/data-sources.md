@@ -244,6 +244,8 @@ Provider Market ID
 
 so external data remains traceable.
 
+Phase 9 normalizes settlement only from terminal standard-binary market payloads with a typed `result`, explicit `settlement_value_dollars`, and `settlement_ts`, following Kalshi's documented [market lifecycle](https://docs.kalshi.com/getting_started/market_lifecycle) and [Get Market response](https://docs.kalshi.com/api-reference/market/get-market). Each official assertion is append-only and fingerprinted. Unsupported, incomplete, or conflicting outcomes remain non-financial.
+
 ---
 
 # 8. Kalshi Order Books

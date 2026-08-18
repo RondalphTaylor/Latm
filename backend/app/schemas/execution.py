@@ -137,7 +137,7 @@ class PaperTradeResponse(BaseModel):
 
 
 class PaperPositionResponse(BaseModel):
-    """Entry-only open paper position with mark-to-market P&L."""
+    """Current paper-position projection with auditable remaining basis."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -150,8 +150,14 @@ class PaperPositionResponse(BaseModel):
     execution_mode: str
     direction: str
     status: PaperPositionStatus
+    initial_quantity: int
     quantity: int
+    disposed_quantity: int
+    version: int
     average_entry_price: Decimal
+    original_gross_cost_basis: Decimal
+    original_entry_fees: Decimal
+    original_total_cost_basis: Decimal
     gross_cost_basis: Decimal
     entry_fees: Decimal
     total_cost_basis: Decimal
@@ -160,9 +166,14 @@ class PaperPositionResponse(BaseModel):
     market_value: Decimal
     unrealized_pnl: Decimal
     realized_pnl: Decimal
+    latest_base_forecast_id: UUID | None
+    market_resolution_id: UUID | None
     input_fingerprint: str
+    projection_fingerprint: str
     opened_at: datetime
     updated_at: datetime
+    closed_at: datetime | None
+    settled_at: datetime | None
 
     @classmethod
     def from_record(cls, record: PaperPositionRecord) -> PaperPositionResponse:
@@ -176,8 +187,14 @@ class PaperPositionResponse(BaseModel):
             execution_mode=record.execution_mode,
             direction=record.direction,
             status=PaperPositionStatus(record.status),
+            initial_quantity=record.initial_quantity,
             quantity=record.quantity,
+            disposed_quantity=record.disposed_quantity,
+            version=record.version,
             average_entry_price=record.average_entry_price,
+            original_gross_cost_basis=record.original_gross_cost_basis,
+            original_entry_fees=record.original_entry_fees,
+            original_total_cost_basis=record.original_total_cost_basis,
             gross_cost_basis=record.gross_cost_basis,
             entry_fees=record.entry_fees,
             total_cost_basis=record.total_cost_basis,
@@ -186,9 +203,14 @@ class PaperPositionResponse(BaseModel):
             market_value=record.market_value,
             unrealized_pnl=record.unrealized_pnl,
             realized_pnl=record.realized_pnl,
+            latest_base_forecast_id=record.latest_base_forecast_id,
+            market_resolution_id=record.market_resolution_id,
             input_fingerprint=record.input_fingerprint,
+            projection_fingerprint=record.projection_fingerprint,
             opened_at=record.opened_at,
             updated_at=record.updated_at,
+            closed_at=record.closed_at,
+            settled_at=record.settled_at,
         )
 
 

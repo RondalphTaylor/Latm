@@ -5,7 +5,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator, model_validator
 
 ProbabilityPrice = Annotated[Decimal, Field(ge=Decimal("0"), le=Decimal("1"))]
 NonNegativeDecimal = Annotated[Decimal, Field(ge=Decimal("0"))]
@@ -54,6 +54,44 @@ class MarketPrice(BaseModel):
     retrieved_at: datetime
 
 
+class BinaryMarketResolution(BaseModel):
+    """Official provider settlement for one standard binary market."""
+
+    model_config = ConfigDict(frozen=True)
+
+    result: OutcomeSide
+    yes_payout: ProbabilityPrice
+    no_payout: ProbabilityPrice
+    resolution_type: str = Field(default="standard_binary", pattern=r"^standard_binary$")
+    source: str = Field(default="official_provider", pattern=r"^official_provider$")
+    settled_at: datetime
+    retrieved_at: datetime
+    source_snapshot: dict[str, JsonValue]
+
+    @field_validator("settled_at", "retrieved_at")
+    @classmethod
+    def times_must_be_timezone_aware(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("market resolution times must be timezone-aware")
+        return value
+
+    @model_validator(mode="after")
+    def validate_standard_binary_payout(self) -> BinaryMarketResolution:
+        if self.settled_at > self.retrieved_at:
+            raise ValueError("market settlement cannot postdate its retrieval")
+        if self.yes_payout + self.no_payout != Decimal("1"):
+            raise ValueError("binary settlement payouts must sum to one")
+        if self.result is OutcomeSide.YES and (
+            self.yes_payout != Decimal("1") or self.no_payout != Decimal("0")
+        ):
+            raise ValueError("a YES result requires a one-dollar YES payout")
+        if self.result is OutcomeSide.NO and (
+            self.yes_payout != Decimal("0") or self.no_payout != Decimal("1")
+        ):
+            raise ValueError("a NO result requires a one-dollar NO payout")
+        return self
+
+
 class PredictionMarket(BaseModel):
     """Provider-independent prediction-market representation."""
 
@@ -77,5 +115,6 @@ class PredictionMarket(BaseModel):
     provider_updated_at: datetime | None = None
     outcomes: tuple[MarketOutcome, ...]
     price: MarketPrice | None = None
+    resolution: BinaryMarketResolution | None = None
     raw_data: dict[str, JsonValue]
     retrieved_at: datetime

@@ -626,7 +626,7 @@ The system should correctly maintain:
 * cost basis
 * average price
 
-Phase 8 deliberately rejects a second entry whenever the portfolio already has an open position for that market. Position increases and weighted-average updates are deferred to Phase 9 so aggregate exposure is not changed without explicit monitoring and risk semantics.
+Phase 8 deliberately rejects a second entry whenever the portfolio already has an open position for that market. Phase 9 preserves that gate, implements exposure reduction, and permits a separately approved new entry only after the prior position is terminal. Increases and weighted-average entry updates remain unsupported.
 
 ---
 
@@ -652,7 +652,7 @@ Possible implementations include:
 
 The normalized portfolio model should eventually account for economic equivalence.
 
-Phase 8 prevents opposing positions by allowing only one open position per portfolio and market, regardless of direction. Independent opposing positions, economic netting, and reduction semantics are deferred to Phase 9.
+The system prevents opposing positions by allowing only one open position per portfolio and market, regardless of direction. Phase 9 adds reduction semantics but not independent opposing positions or economic netting.
 
 ---
 
@@ -711,7 +711,7 @@ total_cost_basis = gross_cost_basis + entry_fees
 unrealized_pnl = floor_cent(quantity * mark_price) - total_cost_basis
 ```
 
-Exit fees remain future work. The position and portfolio snapshot store the same initial market value and unrealized P&L.
+Phase 9 models a distinct configurable exit fee. The position and portfolio snapshot store the same initial market value and unrealized P&L.
 
 The exact formula should be tested carefully.
 
@@ -737,7 +737,7 @@ Allocated Cost Basis
 Fees
 ```
 
-The system must handle partial exits correctly.
+Phase 9 handles partial exits with cumulative original-basis allocation. Gross entry basis and entry fees are allocated independently, rounded down to cents, and the last disposal consumes all residual basis. This prevents the realized result from changing merely because the same total quantity was reduced in different batch sizes.
 
 ---
 
@@ -755,7 +755,7 @@ Inputs may include:
 * time until resolution
 * portfolio risk
 
-The position manager may recommend:
+The deterministic V1 manager records and immediately applies paper-only:
 
 ```text
 HOLD
@@ -763,9 +763,11 @@ HOLD
 REDUCE
 
 CLOSE
+
+SETTLE
 ```
 
-Future versions may also support:
+Every semantic source set and policy identity creates at most one immutable position event. A repeated monitoring call returns that event rather than applying its action again. Future versions may also support:
 
 ```text
 INCREASE
@@ -805,7 +807,7 @@ NEW_EVIDENCE
 MARKET_CONDITIONS_CHANGED
 ```
 
-The exact strategy should evolve through experimentation.
+The V1 policy requires the latest direct held-side bid, a fresh latest operational forecast from the opening model lineage, a current event match, an open market, and a pregame event. It closes when remaining model edge at the executable bid is nonpositive, reduces by the configured fraction when positive edge is below the hold threshold, and otherwise holds. A reversed forecast is an explicit close reason only when the remaining edge is also below the threshold. The exact strategy should evolve through experimentation.
 
 ---
 
@@ -902,6 +904,8 @@ They should be evaluated empirically rather than assumed beneficial.
 # 34. Market Resolution
 
 When a market resolves, the paper-trading system should settle the position.
+
+Phase 9 settles only from an append-only normalized official provider resolution. The record must contain a terminal standard-binary result, explicit consistent YES and NO payout, provider settlement time, retrieval time, source evidence, and fingerprint. Market status, an NBA final score, or an unvalidated raw payload is not settlement authority. Closed markets without that record remain open with an explicit `market_closed_unresolved` HOLD.
 
 For a binary contract:
 
@@ -1582,17 +1586,15 @@ positions
 
 ```
 
-Later position-management and approval milestones may add:
+Phase 9 adds the latter two records; approval history remains a later milestone:
 
 ```text
-trade_approvals
-
 position_events
 
 market_resolutions
 ```
 
-Phase 8 `trades` preserve filled and rejected terminal attempts, while `positions` contain one opening state per portfolio and market. Existing portfolio snapshots carry the append-only accounting transition, so no separate order, reservation, or position-event table is needed for an atomic immediate entry.
+Phase 8 `trades` still preserve filled and rejected entry attempts. Phase 9 keeps those rows immutable, turns `positions` into the current projection, and reconstructs all later HOLD, REDUCE, CLOSE, and SETTLE history from ordered immutable events and snapshots.
 
 ---
 
@@ -1630,7 +1632,7 @@ The staged MVP ultimately should support:
 14. Trade history
 ```
 
-Phase 8 completes items 1-8, 12-14 for entry state, and immutable trade history. Items 9-11—closing, settlement, and realized-P&L transitions—belong to Phase 9. Phase 8 is intentionally limited to provider-free immediate paper entries from single-use `AUTO_APPROVE` decisions, with no live or human-approval route.
+Phases 8 and 9 complete items 1-14 for the initial immediate-fill simulator: entry, tracking, deterministic automated reduction/closing, official standard-binary settlement, realized and unrealized P&L, portfolio value, and immutable history. Human approval, live execution, increases, scalar/void settlement, and realistic order-book fills remain future work.
 
 ---
 

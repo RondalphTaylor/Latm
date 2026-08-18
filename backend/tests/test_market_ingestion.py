@@ -3,8 +3,10 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from app.domain.markets import (
+    BinaryMarketResolution,
     MarketOutcome,
     MarketStatusFilter,
     OutcomeSide,
@@ -92,3 +94,35 @@ def test_ingestion_filters_to_nba_before_persistence() -> None:
     assert result.nba_markets == 1
     assert result.persisted == 1
     assert repository.markets[0].provider_market_id == "KXNBAGAME-1"
+
+
+def test_settled_ingestion_preserves_typed_authoritative_resolution() -> None:
+    retrieved_at = datetime(2026, 8, 2, 2, tzinfo=UTC)
+    normalized_market = market(
+        ticker="KXNBAGAME-1",
+        title="Boston Celtics at New York Knicks",
+        series_ticker="KXNBAGAME",
+        category="Sports",
+    ).model_copy(
+        update={
+            "status": "finalized",
+            "resolution": BinaryMarketResolution(
+                result=OutcomeSide.YES,
+                yes_payout=Decimal("1"),
+                no_payout=Decimal("0"),
+                settled_at=datetime(2026, 8, 2, 1, tzinfo=UTC),
+                retrieved_at=retrieved_at,
+                source_snapshot={"provider_result": "yes"},
+            ),
+            "retrieved_at": retrieved_at,
+        }
+    )
+    provider = StaticProvider([normalized_market])
+    repository = CapturingRepository()
+    service = MarketIngestionService(provider=provider, repository=repository)
+
+    result = asyncio.run(service.ingest(status=MarketStatusFilter.SETTLED))
+
+    assert provider.status is MarketStatusFilter.SETTLED
+    assert result.persisted == 1
+    assert repository.markets[0].resolution == normalized_market.resolution

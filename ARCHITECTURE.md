@@ -936,14 +936,16 @@ Responsibilities include:
 * current forecast
 * current edge
 
-The position manager should support future actions:
+The position manager supports:
 
 * hold
-* increase
 * reduce
 * close
+* settle
 
-Phase 8 creates the initial immutable position state only. It does not increase, reduce, close, settle, or periodically re-mark a position. Phase 9 owns those state transitions, and future position decisions should pass through the same opportunity and risk logic as initial entries.
+Phase 9 keeps the Phase 8 entry trade immutable and treats `positions` as a locked current projection. Every reevaluation appends an immutable `position_events` record containing exact source IDs, before/after quantity and remaining basis, decision checks, policy identity, proceeds, realized P&L, fingerprints, and portfolio-snapshot links. The projection has `open`, `closed`, and `settled` states. Exact semantic retries replay the prior event; they cannot reduce or close twice. Increasing and opposing positions remain unsupported.
+
+Monitoring runs one position per transaction with the fixed lock prefix portfolio, market parent, sports-event parent, position, latest portfolio snapshot, then latest match/price/forecast/resolution rows. It captures database wall-clock time only after lock waits. A state transition and its event and snapshot commit atomically, and aggregate position projections must reconcile with the portfolio ledger before commit.
 
 ---
 
@@ -960,7 +962,18 @@ Triggers may include:
 * approaching resolution
 * risk limit changes
 
-The system should record exit reasons.
+The initial deterministic policy uses the latest direct held-side bid and latest operational forecast from the opening model lineage. Settlement takes precedence. Closed-but-unresolved markets, post-start events, stale or incomplete sources, and invalid semantics explicitly HOLD. Otherwise nonpositive remaining edge closes, positive edge below the configured threshold reduces exposure, and edge at or above the threshold holds. A one-contract reduction becomes a full close.
+
+The system records exit reasons and exact paper economics. Early exits use:
+
+```text
+exit_price = floor_0.000001(directional_bid - exit_slippage_bps / 10000)
+gross_proceeds = floor_cent(exit_price * disposed_quantity)
+exit_fee = 0, or ceil_cent(gross_proceeds * exit_fee_bps / 10000)
+realized_increment = gross_proceeds - exit_fee - allocated_entry_basis
+```
+
+Partial basis allocation is cumulative from the original quantity and original gross/fee components, leaving rounding residue for the final disposal.
 
 Example:
 
@@ -973,6 +986,8 @@ RISK_REDUCTION
 
 MARKET_RESOLVED
 ```
+
+Official settlement is normalized through the read-only provider adapter into append-only `market_resolutions`. It requires a terminal standard-binary provider status, typed YES/NO result, explicit consistent per-side payout, and official settlement time. Scores and unvalidated raw provider fields cannot settle a contract. Conflicting or incomplete observations remain pending. A valid settlement pays the held side without exit slippage or fees and uses the same atomic ledger transition as a close.
 
 ---
 
@@ -1011,6 +1026,8 @@ total_portfolio_value = cash_balance + open_position_value
 ```
 
 The initial snapshot sets current bankroll, cash, available bankroll, and total portfolio value equal to the configured starting bankroll, with reserved capital, committed capital, open-position value, realized P&L, and unrealized P&L at zero. Position sizing and risk evaluation remain read-only. An immediate entry needs no separately persisted reservation: the locked transaction moves its all-in cost, including fees, from available cash into committed capital, adds its initial marked value and unrealized P&L, and appends one `paper_entry_filled` snapshot. Starting bankroll, current bankroll, reserved capital, and realized P&L remain unchanged on entry.
+
+Phase 9 appends `paper_position_marked`, `paper_position_reduced`, `paper_position_closed`, or `paper_position_settled` snapshots when accounting state changes. Disposal removes allocated remaining basis from committed capital, adds net proceeds to cash, and adds net proceeds minus allocated basis to realized P&L and current bankroll. Open-position value and unrealized P&L are rechecked against all current open projections under the portfolio lock.
 
 ---
 

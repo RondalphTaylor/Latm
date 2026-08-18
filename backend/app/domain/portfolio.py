@@ -36,6 +36,10 @@ class PortfolioSnapshotReason(StrEnum):
 
     CREATED = "created"
     PAPER_ENTRY_FILLED = "paper_entry_filled"
+    PAPER_POSITION_MARKED = "paper_position_marked"
+    PAPER_POSITION_REDUCED = "paper_position_reduced"
+    PAPER_POSITION_CLOSED = "paper_position_closed"
+    PAPER_POSITION_SETTLED = "paper_position_settled"
 
 
 class PortfolioStatus(StrEnum):

@@ -37,6 +37,22 @@ class MarketPriceResponse(BaseModel):
     retrieved_at: datetime
 
 
+class MarketResolutionResponse(BaseModel):
+    """Latest validated official binary settlement returned by the API."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: UUID
+    result: str
+    yes_payout: Decimal
+    no_payout: Decimal
+    resolution_type: str
+    source: str
+    settled_at: datetime
+    retrieved_at: datetime
+    input_fingerprint: str
+
+
 class MarketResponse(BaseModel):
     """Persisted provider-neutral prediction market returned by the API."""
 
@@ -64,6 +80,7 @@ class MarketResponse(BaseModel):
     last_seen_at: datetime
     outcomes: tuple[MarketOutcomeResponse, ...]
     latest_price: MarketPriceResponse | None
+    latest_resolution: MarketResolutionResponse | None
 
     @classmethod
     def from_record(cls, record: PredictionMarketRecord) -> MarketResponse:
@@ -82,6 +99,20 @@ class MarketResponse(BaseModel):
                 open_interest=latest_price_record.open_interest,
                 liquidity=latest_price_record.liquidity,
                 retrieved_at=latest_price_record.retrieved_at,
+            )
+        latest_resolution_record = record.resolutions[0] if record.resolutions else None
+        latest_resolution = None
+        if latest_resolution_record is not None:
+            latest_resolution = MarketResolutionResponse(
+                id=latest_resolution_record.id,
+                result=latest_resolution_record.result,
+                yes_payout=latest_resolution_record.yes_payout,
+                no_payout=latest_resolution_record.no_payout,
+                resolution_type=latest_resolution_record.resolution_type,
+                source=latest_resolution_record.source,
+                settled_at=latest_resolution_record.settled_at,
+                retrieved_at=latest_resolution_record.retrieved_at,
+                input_fingerprint=latest_resolution_record.input_fingerprint,
             )
         return cls(
             id=record.id,
@@ -114,6 +145,7 @@ class MarketResponse(BaseModel):
                 for outcome in sorted(record.outcomes, key=lambda item: item.side, reverse=True)
             ),
             latest_price=latest_price,
+            latest_resolution=latest_resolution,
         )
 
 

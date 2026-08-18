@@ -13,6 +13,7 @@ from app.main import create_app
 from app.models.markets import (
     MarketOutcomeRecord,
     MarketPriceRecord,
+    MarketResolutionRecord,
     PredictionMarketRecord,
 )
 from app.providers.prediction_markets.base import ProviderUnavailableError
@@ -22,7 +23,7 @@ from app.services.markets.repository import MarketRepository, market_record_id
 MARKET_ID = market_record_id("kalshi", "KXNBAGAME-26AUG01BOSNYK-BOS")
 
 
-def market_record() -> PredictionMarketRecord:
+def market_record(*, with_resolution: bool = False) -> PredictionMarketRecord:
     observed_at = datetime(2026, 8, 1, 12, tzinfo=UTC)
     record = PredictionMarketRecord(
         id=MARKET_ID,
@@ -79,6 +80,23 @@ def market_record() -> PredictionMarketRecord:
             retrieved_at=observed_at,
         )
     ]
+    record.resolutions = []
+    if with_resolution:
+        record.resolutions = [
+            MarketResolutionRecord(
+                id=UUID("4d3705a0-e83a-40a8-8788-aa430a0ac995"),
+                market_id=MARKET_ID,
+                result="yes",
+                yes_payout=Decimal("1.000000"),
+                no_payout=Decimal("0.000000"),
+                resolution_type="standard_binary",
+                source="official_provider",
+                settled_at=observed_at,
+                retrieved_at=observed_at,
+                input_fingerprint="a" * 64,
+                source_snapshot={"provider_result": "yes"},
+            )
+        ]
     return record
 
 
@@ -174,6 +192,28 @@ def test_get_market_returns_404_for_unknown_id() -> None:
 
     assert response.status_code == 404
     assert response.json() == {"detail": "market not found"}
+
+
+def test_get_market_exposes_latest_authoritative_resolution() -> None:
+    repository = FakeMarketRepository(market_record(with_resolution=True))
+    _, test_client = market_client(repository=repository)
+
+    with test_client:
+        response = test_client.get(f"/markets/{MARKET_ID}")
+
+    assert response.status_code == 200
+    resolution = response.json()["latest_resolution"]
+    assert resolution == {
+        "id": "4d3705a0-e83a-40a8-8788-aa430a0ac995",
+        "result": "yes",
+        "yes_payout": "1.000000",
+        "no_payout": "0.000000",
+        "resolution_type": "standard_binary",
+        "source": "official_provider",
+        "settled_at": "2026-08-01T12:00:00Z",
+        "retrieved_at": "2026-08-01T12:00:00Z",
+        "input_fingerprint": "a" * 64,
+    }
 
 
 def test_ingestion_endpoint_reports_counts() -> None:
