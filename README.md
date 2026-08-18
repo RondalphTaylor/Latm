@@ -1,6 +1,6 @@
 # LATM Prediction Market Platform
 
-An auditable prediction-market research platform focused initially on NBA markets. The current MVP ingests read-only Kalshi market data and authenticated BALLDONTLIE NBA data, deterministically links supported single-game contracts to normalized events, generates versioned event-level Elo base forecasts from local game history, records research-only YES/NO raw-edge opportunities, produces versioned advisory capital allocations against an isolated paper bankroll, and records deterministic paper-only risk decisions.
+An auditable prediction-market research platform focused initially on NBA markets. The current MVP ingests read-only Kalshi market data and authenticated BALLDONTLIE NBA data, deterministically links supported single-game contracts to normalized events, generates versioned event-level Elo base forecasts from local game history, records research-only YES/NO raw-edge opportunities, produces versioned advisory capital allocations against an isolated paper bankroll, records deterministic paper-only risk decisions, and simulates provider-free paper entries with immutable trades, open positions, and portfolio snapshots.
 
 > **Trading safety:** the only supported execution mode is `paper`. The Kalshi adapter accesses public production market data without credentials, while the BALLDONTLIE key authorizes sports-data reads only. Neither adapter contains order placement, financial-account access, or live-trading implementation.
 
@@ -21,7 +21,7 @@ From the repository root in PowerShell:
 Copy-Item .env.example .env
 ```
 
-The committed example contains local-development values only. Keep real credentials in `.env`; Git ignores that file. `DATABASE_URL` is required by the backend, while a missing `TRADING_MODE` defaults safely to `paper`. Any other trading-mode value is rejected. If a default host port is already occupied, change `POSTGRES_PORT`, `BACKEND_PORT`, or `FRONTEND_PORT` in `.env`; when changing `POSTGRES_PORT`, update the port in the host-side `DATABASE_URL` as well.
+The committed example contains local-development values only. Keep real credentials in `.env`; Git ignores that file. `DATABASE_URL` is required by the backend, while a missing `TRADING_MODE` defaults safely to `paper`. Any other trading-mode value is rejected. `PAPER_SLIPPAGE_BPS` and `PAPER_FEE_BPS` configure the versioned Phase 8 simulation assumptions and default to `25.00` and `10.00`. If a default host port is already occupied, change `POSTGRES_PORT`, `BACKEND_PORT`, or `FRONTEND_PORT` in `.env`; when changing `POSTGRES_PORT`, update the port in the host-side `DATABASE_URL` as well.
 
 ## Start the development stack
 
@@ -95,7 +95,7 @@ Invoke-RestMethod "http://localhost:8000/matches/<internal-match-uuid>"
 
 Matcher V1 uses boundary-aware canonical names, nicknames, official uppercase abbreviations, curated aliases, and occurrence-time proximity. A result is `matched` only at confidence `0.90` or higher with at least a `0.10` lead over another candidate inside the 36-hour window. These values are configurable, recorded with every result, and are heuristic matching scores—not calibrated probabilities.
 
-Identical semantic inputs do not create duplicate attempts; changed market text, schedules, candidates, policy, or matcher version append a new historical result. Explicit cross-sport signals, missing teams, multi-team contracts, distant dates, and uncertain candidates remain `unmatched` or `ambiguous`. Only a sufficiently confident `matched` result records the matching prerequisite for potential future automatic trading. No execution exists, and every future trade must still pass the risk engine.
+Identical semantic inputs do not create duplicate attempts; changed market text, schedules, candidates, policy, or matcher version append a new historical result. Explicit cross-sport signals, missing teams, multi-team contracts, distant dates, and uncertain candidates remain `unmatched` or `ambiguous`. Only a sufficiently confident `matched` result records the matching prerequisite for automatic paper trading. The matcher itself cannot execute, and every paper entry must still pass sizing, risk, and final execution revalidation.
 
 ## Base forecasting
 
@@ -184,7 +184,38 @@ Invoke-RestMethod "http://localhost:8000/position-size-proposals/<proposal-uuid>
 
 The MVP policy rejects any failed hard check. It returns `AUTO_APPROVE` only when exposure is strictly below 10%; exactly 10% through exactly 40% requires human approval because calibrated confidence is unavailable; above 40% also requires human approval. Decisions revalidate paper mode, the active portfolio and sizing strategy, the latest portfolio snapshot, accounting and aggregate authorized capital, current opportunity semantics, open market/event state, match confidence, price and forecast freshness, raw edge, and duplicate intent.
 
-Non-rejected decisions expire within a fixed five-minute authorization window and may expire sooner with their source evidence. `unexpired_only` means only that the stored authorization time has not elapsed; Phase 8 must still revalidate every mutable source before simulated execution. Phase 7 does not implement a human-approval action, reserve capital, create an order, mutate balances, call a provider, or execute a trade. Adjusted edge and calibrated confidence are unavailable, and liquidity plus existing executed-position exposure remain explicitly unevaluated.
+Non-rejected decisions expire within a fixed five-minute authorization window and may expire sooner with their source evidence. `unexpired_only` means only that the stored authorization time has not elapsed; the Phase 8 boundary still revalidates every mutable source before simulated execution. Phase 7 itself does not implement a human-approval action, reserve capital, create an order, mutate balances, call a provider, or execute a trade. Adjusted edge and calibrated confidence remain unavailable at risk time, and liquidity remains explicitly unevaluated.
+
+## Paper execution and positions
+
+Consume one explicit, still-current automatic authorization as a paper entry attempt:
+
+```powershell
+$execution = Invoke-RestMethod -Method Post "http://localhost:8000/paper-execution/run?risk_decision_id=<risk-decision-uuid>"
+```
+
+Inspect terminal execution history and entry-only open positions:
+
+```powershell
+Invoke-RestMethod "http://localhost:8000/trades?portfolio_id=<portfolio-uuid>"
+Invoke-RestMethod "http://localhost:8000/trades/<trade-uuid>"
+Invoke-RestMethod "http://localhost:8000/positions?portfolio_id=<portfolio-uuid>"
+Invoke-RestMethod "http://localhost:8000/positions/<position-uuid>"
+```
+
+`paper_immediate_fill` V1 is paper-only and provider-free: it has no authenticated market-account client and cannot submit a live order. A risk decision is single-use. The service locks the portfolio, market and event source parents, and risk decision in a fixed order; it then captures database wall-clock time and reproduces the complete active risk evaluation against the latest proposal, snapshot, opportunity, match, direct directional ask, forecast, market, event, policy, and available balance. Only a latest, unexpired `AUTO_APPROVE` whose input fingerprint reproduces exactly may continue. A repeated request returns the same terminal trade rather than spending twice.
+
+The fill price adds fixed absolute binary-price slippage, not relative percent slippage:
+
+```text
+execution_price = ceil_0.000001(directional_ask + PAPER_SLIPPAGE_BPS / 10000)
+```
+
+The engine chooses the largest whole-contract quantity whose gross cost plus the configured flat estimated fee fits inside the authorized capital. Gross cost and nonzero fees round up to cents; the resulting post-cost adjusted edge must still qualify. Initial value uses the same snapshot's directional bid when available, otherwise the directional ask is retained as an explicit fallback mark. A fill atomically creates one immutable trade, one `OPEN` position, and one linked portfolio snapshot; a rejected attempt records its checks but creates neither a position nor a balance transition.
+
+Entry snapshots extend the ledger with open-position value, unrealized P&L, total portfolio value, and the previous-snapshot link. The all-in cost basis, including entry fees, moves from available cash to committed capital. Realized P&L and current bankroll do not change on entry. Phase 8 permits only one open position per portfolio and market, so increases and opposing entries are rejected until position-management semantics exist.
+
+Phase 8 intentionally excludes human approval actions, exits, reductions, settlement, recurring repricing, order-book depth, liquidity sizing, partial fills, execution latency, provider-specific fees, and every live-trading path. Those positions become inputs to Phase 9 monitoring and exit work.
 
 ## Backend development
 
@@ -255,4 +286,4 @@ infra/compose.yaml    Backend, frontend, and PostgreSQL development stack
 docs/                 Product, architecture, safety, and progress documentation
 ```
 
-See `AGENTS.md`, `ARCHITECTURE.md`, and `ROADMAP.md` for project constraints and phased scope. Risk authorization evidence is implemented, while human approval actions and all execution behavior remain intentionally unavailable. The next roadmap target is Phase 8.
+See `AGENTS.md`, `ARCHITECTURE.md`, and `ROADMAP.md` for project constraints and phased scope. Paper entry execution is implemented without any live provider path or human-approval action. The next roadmap target is Phase 9 position monitoring and exits.

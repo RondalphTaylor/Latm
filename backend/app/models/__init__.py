@@ -1,3 +1,4 @@
+from app.models.execution import PaperPositionRecord, PaperTradeRecord
 from app.models.forecasts import BaseForecastRecord, ModelVersionRecord
 from app.models.markets import (
     MarketOutcomeRecord,
@@ -18,6 +19,8 @@ from app.models.system_metadata import SystemMetadata
 
 __all__ = [
     "BaseForecastRecord",
+    "PaperPositionRecord",
+    "PaperTradeRecord",
     "MarketEventMatchRecord",
     "MarketOutcomeRecord",
     "MarketPriceRecord",

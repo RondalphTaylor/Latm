@@ -35,6 +35,7 @@ class PortfolioSnapshotReason(StrEnum):
     """Reasons supported by the initial immutable balance ledger."""
 
     CREATED = "created"
+    PAPER_ENTRY_FILLED = "paper_entry_filled"
 
 
 class PortfolioStatus(StrEnum):
@@ -129,6 +130,10 @@ class PortfolioSnapshot(BaseModel):
     committed_capital: Money
     available_bankroll: Money
     realized_pnl: Decimal = Field(max_digits=18, decimal_places=2)
+    open_position_value: Money
+    unrealized_pnl: Decimal = Field(max_digits=18, decimal_places=2)
+    total_portfolio_value: Money
+    previous_snapshot_id: UUID | None = None
     reason: PortfolioSnapshotReason
     state_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
     captured_at: datetime
@@ -148,6 +153,10 @@ class PortfolioSnapshot(BaseModel):
             raise ValueError("cash balance must equal bankroll minus committed capital")
         if self.available_bankroll != self.cash_balance - self.reserved_capital:
             raise ValueError("available bankroll must equal cash minus reserved capital")
+        if self.open_position_value != self.committed_capital + self.unrealized_pnl:
+            raise ValueError("open position value must equal committed capital plus unrealized P&L")
+        if self.total_portfolio_value != self.cash_balance + self.open_position_value:
+            raise ValueError("total portfolio value must equal cash plus open position value")
         if self.committed_capital + self.reserved_capital > self.current_bankroll:
             raise ValueError("committed and reserved capital cannot exceed bankroll")
         if self.reason is PortfolioSnapshotReason.CREATED and (
@@ -158,6 +167,10 @@ class PortfolioSnapshot(BaseModel):
             or self.committed_capital != 0
             or self.reserved_capital != 0
             or self.realized_pnl != 0
+            or self.open_position_value != 0
+            or self.unrealized_pnl != 0
+            or self.total_portfolio_value != self.starting_bankroll
+            or self.previous_snapshot_id is not None
         ):
             raise ValueError("created portfolio snapshot must contain an untouched bankroll")
         return self

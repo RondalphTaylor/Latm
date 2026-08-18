@@ -119,6 +119,12 @@ class Settings(BaseSettings):
     risk_max_market_price_age_seconds: int = Field(default=900, ge=1, le=86400)
     risk_max_operational_forecast_age_seconds: int = Field(default=86400, ge=1, le=604800)
     risk_authorization_ttl_seconds: int = Field(default=300, ge=1, le=3600)
+    paper_slippage_bps: Decimal = Field(
+        default=Decimal("25.00"), ge=Decimal("0"), le=Decimal("10000"), decimal_places=2
+    )
+    paper_fee_bps: Decimal = Field(
+        default=Decimal("10.00"), ge=Decimal("0"), le=Decimal("10000"), decimal_places=2
+    )
 
     @model_validator(mode="after")
     def validate_opportunity_thresholds(self) -> Settings:

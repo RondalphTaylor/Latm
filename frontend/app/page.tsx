@@ -15,8 +15,8 @@ export default function HomePage() {
         <p className="eyebrow">LATM</p>
         <h1 id="status-title">Application is running</h1>
         <p className="summary">
-          The Phase 7 MVP is online with auditable NBA research, paper portfolio accounting,
-          advisory position sizing, and deterministic risk decisions in its safe default mode.
+          The Phase 8 MVP is online with auditable NBA research, deterministic risk controls,
+          and provider-free paper execution in its safe default mode.
         </p>
 
         <dl className="status-list">
@@ -51,9 +51,15 @@ export default function HomePage() {
             <dt>Risk policy</dt>
             <dd>Deterministic MVP V1</dd>
           </div>
+          <div>
+            <dt>Paper execution</dt>
+            <dd>Immediate fill V1</dd>
+          </div>
         </dl>
 
-        <p className="safety-note">No order execution is enabled.</p>
+        <p className="safety-note">
+          Paper fills are simulated locally. Live order execution is not implemented.
+        </p>
       </section>
     </main>
   );

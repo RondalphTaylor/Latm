@@ -854,7 +854,7 @@ Phase 7 implements `mvp_risk` V1 as a pure rules engine over an exact Phase 6 pr
 
 The service locks the proposal's paper portfolio while it loads the latest snapshot and calculates aggregate unexpired automatic authorizations and duplicate economic intent. `risk_decisions` rows are append-only, policy-versioned, source-linked, and semantically idempotent. Non-rejected records use fixed five-minute UTC authorization windows bounded by source freshness, opportunity validity, market close, and event start. Rejected records have no authorization expiry.
 
-An `AUTO_APPROVE` result is risk authorization evidence only. It does not reserve capital or mutate portfolio accounting, and there is no human-approval action or execution route in Phase 7. The Phase 8 execution boundary must revalidate the risk record, latest price, forecast, match, opportunity, proposal, portfolio snapshot, duplicate intent, and available bankroll atomically before simulated execution. Adjusted edge and calibrated confidence are unavailable; liquidity and existing executed-position exposure are explicitly not evaluated yet.
+An `AUTO_APPROVE` result is risk authorization evidence only. It does not reserve capital or mutate portfolio accounting, and there is no human-approval action in Phase 7. Phase 8 consumes an automatic authorization at most once and atomically reproduces the active risk evaluation against the latest risk record, price, forecast, match, opportunity, proposal, portfolio snapshot, policy versions, open-position state, and available bankroll before a simulated entry. Adjusted edge and calibrated confidence are unavailable at risk time; liquidity remains explicitly unevaluated.
 
 ---
 
@@ -894,67 +894,31 @@ This separation allows sizing strategies to evolve independently.
 
 # 21. Execution Architecture
 
-The execution engine receives only approved trades.
+Phase 8 implements only the `paper` execution mode. The entry service accepts an explicit risk-decision ID, requires a latest and unexpired `AUTO_APPROVE`, and returns one terminal `filled` or `rejected` trade. A unique risk-decision constraint and stable trade identity make the authorization single-use; an exact retry returns the existing result.
 
-Execution modes:
+The persistence boundary locks the paper portfolio, market and event source parents, and risk decision in a fixed order before capturing database wall-clock time and loading the execution graph. It then reproduces the active Phase 7 risk decision from authoritative state. The risk fingerprint, active risk and sizing policy versions, exact latest portfolio snapshot, opportunity semantics, match, direct directional price, forecast, market and event state, available bankroll, prior execution, and existing open position must all pass again. Filled trades, their position, and their next portfolio snapshot commit in one transaction. Rejected attempts remain audit history and cannot change the ledger.
 
-```text
-paper
-live
-```
-
-Default:
-
-```text
-paper
-```
-
-The execution interface should be common across modes.
-
-Conceptually:
-
-```python
-from typing import Protocol
-
-
-class ExecutionProvider(Protocol):
-    async def execute(
-        self,
-        trade: "ApprovedTrade",
-    ) -> "ExecutionResult":
-        ...
-```
-
-Implementations may include:
-
-```text
-PaperExecutionProvider
-
-LivePredictionMarketExecutionProvider
-```
-
-The live implementation is future work.
+No execution provider or provider account is called. The Kalshi adapter remains public and read-only, and no authenticated order, live account, credential, or live-mode implementation exists. A future common paper/live execution interface must preserve this internal trade schema without weakening the explicit live-trading boundary.
 
 ---
 
 # 22. Paper Trading Architecture
 
-Paper trading should simulate real execution as accurately as practical.
+The versioned `paper_immediate_fill` V1 engine uses an exact provider-free simulation:
 
-The paper execution engine may consider:
+```text
+execution_price = ceil_0.000001(direct_directional_ask + slippage_bps / 10000)
 
-* current market price
-* order-book depth
-* liquidity
-* slippage
-* fees
-* partial fills
+gross_cost = ceil_cent(execution_price * whole_contract_quantity)
+fee = 0, or ceil_cent(gross_cost * fee_bps / 10000)
+total_cost = gross_cost + fee
+```
 
-The initial implementation may begin simpler and increase realism incrementally.
+Here `slippage_bps` is an absolute binary-price-point adjustment: 25 bps adds `0.0025` to the ask. The engine selects the largest integer quantity whose all-in cost fits the authorized capital, decreasing the estimate when cent-rounded fees would exceed the cap. It rejects prices at or above one dollar, fewer than one affordable contract, or a post-slippage and post-fee adjusted edge below the active qualifying threshold.
 
-Paper trades should produce the same internal trade and position objects used by future live execution.
+The opening mark uses the direct directional bid when present and valid. If no bid exists, the direct ask is stored with `directional_ask_fallback` so the audit record does not imply an executable exit. Market value rounds down to cents, total cost basis includes entry fees, and initial unrealized P&L is market value minus total cost basis.
 
-This ensures the rest of the application does not need separate paper and live logic.
+One filled authorization produces an immutable trade, one entry-only `OPEN` position, and one immutable accounting snapshot. `trades` also preserves rejected terminal attempts and all checks, source IDs, strategy versions, configured costs, rounding results, fingerprints, and audit assumptions. Phase 8 supports only immediate full fills and one open position per portfolio and market. Order-book depth, liquidity, partial fills, maximum prices, latency, position increases, opposing entries, and provider-specific fees remain later realism work.
 
 ---
 
@@ -979,7 +943,7 @@ The position manager should support future actions:
 * reduce
 * close
 
-Position decisions should pass through the same opportunity and risk logic as initial entries.
+Phase 8 creates the initial immutable position state only. It does not increase, reduce, close, settle, or periodically re-mark a position. Phase 9 owns those state transitions, and future position decisions should pass through the same opportunity and risk logic as initial entries.
 
 ---
 
@@ -1036,7 +1000,17 @@ cash_balance = current_bankroll - committed_capital
 available_bankroll = cash_balance - reserved_capital
 ```
 
-The initial snapshot sets current bankroll, cash, and available bankroll equal to the configured starting bankroll, with reserved capital, committed capital, and realized P&L at zero. Position sizing reads this snapshot but never appends another snapshot or changes any balance. Phase 7 risk evaluation also leaves balances untouched; Phase 8 paper execution owns reservation and balance transitions.
+Phase 8 extends each snapshot with `open_position_value`, `unrealized_pnl`, `total_portfolio_value`, and a `previous_snapshot_id` chain. The complete equations are:
+
+```text
+current_bankroll = starting_bankroll + realized_pnl
+cash_balance = current_bankroll - committed_capital
+available_bankroll = cash_balance - reserved_capital
+open_position_value = committed_capital + unrealized_pnl
+total_portfolio_value = cash_balance + open_position_value
+```
+
+The initial snapshot sets current bankroll, cash, available bankroll, and total portfolio value equal to the configured starting bankroll, with reserved capital, committed capital, open-position value, realized P&L, and unrealized P&L at zero. Position sizing and risk evaluation remain read-only. An immediate entry needs no separately persisted reservation: the locked transaction moves its all-in cost, including fees, from available cash into committed capital, adds its initial marked value and unrealized P&L, and appends one `paper_entry_filled` snapshot. Starting bankroll, current bankroll, reserved capital, and realized P&L remain unchanged on entry.
 
 ---
 
@@ -1201,7 +1175,11 @@ GET /position-size-proposals/{id}
 
 GET /positions
 
+GET /positions/{id}
+
 GET /trades
+
+GET /trades/{id}
 
 GET /portfolio
 
@@ -1216,7 +1194,7 @@ POST /approvals/{id}/approve
 POST /approvals/{id}/reject
 ```
 
-The current local mutations are `POST /opportunities/run`, idempotent paper-only `POST /portfolios`, and bounded `POST /position-sizing/run`. They write audit records but cannot approve risk, reserve capital, create a trade, or execute.
+Current local mutation routes include bounded forecasting, matching, opportunity, position-sizing, and risk runs; idempotent paper-portfolio creation; and `POST /paper-execution/run?risk_decision_id=...`. The execution route can create only local paper trades, positions, and portfolio snapshots from a single-use automatic authorization. It has no provider call, account credential, approval action, or live-order capability.
 
 API design should use typed request and response schemas.
 

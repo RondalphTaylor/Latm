@@ -643,6 +643,8 @@ Phase 7 is complete when:
 
 # Phase 8: Paper Trading Engine
 
+**Implementation status:** Complete on 2026-08-17. The shipped `paper_immediate_fill` V1 consumes each still-valid automatic risk authorization at most once, reproduces the complete active risk evaluation under a portfolio lock, and atomically records a provider-free paper entry, open position, and immutable accounting snapshot.
+
 ## Goal
 
 Execute approved trades using simulated capital.
@@ -661,6 +663,8 @@ Implement:
 Initial execution may assume immediate fills.
 
 More realistic order-book simulation can be added later.
+
+The first implementation uses the exact direct directional ask plus configurable absolute binary-price-point slippage, whole-contract quantities bounded by all-in authorized capital, and a configurable flat estimated fee rounded conservatively to cents. It marks the opening position at the directional bid when available, otherwise at an explicitly labeled ask fallback. Only one open position per portfolio and market is permitted until Phase 9 defines increases, opposing entries, exits, and settlement.
 
 ## Required Flow
 
@@ -709,6 +713,8 @@ Phase 8 is complete when:
 * fees and basic slippage can be configured
 * trades cannot accidentally invoke live APIs
 * tests cover P&L and balance accounting
+
+Phase 8 remains paper-only and provider-free. Human approval actions, live APIs, order-book depth, liquidity modeling, partial fills, exits, settlement, and recurring position monitoring are excluded.
 
 ---
 
@@ -1459,7 +1465,7 @@ At completion report:
 The current project target is:
 
 ```text
-Phase 8
+Phase 9
 ```
 
 Completed foundations:
@@ -1480,6 +1486,8 @@ Phase 5
 Phase 6
 
 Phase 7
+
+Phase 8
 ```
 
 The project should not begin with AI agents or real trading.

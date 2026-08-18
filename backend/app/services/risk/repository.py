@@ -13,6 +13,7 @@ from sqlalchemy.orm import joinedload, selectinload
 
 from app.domain.opportunities import OpportunityStatus
 from app.domain.risk import RiskDecision, RiskDecisionType
+from app.models.execution import PaperPositionRecord, PaperTradeRecord
 from app.models.forecasts import BaseForecastRecord
 from app.models.markets import MarketPriceRecord, PredictionMarketRecord
 from app.models.matching import MarketEventMatchRecord
@@ -288,6 +289,7 @@ class RiskRepository:
                 RiskDecisionRecord.authorization_valid_until > as_of,
                 RiskDecisionRecord.portfolio_snapshot_id == snapshot_id,
                 RiskDecisionRecord.position_size_proposal_id != proposal.id,
+                RiskDecisionRecord.id.not_in(select(PaperTradeRecord.risk_decision_id)),
             )
             .subquery()
         )
@@ -305,7 +307,7 @@ class RiskRepository:
             ),
             start=Decimal("0.00"),
         )
-        duplicate = any(
+        duplicate_authorization = any(
             item.decision
             in {
                 RiskDecisionType.AUTO_APPROVE.value,
@@ -316,7 +318,16 @@ class RiskRepository:
             and item.outcome_team_id == proposal.outcome_team_id
             for item in current
         )
-        return authorized, duplicate
+        open_position = await self._session.scalar(
+            select(PaperPositionRecord.id)
+            .where(
+                PaperPositionRecord.portfolio_id == proposal.portfolio_id,
+                PaperPositionRecord.market_id == proposal.market_id,
+                PaperPositionRecord.status == "open",
+            )
+            .limit(1)
+        )
+        return authorized, duplicate_authorization or open_position is not None
 
     async def persist_decision(
         self,

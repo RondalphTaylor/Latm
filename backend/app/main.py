@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.execution import router as execution_router
 from app.api.forecasts import router as forecasts_router
 from app.api.health import router as health_router
 from app.api.markets import router as markets_router
@@ -27,7 +28,7 @@ def create_app() -> FastAPI:
     """Build and configure the FastAPI application."""
     application = FastAPI(
         title="LATM API",
-        version="0.8.0",
+        version="0.9.0",
         lifespan=lifespan,
     )
     application.include_router(health_router)
@@ -38,6 +39,7 @@ def create_app() -> FastAPI:
     application.include_router(opportunities_router)
     application.include_router(portfolio_router)
     application.include_router(risk_router)
+    application.include_router(execution_router)
     return application
 
 

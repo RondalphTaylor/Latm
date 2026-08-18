@@ -198,8 +198,32 @@ Completed risk capabilities:
 
 Migration `0008_risk_engine` was applied to PostgreSQL and Alembic reported no schema drift. The complete backend suite passed with 239 non-database tests and all four PostgreSQL transaction suites (243 tests total). Phase 7 fixture validation proved risk-decision retry idempotence, duplicate-intent rejection, append-on-source-change history, stale authorization rejection after a newer price, and unchanged portfolio balances. Ruff, strict mypy, frontend lint/type checking, the production build, and production dependency validation also passed.
 
-An `AUTO_APPROVE` decision is short-lived risk authorization evidence only. It does not reserve capital, mutate a balance, create an order, or execute. Adjusted edge and calibrated confidence remain unavailable; liquidity and existing executed-position exposure remain unevaluated. There is no human-approval action in Phase 7.
+An `AUTO_APPROVE` decision is short-lived risk authorization evidence only. It does not reserve capital, mutate a balance, create an order, or execute. Adjusted edge and calibrated confidence remain unavailable and liquidity remains unevaluated. Phase 8 now excludes consumed authorizations from aggregate risk and treats an existing open position in the same portfolio and market as duplicate intent. There is no human-approval action.
+
+## Phase 8: Paper Trading Engine
+
+**Status:** Complete
+**Completed:** 2026-08-17
+
+Phase 8 introduced provider-free, paper-only entry execution without adding any authenticated market-account or live-order path.
+
+Completed execution capabilities:
+
+- versioned `paper_immediate_fill` V1 with configurable `PAPER_SLIPPAGE_BPS` and `PAPER_FEE_BPS`, plus a fingerprint that records every pricing and rounding assumption
+- single-use consumption of an explicit, latest, unexpired `AUTO_APPROVE`; repeated requests return the same immutable terminal trade instead of creating another financial effect
+- fixed-order portfolio, market/event parent, and risk-decision locking with post-lock database wall-clock capture before exact reproduction of the active risk decision and every mutable proposal, portfolio, opportunity, match, price, forecast, market, event, and policy input
+- direct YES or NO ask execution with additive absolute binary-price-point slippage, upward six-decimal price rounding, and rejection when simulated price reaches one dollar
+- largest-affordable whole-contract sizing against the authorized all-in capital cap, with gross cost and nonzero flat estimated fees rounded upward to cents
+- post-slippage and post-fee adjusted-edge revalidation before a fill can proceed
+- bid-first initial marking with an explicit directional-ask fallback, cent-floor market value, fee-inclusive cost basis, and reproducible unrealized P&L
+- atomic creation of one filled trade, one entry-only `OPEN` position, and one next portfolio snapshot; rejected terminal attempts preserve their checks without creating a position or changing balances
+- immutable snapshots extended with open-position value, unrealized P&L, total portfolio value, and previous-snapshot identity while retaining the canonical cash, committed, reserved, and available-capital equations
+- one-open-position-per-portfolio-and-market enforcement, preventing accidental increases or opposing entries before position-management semantics exist
+- typed execution, trade list/detail, and position list/detail APIs
+- database migration `0009_paper_execution` for `trades`, `positions`, and the extended accounting ledger, plus unit, service, and API coverage
+
+The Kalshi adapter remains public and read-only, and the execution engine does not call it or any other provider. Phase 8 implements immediate full fills only. It does not add human approval actions, persistent orders or reservations, liquidity or order-book simulation, partial fills, execution latency, provider-specific fee formulas, position increases, opposing holdings, exits, settlement, recurring marking, realized-P&L transitions, or live trading.
 
 ## Next phase
 
-Phase 8 should implement paper execution that consumes only a still-valid automatic authorization, revalidates every mutable input and portfolio limit atomically, simulates fills, and records the resulting order, position, and portfolio transitions. It must not add live trading.
+Phase 9 should monitor open positions, refresh mark and edge state, and add explicitly audited hold, reduce, close, and settlement transitions with realized-P&L accounting. It must preserve the paper-only default and route every position-changing decision through deterministic risk controls.

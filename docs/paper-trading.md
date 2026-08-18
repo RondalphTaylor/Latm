@@ -81,15 +81,19 @@ The portfolio should track:
 * historical peak value
 * drawdown
 
-Phase 6 establishes the first, deliberately narrower accounting slice. It creates active USD paper portfolios with immutable sequence-zero snapshots and the following canonical equations:
+Phase 6 establishes active USD paper portfolios with immutable sequence-zero snapshots. Phase 8 extends those snapshots with open-position value, unrealized P&L, total portfolio value, and a previous-snapshot chain. The canonical equations are:
 
 ```text
 current_bankroll = starting_bankroll + realized_pnl
 cash_balance = current_bankroll - committed_capital
 available_bankroll = cash_balance - reserved_capital
+open_position_value = committed_capital + unrealized_pnl
+total_portfolio_value = cash_balance + open_position_value
 ```
 
-At creation, current bankroll, cash, and available bankroll equal the starting bankroll, while committed capital, reserved capital, and realized P&L are zero. Phase 6 sizing proposals do not reserve capital or append balance snapshots. Open positions, unrealized P&L, drawdown, settlement, and balance mutations remain later paper-execution work.
+At creation, current bankroll, cash, available bankroll, and total portfolio value equal the starting bankroll, while committed capital, reserved capital, open-position value, realized P&L, and unrealized P&L are zero. Phase 6 sizing proposals and Phase 7 risk decisions do not reserve capital or append balance snapshots.
+
+For a Phase 8 immediate entry with all-in cost `C` and initial marked value `V`, one locked transaction increases committed capital by `C`, reduces cash and available bankroll by `C`, increases open-position value by `V`, and increases unrealized P&L by `V - C`. Starting bankroll, current bankroll, reserved capital, and realized P&L remain unchanged. The transaction appends exactly one `paper_entry_filled` snapshot linked to the previous snapshot.
 
 Example:
 
@@ -209,6 +213,8 @@ Performance Evaluated
 
 Paper trading must still use the normal risk engine.
 
+The implemented Phase 8 lifecycle ends at the initial `OPEN` position. It consumes a still-valid automatic risk authorization once, revalidates it atomically, and records either a filled entry with its position and balance snapshot or a rejected terminal attempt with no financial effects. Monitoring, increases, exits, settlement, and realized-P&L transitions begin in Phase 9.
+
 ---
 
 # 8. Trade Direction
@@ -261,7 +267,9 @@ The proposed trade should then pass through the risk engine.
 
 Phase 6 stops one boundary earlier and stores `position_size_proposals`, not proposed trades. These records contain provider-neutral proposed capital and actual exposure against one exact portfolio snapshot. They remain `awaiting_risk`, contain no contract quantity, and cannot reach execution.
 
-Phase 7 revalidates those records and stores immutable `risk_decisions`. An automatic approval is a short-lived risk authorization, not a paper trade: it does not reserve capital, append a balance snapshot, or authorize a stale future execution. Human-escalated decisions also remain pending evidence because Phase 7 has no approval-action workflow. Phase 8 owns simulated order creation, final source revalidation, reservation, fills, positions, and portfolio effects.
+Phase 7 revalidates those records and stores immutable `risk_decisions`. An automatic approval is a short-lived risk authorization, not a paper trade: it does not reserve capital, append a balance snapshot, or authorize a stale future execution. Human-escalated decisions remain pending evidence because no approval-action workflow exists.
+
+Phase 8 accepts one explicit risk-decision ID and consumes only the latest, unexpired `AUTO_APPROVE` whose complete input fingerprint reproduces under the current risk and sizing policies. Each risk decision has at most one terminal execution record, so a retry returns the same result rather than spending twice. The service locks the portfolio, market and event source parents, and risk decision in a fixed order, captures wall-clock time after any waits, and revalidates the latest portfolio snapshot, opportunity semantics, direct directional price, match, forecast, market, event, available balance, prior execution, and existing open position before making any financial change.
 
 ---
 
@@ -277,7 +285,7 @@ An approved trade should preserve:
 * approval method
 * approval timestamp
 
-Approval methods may include:
+Approval methods may eventually include:
 
 ```text
 AUTO_APPROVED
@@ -288,6 +296,8 @@ or:
 ```text
 HUMAN_APPROVED
 ```
+
+Phase 8 implements `AUTO_APPROVED` entries only. `REJECT` and `REQUIRE_HUMAN_APPROVAL` risk decisions cannot enter execution, and no human-approval action is available.
 
 ---
 
@@ -307,7 +317,7 @@ REJECTED
 FAILED
 ```
 
-The earliest MVP may support:
+Phase 8 supports:
 
 ```text
 FILLED
@@ -323,29 +333,26 @@ only.
 
 Partial fills should be added when order-book simulation is introduced.
 
+Both results are immutable terminal trade records. A `FILLED` result atomically creates a position and next portfolio snapshot. A `REJECTED` result preserves the failed execution checks but has no fill economics, position, reservation, or balance transition.
+
 ---
 
 # 12. MVP Fill Model
 
-The first paper-trading implementation may assume immediate execution.
+The first paper-trading implementation assumes immediate full execution.
 
 However, the executed price should not automatically equal the ideal displayed midpoint.
 
 The MVP should use a conservative configurable execution assumption.
 
-Possible initial approach:
+The implemented formula is:
 
 ```text
-Execution Price
-=
-Current Best Available Price
-+
-Configured Slippage
+execution_price =
+ceil_0.000001(direct_directional_ask + PAPER_SLIPPAGE_BPS / 10000)
 ```
 
-for purchases.
-
-The exact behavior depends on available provider data.
+`PAPER_SLIPPAGE_BPS` is an absolute binary-price-point adjustment, not a relative percentage. For example, 25 bps adds `0.0025` to the direct ask. Execution is rejected if the result reaches or exceeds `1.000000`.
 
 ---
 
@@ -375,7 +382,7 @@ If only a single market price is available, the simulator may use it with an exp
 
 # 14. Slippage
 
-Paper execution should support configurable slippage.
+Paper execution uses configurable, versioned slippage.
 
 Conceptually:
 
@@ -385,7 +392,7 @@ PAPER_SLIPPAGE_BPS
 
 or another clearly documented representation.
 
-Example:
+Example with 50 absolute bps:
 
 ```text
 Displayed Price:
@@ -395,7 +402,7 @@ Simulated Execution Price:
 0.425
 ```
 
-Slippage assumptions should be recorded with the trade.
+The configured value, absolute-price interpretation, six-decimal upward rounding, per-contract adjustment, and resulting cent-rounded slippage cost are recorded with the trade and execution-policy fingerprint.
 
 ---
 
@@ -408,11 +415,21 @@ If provider fees are unknown or not yet implemented, the system should:
 * document that limitation
 * support configurable estimated fees
 
-A trade should record:
+A Phase 8 trade records:
 
 * gross trade value
 * estimated fees
 * net cost
+
+The provider-specific fee schedule is not modeled. `PAPER_FEE_BPS` is a flat estimated rate over simulated gross cost. Nonzero fees round up to cents:
+
+```text
+gross_cost(q) = ceil_cent(execution_price * q)
+fee(q) = ceil_cent(gross_cost(q) * PAPER_FEE_BPS / 10000)
+total_cost(q) = gross_cost(q) + fee(q)
+```
+
+The proposal's capital is an all-in cap, including fees. The engine selects the largest integer contract quantity whose `total_cost` fits that cap, decreasing its estimate when cent rounding would otherwise overspend. If even one contract is unaffordable, execution is rejected.
 
 ---
 
@@ -508,6 +525,8 @@ EXECUTION_BLOCKED
 
 The opportunity should be reevaluated using fresh data.
 
+Phase 8 performs a stronger exact check: the selected automatic authorization must be the latest risk result, use the active policy versions, remain strictly unexpired, and reproduce when the risk engine is rerun from authoritative state after acquiring the portfolio lock. Any newer or changed price, forecast, match, opportunity, event, market, proposal, or portfolio snapshot produces a rejected execution record and requires a fresh sizing and risk cycle.
+
 ---
 
 # 20. Price Revalidation
@@ -537,13 +556,20 @@ The original edge may no longer exist.
 
 The simulator should not blindly execute the original trade.
 
-The system should recalculate the adjusted edge before execution where practical.
+Phase 8 recalculates adjusted edge after slippage, fee, and cent rounding:
+
+```text
+effective_unit_cost = ceil_0.000001(total_cost / whole_contract_quantity)
+adjusted_edge = model_probability - effective_unit_cost
+```
+
+The fill is rejected unless this adjusted edge still meets both the active opportunity and risk minimum. A favorable newer price still invalidates the old authorization rather than silently changing its inputs.
 
 ---
 
 # 21. Position Creation
 
-A filled trade should create or update a position.
+A filled Phase 8 trade creates one position.
 
 A position should include:
 
@@ -570,11 +596,13 @@ CLOSED
 RESOLVED
 ```
 
+Phase 8 supports `OPEN` only. It stores whole-contract quantity, execution price, gross cost basis, entry fees, total cost basis, initial mark basis, market value, unrealized P&L, zero realized P&L, source price, opening trade, fingerprints, and timestamps.
+
 ---
 
 # 22. Multiple Entries
 
-The system should support entering the same position multiple times.
+The mature system should support entering the same position multiple times.
 
 Example:
 
@@ -597,6 +625,8 @@ The system should correctly maintain:
 * quantity
 * cost basis
 * average price
+
+Phase 8 deliberately rejects a second entry whenever the portfolio already has an open position for that market. Position increases and weighted-average updates are deferred to Phase 9 so aggregate exposure is not changed without explicit monitoring and risk semantics.
 
 ---
 
@@ -622,7 +652,7 @@ Possible implementations include:
 
 The normalized portfolio model should eventually account for economic equivalence.
 
-For the MVP, the simplest provider-compatible representation may be used, but behavior must be explicit.
+Phase 8 prevents opposing positions by allowing only one open position per portfolio and market, regardless of direction. Independent opposing positions, economic netting, and reduction semantics are deferred to Phase 9.
 
 ---
 
@@ -654,6 +684,8 @@ Expected Exit Price
 
 in more advanced simulation.
 
+At entry, Phase 8 uses the exact source snapshot's direct directional bid when it exists and is not above the ask. If no bid exists, it stores the direct ask with the explicit basis `directional_ask_fallback`; this fallback is a reference mark, not a claim about executable exit liquidity. Market value is rounded down to cents.
+
 ---
 
 # 25. Unrealized P&L
@@ -672,7 +704,14 @@ Current Position Value
 Remaining Cost Basis
 ```
 
-Fees and expected exit costs may eventually be incorporated.
+Phase 8 includes entry fees in total cost basis:
+
+```text
+total_cost_basis = gross_cost_basis + entry_fees
+unrealized_pnl = floor_cent(quantity * mark_price) - total_cost_basis
+```
+
+Exit fees remain future work. The position and portfolio snapshot store the same initial market value and unrealized P&L.
 
 The exact formula should be tested carefully.
 
@@ -970,6 +1009,8 @@ Every paper trade should record:
 
 This should allow complete reconstruction of a simulated trade.
 
+Phase 8 `trades` are append-only terminal execution attempts linked to the exact proposal, automatic risk decision, opportunity, match, price, forecast, before/after portfolio snapshots, and sizing/risk/execution policy versions. They preserve every execution gate, direct reference ask, configured slippage and fee, whole-contract calculation, cost and mark values, fingerprints, assumptions, and failure reasons. A unique risk-decision link enforces single-use execution.
+
 ---
 
 # 39. Position History
@@ -1010,6 +1051,8 @@ A snapshot may include:
 * drawdown
 
 Snapshots support performance charts and historical analysis.
+
+Phase 8 appends a snapshot only for a filled entry. It links to the prior sequence and records cash, reserved and committed capital, available bankroll, open-position value, realized and unrealized P&L, and total portfolio value. Rejected attempts append no snapshot. An immediate atomic fill creates no intermediate reservation snapshot; `reserved_capital` remains unchanged.
 
 ---
 
@@ -1300,6 +1343,8 @@ Failed trades should remain in history.
 
 This helps measure execution quality.
 
+Phase 8 uses terminal `filled` and `rejected` states only. Expected gate failures—expired or superseded authorization, changed risk fingerprint, stale source, snapshot change, open-position conflict, invalid directional book, unaffordable contract, execution price at one, or inadequate adjusted edge—are persisted as rejected attempts with no financial effects. Unexpected database failures roll back rather than recording a result that might imply a completed fill.
+
 ---
 
 # 56. Paper Approval Workflow
@@ -1329,6 +1374,8 @@ REJECTED
 ```
 
 This allows testing the actual operational workflow before live trading.
+
+Phase 8 does not implement this workflow. A `REQUIRE_HUMAN_APPROVAL` decision remains non-executable evidence; only `AUTO_APPROVE` can produce a paper execution attempt. Approval actions, pending approval state, and human-decision history remain future work.
 
 ---
 
@@ -1518,35 +1565,40 @@ This is important for both debugging and portfolio demonstration.
 
 # 65. Database Models
 
-Potential tables include:
+The implemented entry path uses:
 
 ```text
 portfolios
 
 portfolio_snapshots
 
-proposed_trades
+position_size_proposals
 
 risk_decisions
-
-trade_approvals
 
 trades
 
 positions
+
+```
+
+Later position-management and approval milestones may add:
+
+```text
+trade_approvals
 
 position_events
 
 market_resolutions
 ```
 
-The exact schema should be defined during implementation.
+Phase 8 `trades` preserve filled and rejected terminal attempts, while `positions` contain one opening state per portfolio and market. Existing portfolio snapshots carry the append-only accounting transition, so no separate order, reservation, or position-event table is needed for an atomic immediate entry.
 
 ---
 
 # 66. MVP Paper Trading Scope
 
-The first paper-trading implementation should support:
+The staged MVP ultimately should support:
 
 ```text
 1. Configurable starting bankroll
@@ -1578,11 +1630,13 @@ The first paper-trading implementation should support:
 14. Trade history
 ```
 
+Phase 8 completes items 1-8, 12-14 for entry state, and immutable trade history. Items 9-11—closing, settlement, and realized-P&L transitions—belong to Phase 9. Phase 8 is intentionally limited to provider-free immediate paper entries from single-use `AUTO_APPROVE` decisions, with no live or human-approval route.
+
 ---
 
 # 67. MVP Execution Assumption
 
-The first MVP may use:
+Phase 8 uses:
 
 ```text
 Best available price
@@ -1590,7 +1644,7 @@ Best available price
 Configured conservative slippage
 ```
 
-If only one price is available:
+For entry, the best available price is the direct directional ask. If no directional bid exists for the initial mark, the same ask is retained as an explicitly labeled fallback reference:
 
 ```text
 Provider Price
@@ -1598,7 +1652,7 @@ Provider Price
 Configured conservative slippage
 ```
 
-This limitation should be documented.
+This limitation is recorded in every affected trade and position. The simulation does not infer a complement price, midpoint, or provider fill.
 
 ---
 
@@ -1606,11 +1660,11 @@ This limitation should be documented.
 
 After the basic simulator works, add:
 
-* bid/ask-aware execution
-* price revalidation
 * maximum acceptable price
 * liquidity checks
 * improved fee modeling
+
+Direct directional ask execution, bid-first initial marking, complete source revalidation, and post-cost edge checks are already present in Phase 8.
 
 ---
 
@@ -1623,6 +1677,8 @@ Later add:
 * realistic market impact
 * execution latency
 * approval expiration
+
+Risk authorization expiration is already enforced in Phase 8; a future milestone may add a separate pending human-approval timeout once that workflow exists.
 
 ---
 

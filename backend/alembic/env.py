@@ -17,6 +17,8 @@ from app.models import (  # noqa: F401
     MarketPriceRecord,
     ModelVersionRecord,
     OpportunityRecord,
+    PaperPositionRecord,
+    PaperTradeRecord,
     PortfolioRecord,
     PortfolioSnapshotRecord,
     PositionSizeProposalRecord,

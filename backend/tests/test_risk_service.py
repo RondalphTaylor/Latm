@@ -41,6 +41,10 @@ def risk_context() -> RiskEvaluationContext:
         committed_capital=snapshot.committed_capital,
         available_bankroll=snapshot.available_bankroll,
         realized_pnl=snapshot.realized_pnl,
+        open_position_value=getattr(snapshot, "open_position_value", None) or Decimal("0.00"),
+        unrealized_pnl=getattr(snapshot, "unrealized_pnl", None) or Decimal("0.00"),
+        total_portfolio_value=getattr(snapshot, "total_portfolio_value", None)
+        or snapshot.current_bankroll,
         reason=snapshot.reason,
         state_fingerprint=snapshot.state_fingerprint,
         captured_at=snapshot.captured_at,

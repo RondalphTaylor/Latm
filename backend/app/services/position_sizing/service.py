@@ -169,6 +169,9 @@ class PaperPortfolioService:
             committed_capital=Decimal("0.00"),
             available_bankroll=bankroll,
             realized_pnl=Decimal("0.00"),
+            open_position_value=Decimal("0.00"),
+            unrealized_pnl=Decimal("0.00"),
+            total_portfolio_value=bankroll,
             reason=PortfolioSnapshotReason.CREATED,
             state_fingerprint="0" * 64,
             captured_at=created_at,
@@ -301,6 +304,14 @@ class PositionSizingService:
             committed_capital=record.committed_capital,
             available_bankroll=record.available_bankroll,
             realized_pnl=record.realized_pnl,
+            open_position_value=(
+                getattr(record, "open_position_value", None) or record.committed_capital
+            ),
+            unrealized_pnl=(getattr(record, "unrealized_pnl", None) or Decimal("0.00")),
+            total_portfolio_value=(
+                getattr(record, "total_portfolio_value", None) or record.current_bankroll
+            ),
+            previous_snapshot_id=getattr(record, "previous_snapshot_id", None),
             reason=record.reason,
             state_fingerprint=record.state_fingerprint,
             captured_at=record.captured_at,

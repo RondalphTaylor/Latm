@@ -58,6 +58,10 @@ class PortfolioSnapshotResponse(BaseModel):
     committed_capital: Decimal
     available_bankroll: Decimal
     realized_pnl: Decimal
+    open_position_value: Decimal
+    unrealized_pnl: Decimal
+    total_portfolio_value: Decimal
+    previous_snapshot_id: UUID | None
     reason: PortfolioSnapshotReason
     state_fingerprint: str
     captured_at: datetime
@@ -77,6 +81,14 @@ class PortfolioSnapshotResponse(BaseModel):
             committed_capital=record.committed_capital,
             available_bankroll=record.available_bankroll,
             realized_pnl=record.realized_pnl,
+            open_position_value=(
+                getattr(record, "open_position_value", None) or record.committed_capital
+            ),
+            unrealized_pnl=(getattr(record, "unrealized_pnl", None) or Decimal("0.00")),
+            total_portfolio_value=(
+                getattr(record, "total_portfolio_value", None) or record.current_bankroll
+            ),
+            previous_snapshot_id=getattr(record, "previous_snapshot_id", None),
             reason=PortfolioSnapshotReason(record.reason),
             state_fingerprint=record.state_fingerprint,
             captured_at=record.captured_at,

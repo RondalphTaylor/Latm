@@ -46,6 +46,8 @@ def test_trading_mode_defaults_to_paper(monkeypatch: pytest.MonkeyPatch) -> None
     assert settings.risk_max_market_price_age_seconds == 900
     assert settings.risk_max_operational_forecast_age_seconds == 86400
     assert settings.risk_authorization_ttl_seconds == 300
+    assert settings.paper_slippage_bps == Decimal("25.00")
+    assert settings.paper_fee_bps == Decimal("10.00")
 
 
 def test_database_url_can_be_loaded_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -208,4 +210,24 @@ def test_risk_exposure_thresholds_must_be_strictly_ordered(
     monkeypatch.setenv("RISK_HIGH_CONFIDENCE_AUTO_APPROVE_MAX", "0.40")
 
     with pytest.raises(ValidationError, match="risk exposure thresholds"):
+        Settings(database_url=TEST_DATABASE_URL, _env_file=None)
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("PAPER_SLIPPAGE_BPS", "-0.01"),
+        ("PAPER_SLIPPAGE_BPS", "10000.01"),
+        ("PAPER_FEE_BPS", "-0.01"),
+        ("PAPER_FEE_BPS", "0.001"),
+    ],
+)
+def test_invalid_paper_execution_settings_are_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
+    value: str,
+) -> None:
+    monkeypatch.setenv(name, value)
+
+    with pytest.raises(ValidationError):
         Settings(database_url=TEST_DATABASE_URL, _env_file=None)

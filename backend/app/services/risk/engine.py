@@ -36,8 +36,8 @@ def risk_policy_fingerprint(policy: RiskPolicy) -> str:
             "medium_comparison": "auto_max <= exposure <= high_confidence_max",
             "large_comparison": "exposure > high_confidence_max",
             "medium_confidence_behavior": "require_human_when_not_available",
-            "duplicate_scope": "portfolio_market_direction_outcome_team_active_decision",
-            "bankroll_rule": "authorized_capital_plus_proposal_lte_available",
+            "duplicate_scope": ("portfolio_market_unconsumed_authorizations_or_open_position"),
+            "bankroll_rule": "unconsumed_authorized_capital_plus_proposal_lte_available",
             "authorization_window": "fixed_utc_epoch_bucket",
         }
     )
@@ -426,7 +426,7 @@ class DeterministicRiskEngine:
                 "adjusted_edge": "not_available",
                 "confidence": "not_available",
                 "liquidity": "not_evaluated_phase7",
-                "existing_positions": "not_available_before_phase8",
+                "existing_positions": "same_portfolio_market_open_position_gate_phase8",
             },
             "checks": [item.model_dump(mode="json") for item in checks],
         }

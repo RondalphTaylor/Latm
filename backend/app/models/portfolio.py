@@ -89,16 +89,30 @@ class PortfolioSnapshotRecord(Base):
             name="ck_portfolio_snapshots_available_bankroll",
         ),
         CheckConstraint(
+            "open_position_value = committed_capital + unrealized_pnl",
+            name="ck_portfolio_snapshots_open_position_value",
+        ),
+        CheckConstraint(
+            "total_portfolio_value = cash_balance + open_position_value",
+            name="ck_portfolio_snapshots_total_portfolio_value",
+        ),
+        CheckConstraint(
             "committed_capital + reserved_capital <= current_bankroll",
             name="ck_portfolio_snapshots_total_capital",
         ),
-        CheckConstraint("reason = 'created'", name="ck_portfolio_snapshots_reason"),
+        CheckConstraint(
+            "reason IN ('created', 'paper_entry_filled')",
+            name="ck_portfolio_snapshots_reason",
+        ),
         CheckConstraint(
             "(reason <> 'created') OR (sequence = 0 "
             "AND current_bankroll = starting_bankroll "
             "AND cash_balance = starting_bankroll "
             "AND available_bankroll = starting_bankroll "
-            "AND reserved_capital = 0 AND committed_capital = 0 AND realized_pnl = 0)",
+            "AND reserved_capital = 0 AND committed_capital = 0 AND realized_pnl = 0 "
+            "AND open_position_value = 0 AND unrealized_pnl = 0 "
+            "AND total_portfolio_value = starting_bankroll "
+            "AND previous_snapshot_id IS NULL)",
             name="ck_portfolio_snapshots_created_state",
         ),
         CheckConstraint(
@@ -122,6 +136,12 @@ class PortfolioSnapshotRecord(Base):
     committed_capital: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     available_bankroll: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     realized_pnl: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    open_position_value: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    unrealized_pnl: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    total_portfolio_value: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    previous_snapshot_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("portfolio_snapshots.id", ondelete="RESTRICT"), nullable=True
+    )
     reason: Mapped[str] = mapped_column(String(30), nullable=False)
     state_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
