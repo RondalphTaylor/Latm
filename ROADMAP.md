@@ -720,6 +720,8 @@ Phase 8 remains paper-only and provider-free. Human approval actions, live APIs,
 
 # Phase 9: Position Monitoring and Exits
 
+**Implementation status:** Complete on 2026-08-18. The shipped V1 adds provider-free HOLD, REDUCE, CLOSE, and official standard-binary SETTLE transitions with immutable event history and atomic realized-P&L accounting.
+
 ## Goal
 
 Manage positions after entry.
@@ -772,6 +774,8 @@ Implemented limitations: no increases, opposing entries, in-play forecast exits,
 
 # Phase 10: Evaluation Engine
 
+**Implementation status:** Complete on 2026-08-18. The shipped V1 materializes immutable binary-home forecast scores, exposes purpose-separated Brier/calibration and paired model comparison, and derives paper performance directly from the authoritative snapshot/position ledger.
+
 ## Goal
 
 Determine whether the forecasting and trading system actually works.
@@ -807,6 +811,8 @@ Performance should eventually be filterable by:
 * confidence
 * market type
 
+The implemented V1 supports model-version and event-date filtering for forecast metrics. Trading results are grouped by the complete immutable opening lineage: model, opportunity, sizing, risk, execution, and market type. Confidence segmentation remains unavailable because the current upstream records explicitly have no calibrated confidence.
+
 ## Acceptance Criteria
 
 Phase 10 is complete when:
@@ -818,6 +824,8 @@ Phase 10 is complete when:
 * strategy versions can be compared
 * drawdown is tracked
 * the system clearly shows whether it is profitable
+
+Implemented limitations: sports events preserve only their latest normalized result and not first-observed-final time; historical replay is therefore labeled retrospective. Drawdown is sampled only at immutable portfolio snapshots. Open-position equity uses current stored marks and excludes hypothetical future exit fees/slippage. Log loss, Wilson intervals, continuous intraperiod drawdown, confidence segmentation, and persisted aggregate reports are deferred.
 
 ---
 
@@ -1471,7 +1479,7 @@ At completion report:
 The current project target is:
 
 ```text
-Phase 9
+Phase 11
 ```
 
 Completed foundations:
@@ -1494,6 +1502,10 @@ Phase 6
 Phase 7
 
 Phase 8
+
+Phase 9
+
+Phase 10
 ```
 
 The project should not begin with AI agents or real trading.

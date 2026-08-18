@@ -224,6 +224,37 @@ Completed execution capabilities:
 
 The Kalshi adapter remains public and read-only, and the execution engine does not call it or any other provider. Phase 8 implements immediate full fills only. It does not add human approval actions, persistent orders or reservations, liquidity or order-book simulation, partial fills, execution latency, provider-specific fee formulas, position increases, opposing holdings, exits, settlement, recurring marking, realized-P&L transitions, or live trading.
 
+## Phase 9: Position Monitoring and Exits
+
+**Status:** Complete
+**Completed:** 2026-08-18
+
+Phase 9 added deterministic, provider-free HOLD, REDUCE, CLOSE, and SETTLE decisions over locked paper-position projections. Immutable position events preserve every decision and source fingerprint; quantity, cumulative original basis, proceeds, fees, realized P&L, current projections, and next portfolio snapshots transition atomically. Settlement requires an append-only typed official standard-binary market resolution and never uses an NBA score as contract authority. Exact retries cannot dispose exposure twice, and live/provider-order paths remain absent.
+
+## Phase 10: Evaluation Engine
+
+**Status:** Complete
+**Completed:** 2026-08-18
+
+Phase 10 added immutable, versioned forecast-outcome evaluation facts and read-only ledger-derived paper performance.
+
+Completed evaluation capabilities:
+
+- exact twelve-decimal scalar binary-home Brier scoring with `0.5` accuracy abstention
+- strict separation of real-time operational forecasts from retrospective historical replay
+- canonical one-forecast-per-event/model/purpose selection with result-correction history and semantic reversion
+- configurable fixed-width calibration tables including empty bins, ECE, and MCE
+- paired model comparison only over the exact shared event/outcome intersection
+- authoritative marked-equity, realized, and unrealized P&L and bankroll returns
+- completed-position win/loss/breakeven rates, raw and adjusted entry edges, terminal returns, and aggregate return on cost
+- immutable opening-lineage grouping across model, opportunity, sizing, risk, execution, and market type
+- sequence-sampled maximum drawdown with peak/trough snapshot provenance and explicit valuation warnings
+- migration `0011_evaluation_engine`, typed evaluation APIs, unit/API/service/model/PostgreSQL coverage, and paper-only OpenAPI validation
+
+Final Phase 10 validation passed with all 399 backend tests against PostgreSQL, Ruff formatting and linting, strict mypy, Alembic head and schema-drift checks, frontend lint and type checking, the production build, Compose rendering, and a zero-vulnerability production dependency audit. Migration `0011` also normalizes early local Phase 9 schemas so an authoritative standard-binary settlement payout of exactly `1.000000` remains valid without weakening any exit-price constraint.
+
+The local database currently has no normalized NBA event/forecast sample, so real calibration remains empty until historical or operational data is ingested. Historical replay cannot prove when prior results first became available because sports events retain latest state rather than an observation timeline. Drawdown is snapshot-sampled, and open-position equity excludes hypothetical future exit costs.
+
 ## Next phase
 
-Phase 9 should monitor open positions, refresh mark and edge state, and add explicitly audited hold, reduce, close, and settlement transitions with realized-P&L accounting. It must preserve the paper-only default and route every position-changing decision through deterministic risk controls.
+Phase 11 should build the basic responsive dashboard over the existing read APIs, clearly display paper mode, and expose markets, forecasts, opportunities, positions, trade history, calibration, and portfolio performance without adding trading authority.

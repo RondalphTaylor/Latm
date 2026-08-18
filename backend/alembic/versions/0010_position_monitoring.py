@@ -590,36 +590,31 @@ def _delete_phase9_and_descendant_state() -> None:
         "GROUP BY portfolio_id) "
     )
     op.execute(
-        cutoff
-        + "DELETE FROM positions AS p USING trades AS t, "
+        cutoff + "DELETE FROM positions AS p USING trades AS t, "
         "portfolio_snapshots AS s, cutoffs AS c "
         "WHERE p.opening_trade_id = t.id "
         "AND t.portfolio_snapshot_after_id = s.id "
         "AND s.portfolio_id = c.portfolio_id AND s.sequence >= c.first_sequence"
     )
     op.execute(
-        cutoff
-        + "DELETE FROM trades AS t USING portfolio_snapshots AS s, cutoffs AS c "
+        cutoff + "DELETE FROM trades AS t USING portfolio_snapshots AS s, cutoffs AS c "
         "WHERE (t.portfolio_snapshot_before_id = s.id "
         "OR t.portfolio_snapshot_after_id = s.id) "
         "AND s.portfolio_id = c.portfolio_id AND s.sequence >= c.first_sequence"
     )
     op.execute(
-        cutoff
-        + "DELETE FROM risk_decisions AS r USING portfolio_snapshots AS s, cutoffs AS c "
+        cutoff + "DELETE FROM risk_decisions AS r USING portfolio_snapshots AS s, cutoffs AS c "
         "WHERE r.portfolio_snapshot_id = s.id "
         "AND s.portfolio_id = c.portfolio_id AND s.sequence >= c.first_sequence"
     )
     op.execute(
-        cutoff
-        + "DELETE FROM position_size_proposals AS p "
+        cutoff + "DELETE FROM position_size_proposals AS p "
         "USING portfolio_snapshots AS s, cutoffs AS c "
         "WHERE p.portfolio_snapshot_id = s.id "
         "AND s.portfolio_id = c.portfolio_id AND s.sequence >= c.first_sequence"
     )
     op.execute(
-        cutoff
-        + "DELETE FROM portfolio_snapshots AS s USING cutoffs AS c "
+        cutoff + "DELETE FROM portfolio_snapshots AS s USING cutoffs AS c "
         "WHERE s.portfolio_id = c.portfolio_id AND s.sequence >= c.first_sequence"
     )
 

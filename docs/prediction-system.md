@@ -1539,6 +1539,16 @@ If a more advanced model cannot outperform the baseline, it should not automatic
 
 ---
 
+## Implemented Phase 10 forecast evaluation
+
+Phase 10 evaluates one designated home-win Bernoulli probability per completed NBA event. It does not score the complementary away probability as a second observation. The exact scalar score is `(home_probability - home_won)^2`; accuracy abstains at exactly `0.5` instead of choosing an arbitrary side.
+
+The current canonical sample contains only the newest forecast snapshot for each event, model version, and purpose. Operational forecasts must have been generated strictly before tip. Historical replay uses tip as its chronological cutoff and is always labeled retrospective because the current sports schema does not preserve when earlier results first became available.
+
+Every score freezes the final result semantics, model identity, forecast, policy, and fingerprints in `forecast_evaluations`. A score or event-date correction appends a new row. Current summaries match those frozen values back to the current event row, so a correction reversion selects the original semantic fact without deleting either history record.
+
+Calibration returns every fixed-width bin, including empty bins, plus mean Brier, expected calibration error, and maximum calibration error. Model comparisons use only paired events with the same outcome fingerprint; unpaired sample coverage is reported separately. The engine does not make significance or independence claims from these descriptive metrics.
+
 # 54. Core Prediction Principle
 
 The core forecasting philosophy is:

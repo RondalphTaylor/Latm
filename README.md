@@ -21,7 +21,7 @@ From the repository root in PowerShell:
 Copy-Item .env.example .env
 ```
 
-The committed example contains local-development values only. Keep real credentials in `.env`; Git ignores that file. `DATABASE_URL` is required by the backend, while a missing `TRADING_MODE` defaults safely to `paper`. Any other trading-mode value is rejected. `PAPER_SLIPPAGE_BPS` and `PAPER_FEE_BPS` configure the versioned Phase 8 entry assumptions. Phase 9 adds `POSITION_MONITOR_MIN_HOLD_EDGE`, `POSITION_MONITOR_REDUCE_FRACTION`, the two monitoring freshness limits, and distinct `PAPER_EXIT_SLIPPAGE_BPS` / `PAPER_EXIT_FEE_BPS` assumptions. If a default host port is already occupied, change `POSTGRES_PORT`, `BACKEND_PORT`, or `FRONTEND_PORT` in `.env`; when changing `POSTGRES_PORT`, update the port in the host-side `DATABASE_URL` as well.
+The committed example contains local-development values only. Keep real credentials in `.env`; Git ignores that file. `DATABASE_URL` is required by the backend, while a missing `TRADING_MODE` defaults safely to `paper`. Any other trading-mode value is rejected. `PAPER_SLIPPAGE_BPS` and `PAPER_FEE_BPS` configure the versioned Phase 8 entry assumptions. Phase 9 adds `POSITION_MONITOR_MIN_HOLD_EDGE`, `POSITION_MONITOR_REDUCE_FRACTION`, the two monitoring freshness limits, and distinct `PAPER_EXIT_SLIPPAGE_BPS` / `PAPER_EXIT_FEE_BPS` assumptions. Phase 10 uses `EVALUATION_CALIBRATION_BIN_COUNT` for its fixed-width reliability table. If a default host port is already occupied, change `POSTGRES_PORT`, `BACKEND_PORT`, or `FRONTEND_PORT` in `.env`; when changing `POSTGRES_PORT`, update the port in the host-side `DATABASE_URL` as well.
 
 ## Start the development stack
 
@@ -231,6 +231,19 @@ Early exits require a fresh direct bid for the held side, the latest operational
 
 Settlement uses a separate hard boundary. Kalshi data is normalized into append-only `market_resolutions` only when a terminal `settled` or `finalized` standard-binary payload supplies a consistent official YES/NO result, explicit payout, and settlement timestamp. A sports score, raw JSON extra, terminal status alone, unsupported scalar result, or conflicting resolution never moves money. Closed markets without a validated payout record an awaiting-resolution HOLD. A valid settlement has no simulated slippage or exit fee and atomically updates the position projection, immutable event, and next portfolio snapshot.
 
+## Evaluation and calibration
+
+Phase 10 scores one canonical home-win probability per completed NBA game with exact-decimal binary Brier score and strict `0.5` accuracy abstention. Operational and retrospective historical-replay samples are always separated. Forecast score facts are immutable and fingerprinted; a corrected result appends history, while current summaries use the score matching the current canonical forecast and current normalized result.
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8000/forecast-evaluations/run?purpose=operational&start_date=2026-01-01&end_date=2026-12-31"
+Invoke-RestMethod "http://localhost:8000/forecast-performance?purpose=operational"
+Invoke-RestMethod "http://localhost:8000/forecast-performance/compare?purpose=operational&model_a_version_id=<uuid>&model_b_version_id=<uuid>"
+Invoke-RestMethod "http://localhost:8000/portfolios/<portfolio-uuid>/performance"
+```
+
+Forecast performance exposes Brier score, decisive-prediction accuracy, all calibration bins including empty bins, ECE, MCE, and paired model comparisons over the shared event intersection. Trading performance is derived from the locked authoritative ledger rather than copied into a second accounting table. It reports marked-equity P&L and bankroll return, realized and unrealized components, completed-position win rate, entry edges, terminal returns, strategy-lineage groups, and snapshot-sampled maximum drawdown. Empty denominators remain `null`; retrospective availability and non-executable mark limitations are explicit warnings.
+
 ## Backend development
 
 Backend packaging uses the standard PEP 621 `pyproject.toml` format with bounded dependency ranges and pip/venv. This keeps Phase 0's bootstrap toolchain small and works identically on the host, in Docker, and in CI without requiring Poetry or another package manager.
@@ -300,4 +313,4 @@ infra/compose.yaml    Backend, frontend, and PostgreSQL development stack
 docs/                 Product, architecture, safety, and progress documentation
 ```
 
-See `AGENTS.md`, `ARCHITECTURE.md`, and `ROADMAP.md` for project constraints and phased scope. Paper entry execution is implemented without any live provider path or human-approval action. The next roadmap target is Phase 9 position monitoring and exits.
+See `AGENTS.md`, `ARCHITECTURE.md`, and `ROADMAP.md` for project constraints and phased scope. Paper entry, monitoring, settlement, and evaluation are implemented without any live provider path or human-approval action. The next roadmap target is Phase 11, the basic dashboard.

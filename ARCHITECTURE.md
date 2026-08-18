@@ -1061,6 +1061,12 @@ Metrics should be segmentable by:
 
 This is required to determine whether changes improve or degrade the system.
 
+Phase 10 persists immutable `forecast_evaluations`, one scalar home-team Bernoulli score per current canonical event/model/purpose forecast and frozen normalized final result. The versioned `binary_home_brier` policy stores exact twelve-decimal `(p-y)^2`, uses strict `p=0.5` accuracy abstention, and fingerprints result date, schedule, teams, score, forecast, model configuration, purpose, and policy. Result corrections append facts; current summaries match copied semantics back to the current normalized event so corrections and reversions never rewrite history. Operational and retrospective historical-replay samples cannot be combined.
+
+Calibration uses a configured fixed-width reliability table with every bin present, including empty bins, plus ECE and MCE. Model comparison is paired on the exact shared event and outcome-fingerprint intersection; unpaired coverage remains visible and is not treated as evidence of superiority.
+
+Paper trading performance is read-only derived state. The service takes the portfolio lock used by execution and monitoring, anchors to the latest immutable snapshot sequence, validates the complete snapshot chain, position projections, opening lineage, entry-edge economics, and monitoring-event continuity, then calculates marked-equity P&L, realized/unrealized returns, completed-position win rate, entry-edge means, terminal return, strategy-lineage groups, and snapshot-sampled drawdown. It does not duplicate financial truth in an aggregate table. Confidence segmentation is rejected until a real upstream confidence signal exists.
+
 ---
 
 # 27. Data Storage
@@ -1114,7 +1120,7 @@ model_versions
 
 strategy_versions
 
-evaluation_results
+forecast_evaluations
 ```
 
 The exact schema should be defined incrementally.
@@ -1200,7 +1206,15 @@ GET /trades/{id}
 
 GET /portfolio
 
-GET /evaluation
+POST /forecast-evaluations/run
+
+GET /forecast-evaluations
+
+GET /forecast-performance
+
+GET /forecast-performance/compare
+
+GET /portfolios/{portfolio_id}/performance
 ```
 
 Future mutation routes may include:

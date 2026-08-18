@@ -231,3 +231,14 @@ def test_invalid_paper_execution_settings_are_rejected(
 
     with pytest.raises(ValidationError):
         Settings(database_url=TEST_DATABASE_URL, _env_file=None)
+
+
+@pytest.mark.parametrize("value", ["1", "51"])
+def test_invalid_evaluation_calibration_bin_count_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+    value: str,
+) -> None:
+    monkeypatch.setenv("EVALUATION_CALIBRATION_BIN_COUNT", value)
+
+    with pytest.raises(ValidationError):
+        Settings(database_url=TEST_DATABASE_URL, _env_file=None)

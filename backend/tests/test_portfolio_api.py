@@ -15,6 +15,7 @@ from app.api.portfolio import (
 from app.domain.portfolio import PositionSizingPolicy
 from app.main import create_app
 from app.models.portfolio import PositionSizeProposalRecord
+from app.schemas.portfolio import PortfolioSnapshotResponse
 from app.services.position_sizing.engine import RulesPositionSizer
 from app.services.position_sizing.repository import PortfolioBundle
 from app.services.position_sizing.service import (
@@ -159,6 +160,23 @@ def test_sizing_run_and_proposal_history_expose_pre_risk_audit() -> None:
         "limit": 25,
         "offset": 2,
     }
+
+
+def test_snapshot_schema_preserves_legitimate_zero_equity_values() -> None:
+    record = portfolio_bundle().snapshot
+    record.current_bankroll = Decimal("1000.00")
+    record.cash_balance = Decimal("0.00")
+    record.committed_capital = Decimal("1000.00")
+    record.available_bankroll = Decimal("0.00")
+    record.open_position_value = Decimal("0.00")
+    record.unrealized_pnl = Decimal("-1000.00")
+    record.total_portfolio_value = Decimal("0.00")
+
+    response = PortfolioSnapshotResponse.from_record(record)
+
+    assert response.open_position_value == Decimal("0.00")
+    assert response.unrealized_pnl == Decimal("-1000.00")
+    assert response.total_portfolio_value == Decimal("0.00")
 
 
 def test_unknown_portfolio_and_proposal_return_404() -> None:

@@ -1726,6 +1726,16 @@ The biggest question should be:
 
 ---
 
+## Implemented Phase 10 trading evaluation
+
+Phase 10 derives performance under the same portfolio lock used by execution and monitoring. It validates the immutable snapshot chain, current position projections, filled opening lineage, entry-edge arithmetic, and monitoring-event continuity before producing results. Financial metrics are not copied into another mutable ledger.
+
+The headline total P&L is marked equity minus starting bankroll, exactly equal to realized plus unrealized P&L. Return on starting bankroll is unannualized. Win rate counts completed positions once, includes breakevens in the denominator, and excludes open positions. Average terminal return is the arithmetic mean of terminal position P&L divided by original all-in basis; aggregate return on cost is exposed separately.
+
+Maximum drawdown is calculated over sequence-ordered `total_portfolio_value` snapshots with exact peak and trough provenance. It is explicitly snapshot-sampled, not continuous intraperiod drawdown. Stored open marks exclude hypothetical future exit fees and slippage, and ask-fallback valuation can be non-executable; response warnings preserve those limitations.
+
+Model and strategy comparison uses the immutable opening lineage rather than mutable current forecasts: model configuration, opportunity policy, sizing policy, risk policy, execution policy, and opening market type. Exit-policy attribution is not treated as a whole-position strategy because one position can be reduced under several monitoring versions.
+
 # 72. Core Paper Trading Principle
 
 The simulator should attempt to answer:

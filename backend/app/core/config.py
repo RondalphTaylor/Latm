@@ -153,6 +153,7 @@ class Settings(BaseSettings):
     paper_exit_fee_bps: Decimal = Field(
         default=Decimal("10.00"), ge=Decimal("0"), le=Decimal("10000"), decimal_places=2
     )
+    evaluation_calibration_bin_count: int = Field(default=10, ge=2, le=50)
 
     @model_validator(mode="after")
     def validate_opportunity_thresholds(self) -> Settings:
