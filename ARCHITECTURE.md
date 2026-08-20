@@ -183,6 +183,10 @@ The initial frontend should be responsive enough to use from a mobile browser.
 
 A native mobile application is not required for the MVP.
 
+The implemented Phase 11 dashboard is a single Next.js Server Component route with anchored sections. A typed server-only adapter reads bounded FastAPI endpoints through `BACKEND_API_URL` with `cache: no-store`; the browser never calls FastAPI directly, so the MVP does not require CORS. Independent read failures remain isolated by section. Decimal accounting values stay as strings through the adapter and the UI renders authoritative portfolio, position, and evaluation fields without recomputing them.
+
+The dashboard is observational only. It contains no execution, monitoring-run, ingestion, approval, credential, provider-account, or live-order controls, and it displays the paper/simulated boundary persistently at desktop and mobile widths.
+
 ---
 
 ## Database
@@ -1229,6 +1233,8 @@ Current local mutation routes include bounded forecasting, matching, opportunity
 
 API design should use typed request and response schemas.
 
+The Phase 11 dashboard consumes only the current `GET` routes. It selects the active portfolio deterministically, then scopes position, trade, event, and performance reads to that portfolio. Research sections remain available without a portfolio. List caps are disclosed because the current bare-array APIs do not expose total counts or cursors.
+
 ---
 
 # 30. Real-Time Updates
@@ -1490,11 +1496,15 @@ Initial frontend:
 ```text
 Next.js Dashboard
         │
+        ├── Server-only API Adapter
+        │       └── Partial Read States
+        │
         ├── Markets
         ├── Forecasts
         ├── Opportunities
         ├── Positions
-        └── Performance
+        ├── Paper Activity
+        └── Performance + Calibration
 ```
 
 AI evidence processing should be introduced after the deterministic pipeline works.

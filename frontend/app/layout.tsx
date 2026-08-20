@@ -4,8 +4,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LATM Status",
-  description: "Operational status for the LATM prediction-market platform.",
+  title: "LATM Paper Research Desk",
+  description: "Read-only monitoring for LATM forecasts, paper positions, and evaluation.",
 };
 
 interface RootLayoutProps {

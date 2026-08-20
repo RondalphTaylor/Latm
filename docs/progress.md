@@ -255,6 +255,19 @@ Final Phase 10 validation passed with all 399 backend tests against PostgreSQL, 
 
 The local database currently has no normalized NBA event/forecast sample, so real calibration remains empty until historical or operational data is ingested. Historical replay cannot prove when prior results first became available because sports events retain latest state rather than an observation timeline. Drawdown is snapshot-sampled, and open-position equity excludes hypothetical future exit costs.
 
+## Phase 11: Basic Dashboard
+
+**Status:** Complete
+**Completed:** 2026-08-20
+
+Phase 11 replaced the static status splash with a responsive, server-rendered paper research desk. A typed server-only adapter reads the existing bounded FastAPI endpoints, selects the active portfolio deterministically, joins market and sports-event display context, and isolates resource failures so one unavailable read cannot blank the page. Decimal accounting values remain strings until display and stored position marks retain their basis and timestamp.
+
+The dashboard exposes portfolio balances, active and terminal position projections, combined entry/monitoring activity, operational forecasts, current opportunities, NBA market quotes, ledger-derived trading performance, and operational calibration. Empty datasets and unavailable metrics are explicit. A persistent `PAPER / SIMULATED` banner, GET-only adapter tests, and the absence of buttons/forms preserve the no-live execution boundary.
+
+Final Phase 11 validation passed all 399 PostgreSQL-backed backend tests and 7 frontend adapter/rendering tests, along with Ruff, strict mypy, frontend lint and type checking, the production build, Compose rendering, Alembic head/drift checks, and a zero-vulnerability production dependency audit. Browser validation against the running local stack confirmed real market rows, API readiness, empty-state semantics, no console errors, the persistent paper boundary, and no body overflow at a 390-by-844 mobile viewport.
+
+Implemented limitations: refresh is manual, list responses are bounded without global totals, and the first active portfolio is shown without an interactive selector. The local database currently has market records but no portfolio or operational forecast sample, so runtime validation exercised real markets plus the intended empty states for portfolio, positions, opportunities, performance, and calibration.
+
 ## Next phase
 
-Phase 11 should build the basic responsive dashboard over the existing read APIs, clearly display paper mode, and expose markets, forecasts, opportunities, positions, trade history, calibration, and portfolio performance without adding trading authority.
+Phase 12 should introduce the research and evidence pipeline: retrieve bounded high-quality NBA information, preserve provenance and freshness, and produce structured evidence records without letting an LLM directly set probabilities or call trading APIs.

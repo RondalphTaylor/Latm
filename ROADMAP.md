@@ -831,6 +831,8 @@ Implemented limitations: sports events preserve only their latest normalized res
 
 # Phase 11: Basic Dashboard
 
+**Implementation status:** Complete on 2026-08-20. The shipped dashboard is a single responsive, server-rendered monitoring surface over the existing bounded read APIs. It isolates partial failures, preserves Decimal strings until display, labels stored position marks, and keeps paper/simulated mode permanently visible without adding any execution authority.
+
 ## Goal
 
 Provide a usable interface for monitoring the system.
@@ -898,6 +900,8 @@ Phase 11 is complete when:
 * active positions are visible
 * historical trades are visible
 * basic performance is visible
+
+Implemented limitations: the dashboard uses manual page refresh rather than polling or WebSockets, selects the first active portfolio deterministically instead of exposing an interactive selector, and labels its bounded lists rather than claiming global totals. Empty local forecast and portfolio datasets render explicit unavailable/empty states. Mutation controls remain outside this phase.
 
 ---
 
@@ -1479,7 +1483,7 @@ At completion report:
 The current project target is:
 
 ```text
-Phase 11
+Phase 12
 ```
 
 Completed foundations:
@@ -1506,6 +1510,8 @@ Phase 8
 Phase 9
 
 Phase 10
+
+Phase 11
 ```
 
 The project should not begin with AI agents or real trading.

@@ -96,6 +96,7 @@ services:
       target: development
     environment:
       TRADING_MODE: ${TRADING_MODE:-paper}
+      BACKEND_API_URL: http://backend:8000
     command:
       - npm
       - run

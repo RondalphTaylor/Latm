@@ -1,6 +1,6 @@
 # LATM Prediction Market Platform
 
-An auditable prediction-market research platform focused initially on NBA markets. The current MVP ingests read-only Kalshi market data and authenticated BALLDONTLIE NBA data, deterministically links supported single-game contracts to normalized events, generates versioned event-level Elo base forecasts from local game history, records research-only YES/NO raw-edge opportunities, produces versioned advisory capital allocations against an isolated paper bankroll, records deterministic paper-only risk decisions, and simulates provider-free paper entries with immutable trades, open positions, and portfolio snapshots.
+An auditable prediction-market research platform focused initially on NBA markets. The current MVP ingests read-only Kalshi market data and authenticated BALLDONTLIE NBA data, deterministically links supported single-game contracts to normalized events, generates versioned event-level Elo base forecasts from local game history, records research-only YES/NO raw-edge opportunities, produces versioned advisory capital allocations against an isolated paper bankroll, records deterministic paper-only risk decisions, simulates provider-free paper positions, evaluates forecast and trading performance, and exposes the full state through a responsive read-only dashboard.
 
 > **Trading safety:** the only supported execution mode is `paper`. The Kalshi adapter accesses public production market data without credentials, while the BALLDONTLIE key authorizes sports-data reads only. Neither adapter contains order placement, financial-account access, or live-trading implementation.
 
@@ -21,7 +21,7 @@ From the repository root in PowerShell:
 Copy-Item .env.example .env
 ```
 
-The committed example contains local-development values only. Keep real credentials in `.env`; Git ignores that file. `DATABASE_URL` is required by the backend, while a missing `TRADING_MODE` defaults safely to `paper`. Any other trading-mode value is rejected. `PAPER_SLIPPAGE_BPS` and `PAPER_FEE_BPS` configure the versioned Phase 8 entry assumptions. Phase 9 adds `POSITION_MONITOR_MIN_HOLD_EDGE`, `POSITION_MONITOR_REDUCE_FRACTION`, the two monitoring freshness limits, and distinct `PAPER_EXIT_SLIPPAGE_BPS` / `PAPER_EXIT_FEE_BPS` assumptions. Phase 10 uses `EVALUATION_CALIBRATION_BIN_COUNT` for its fixed-width reliability table. If a default host port is already occupied, change `POSTGRES_PORT`, `BACKEND_PORT`, or `FRONTEND_PORT` in `.env`; when changing `POSTGRES_PORT`, update the port in the host-side `DATABASE_URL` as well.
+The committed example contains local-development values only. Keep real credentials in `.env`; Git ignores that file. `DATABASE_URL` is required by the backend, while a missing `TRADING_MODE` defaults safely to `paper`. Any other trading-mode value is rejected. `BACKEND_API_URL` is read only by the Next.js server; local host development defaults to `http://localhost:8000`, while Compose uses the internal `http://backend:8000` address. `PAPER_SLIPPAGE_BPS` and `PAPER_FEE_BPS` configure the versioned Phase 8 entry assumptions. Phase 9 adds `POSITION_MONITOR_MIN_HOLD_EDGE`, `POSITION_MONITOR_REDUCE_FRACTION`, the two monitoring freshness limits, and distinct `PAPER_EXIT_SLIPPAGE_BPS` / `PAPER_EXIT_FEE_BPS` assumptions. Phase 10 uses `EVALUATION_CALIBRATION_BIN_COUNT` for its fixed-width reliability table. If a default host port is already occupied, change `POSTGRES_PORT`, `BACKEND_PORT`, or `FRONTEND_PORT` in `.env`; when changing `POSTGRES_PORT`, update the port in the host-side `DATABASE_URL` as well.
 
 ## Start the development stack
 
@@ -244,6 +244,12 @@ Invoke-RestMethod "http://localhost:8000/portfolios/<portfolio-uuid>/performance
 
 Forecast performance exposes Brier score, decisive-prediction accuracy, all calibration bins including empty bins, ECE, MCE, and paired model comparisons over the shared event intersection. Trading performance is derived from the locked authoritative ledger rather than copied into a second accounting table. It reports marked-equity P&L and bankroll return, realized and unrealized components, completed-position win rate, entry edges, terminal returns, strategy-lineage groups, and snapshot-sampled maximum drawdown. Empty denominators remain `null`; retrospective availability and non-executable mark limitations are explicit warnings.
 
+## Read-only dashboard
+
+Open [http://localhost:3000](http://localhost:3000) after starting the Compose stack. The single responsive dashboard presents the primary paper portfolio, stored position marks, entry and monitoring history, operational forecasts, current opportunities, NBA market quotes, trading results, and calibration. It uses bounded server-side `GET` requests with no browser-to-backend CORS dependency. A failed section is labeled unavailable without replacing missing metrics with zero or hiding healthy sections.
+
+The page is deliberately observational. Its persistent `PAPER / SIMULATED` boundary is sourced from the only accepted runtime mode, and it exposes no paper-execution, monitoring-run, provider-ingestion, approval, or live-order control. Refreshing the page requests a new read-only server snapshot; Phase 11 does not add automatic polling or WebSockets.
+
 ## Backend development
 
 Backend packaging uses the standard PEP 621 `pyproject.toml` format with bounded dependency ranges and pip/venv. This keeps Phase 0's bootstrap toolchain small and works identically on the host, in Docker, and in CI without requiring Poetry or another package manager.
@@ -291,12 +297,13 @@ Run frontend validation:
 ```powershell
 cmd /c npm run lint
 cmd /c npm run typecheck
+cmd /c npm test
 cmd /c npm run build
 ```
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on pull requests and pushes to `main`. It checks backend tests, linting, formatting, typing, and migrations; frontend linting, typing, and production build; and Docker Compose configuration. CI uses only a temporary PostgreSQL service and paper mode.
+`.github/workflows/ci.yml` runs on pull requests and pushes to `main`. It checks backend tests, linting, formatting, typing, and migrations; frontend adapter/rendering tests, linting, typing, and production build; and Docker Compose configuration. CI uses only a temporary PostgreSQL service and paper mode.
 
 ## Git publication workflow
 
@@ -308,9 +315,9 @@ Use concise conventional commit messages where practical. Keep unrelated changes
 
 ```text
 backend/              FastAPI application, SQLAlchemy, Alembic, and tests
-frontend/             Minimal Next.js paper-mode and model status application
+frontend/             Responsive Next.js paper-research dashboard and typed API adapter
 infra/compose.yaml    Backend, frontend, and PostgreSQL development stack
 docs/                 Product, architecture, safety, and progress documentation
 ```
 
-See `AGENTS.md`, `ARCHITECTURE.md`, and `ROADMAP.md` for project constraints and phased scope. Paper entry, monitoring, settlement, and evaluation are implemented without any live provider path or human-approval action. The next roadmap target is Phase 11, the basic dashboard.
+See `AGENTS.md`, `ARCHITECTURE.md`, and `ROADMAP.md` for project constraints and phased scope. Paper entry, monitoring, settlement, evaluation, and the read-only dashboard are implemented without any live provider path or human-approval action. The next roadmap target is Phase 12, the research and evidence pipeline.
