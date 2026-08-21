@@ -476,11 +476,11 @@ Raw provider responses may be retained for debugging and audit purposes.
 
 ---
 
-# 10. NBA Event Normalization
+# 10. Sports Event Normalization
 
-NBA events should be represented independently of the sports data provider.
+Sports events should be represented independently of the sports data provider.
 
-A normalized NBA game should contain:
+A normalized game should contain:
 
 * internal event ID
 * external provider IDs
@@ -492,6 +492,16 @@ A normalized NBA game should contain:
 * final score when available
 
 Forecasting code should operate against normalized events.
+
+The sports domain now supports `nba` and `mlb`. BALLDONTLIE remains the NBA provider, while the
+offseason pilot adds a public read-only official MLB Stats API adapter for active teams, bounded
+schedules, lifecycle state, scores, venue, and series metadata. Both providers persist into the
+same normalized tables with stable provider identities and explicit league values.
+
+This shared storage does not make the downstream pipeline sport-agnostic by implication. The
+implemented matcher, Elo model, forecast evaluation, opportunity, risk, and trading services retain
+their explicit `league=nba` gates. MLB market matching and forecasting require separately versioned
+sport-specific implementations.
 
 ---
 
@@ -1476,7 +1486,7 @@ FastAPI Application
         │
         ├── Prediction Market Provider
         │
-        ├── NBA Data Provider
+        ├── NBA and MLB Data Providers
         │
         ├── Event Matcher
         │

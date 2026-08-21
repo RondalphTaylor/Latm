@@ -21,7 +21,7 @@ from app.db.base import Base
 
 
 class TeamRecord(Base):
-    """Persisted provider-neutral NBA team."""
+    """Persisted provider-neutral sports team."""
 
     __tablename__ = "teams"
     __table_args__ = (
@@ -51,7 +51,7 @@ class TeamRecord(Base):
 
 
 class SportsEventRecord(Base):
-    """Persisted provider-neutral NBA game."""
+    """Persisted provider-neutral sports event."""
 
     __tablename__ = "sports_events"
     __table_args__ = (

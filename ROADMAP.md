@@ -1325,6 +1325,11 @@ Phase 20 is complete when:
 
 # Phase 21: Additional Sports
 
+**Implementation status:** Started on 2026-08-20 with a bounded offseason MLB ingestion
+foundation. The shipped slice adds official read-only MLB team, schedule, and result normalization,
+selectable ingestion, shared persistence, and league-filtered reads. It does not yet add MLB market
+classification, matching, forecasting, evidence, opportunities, evaluation, or trading.
+
 ## Goal
 
 Expand the system beyond NBA markets.
@@ -1484,6 +1489,10 @@ The current project target is:
 
 ```text
 Phase 12
+
++
+
+User-approved bounded MLB offseason pilot slices
 ```
 
 Completed foundations:

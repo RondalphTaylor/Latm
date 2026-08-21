@@ -1,1 +1,1 @@
-"""NBA team and sports-event ingestion services."""
+"""Provider-neutral team and sports-event ingestion services."""

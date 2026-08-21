@@ -20,7 +20,7 @@ def validate_ingestion_date_range(start_date: date, end_date: date) -> None:
 
 
 class TeamIngestionResult(BaseModel):
-    """Auditable summary of one NBA-team ingestion run."""
+    """Auditable summary of one sports-team ingestion run."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -30,7 +30,7 @@ class TeamIngestionResult(BaseModel):
 
 
 class EventIngestionResult(BaseModel):
-    """Auditable summary of one bounded NBA-game ingestion run."""
+    """Auditable summary of one bounded sports-event ingestion run."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -61,7 +61,7 @@ class SportsIngestionService:
         self._repository = repository
 
     async def ingest_teams(self) -> TeamIngestionResult:
-        """Retrieve and persist all provider NBA teams."""
+        """Retrieve and persist all teams exposed by the selected provider."""
         teams = await self._provider.get_teams()
         persisted = await self._repository.upsert_teams(teams)
         return TeamIngestionResult(

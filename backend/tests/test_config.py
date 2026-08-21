@@ -24,6 +24,8 @@ def test_trading_mode_defaults_to_paper(monkeypatch: pytest.MonkeyPatch) -> None
     assert settings.prediction_market_provider is PredictionMarketProviderName.KALSHI
     assert settings.sports_data_provider is SportsDataProviderName.BALLDONTLIE
     assert settings.balldontlie_api_key is None
+    assert settings.mlb_api_base_url == "https://statsapi.mlb.com/api/v1"
+    assert settings.mlb_provider_request_interval_seconds == 0.25
     assert settings.matching_min_confidence == Decimal("0.90")
     assert settings.matching_ambiguity_margin == Decimal("0.10")
     assert settings.matching_time_window_hours == 36

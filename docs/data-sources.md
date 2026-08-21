@@ -1256,3 +1256,50 @@ Market vs Model Comparison
 ```
 
 Once this works, the project has its first real forecasting loop.
+
+---
+
+# 38. Offseason MLB Pilot Source
+
+The current MLB pilot uses the official public MLB Stats API:
+
+```text
+https://statsapi.mlb.com/api/v1
+```
+
+The implemented read-only adapter uses:
+
+```text
+/teams?sportId=1
+
+/schedule?sportId=1
+```
+
+It retrieves active MLB team identity and division metadata plus bounded schedule, status, inning,
+score, venue, game type, and series data. It does not authenticate, access an account, or expose any
+execution operation. Provider payloads are schema validated and retained in normalized raw source
+snapshots. Temporary failures use bounded retry and all malformed source data fails closed.
+
+The source progression for an MLB forecast pilot is:
+
+```text
+Implemented:
+Official MLB teams + schedule + results
+
+Next:
+Official starting lineups + probable pitchers
+
+Then:
+Baseball Savant / Statcast quantitative features
+
+Separately:
+Kalshi MLB market classification and contract matching
+```
+
+MLB.com starting-lineup and probable-pitcher surfaces and Baseball Savant were verified as the
+preferred official inputs, but they are not yet consumed. Each must receive a typed, timestamped
+source contract before it affects a model. Prediction-market prices remain comparison data and must
+not be used as independent factual evidence in the MLB base forecast.
+
+MLB results can evaluate a sports forecast but cannot settle a prediction-market contract. The
+exchange's typed official resolution remains the sole financial settlement authority.

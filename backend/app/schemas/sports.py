@@ -9,7 +9,7 @@ from app.models.sports import SportsEventRecord, TeamRecord
 
 
 class TeamResponse(BaseModel):
-    """Normalized NBA team returned by the API."""
+    """Normalized sports team returned by the API."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -46,7 +46,7 @@ class TeamResponse(BaseModel):
 
 
 class SportsEventResponse(BaseModel):
-    """Normalized NBA game returned by the API."""
+    """Normalized sports event returned by the API."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -101,7 +101,7 @@ class SportsEventResponse(BaseModel):
 
 
 class TeamIngestionResponse(BaseModel):
-    """Summary returned after NBA-team ingestion."""
+    """Summary returned after sports-team ingestion."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -111,7 +111,7 @@ class TeamIngestionResponse(BaseModel):
 
 
 class EventIngestionResponse(BaseModel):
-    """Summary returned after bounded NBA-game ingestion."""
+    """Summary returned after bounded sports-event ingestion."""
 
     model_config = ConfigDict(frozen=True)
 

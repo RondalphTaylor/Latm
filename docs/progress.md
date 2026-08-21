@@ -268,6 +268,19 @@ Final Phase 11 validation passed all 399 PostgreSQL-backed backend tests and 7 f
 
 Implemented limitations: refresh is manual, list responses are bounded without global totals, and the first active portfolio is shown without an interactive selector. The local database currently has market records but no portfolio or operational forecast sample, so runtime validation exercised real markets plus the intended empty states for portfolio, positions, opportunities, performance, and calibration.
 
+## Offseason MLB ingestion foundation
+
+**Status:** Complete
+**Completed:** 2026-08-21
+
+The first user-approved MLB pilot slice adds a credential-free read-only adapter for the official MLB Stats API. It validates and normalizes active MLB teams and bounded schedules, including scheduled/live/final lifecycle state, inning information, scores, venue, game type, and series metadata. MLB records reuse stable provider-derived identities and the existing transactional team/event persistence while remaining distinguishable through `league=mlb` and `provider=mlb`.
+
+Team and event ingestion can select `provider=mlb` per request without replacing the BALLDONTLIE NBA default. Read APIs now accept explicit `league=nba|mlb` filters. The provider uses timeouts, conservative pacing, bounded retries, raw validated snapshots, and safe failures. It has no credential, market-account access, or order method.
+
+Validation passed all 406 backend tests (7 database-integration tests skipped by default), Ruff, strict mypy, all 7 frontend tests, frontend lint/type checking, and the production build. A live read-only smoke against the official source persisted all 30 active MLB teams and 15 games for August 21, 2026, then returned them through the league-filtered API without changing the configured NBA default.
+
+The existing matcher, Elo model, forecast evaluation, opportunity, sizing, risk, execution, and position paths remain explicitly NBA-only. MLB market classification, matching, probable-pitcher and lineup snapshots, Statcast features, an MLB model, and all MLB trading eligibility remain future independently validated slices.
+
 ## Next phase
 
-Phase 12 should introduce the research and evidence pipeline: retrieve bounded high-quality NBA information, preserve provenance and freshness, and produce structured evidence records without letting an LLM directly set probabilities or call trading APIs.
+Continue the bounded MLB pilot with Kalshi MLB market classification and deterministic MLB market-to-game matching, without reusing NBA aliases or enabling downstream trading. Phase 12 research/evidence work remains the next broader roadmap milestone.

@@ -108,3 +108,13 @@ def test_team_upsert_batches_large_sets() -> None:
     assert persisted == 501
     assert session.commits == 1
     assert len(session.statements) == 3
+
+
+def test_mlb_provider_display_name_is_explicit() -> None:
+    assert SportsRepository._provider_values({"mlb"}) == [
+        {
+            "name": "mlb",
+            "display_name": "MLB Stats API",
+            "is_read_only": True,
+        }
+    ]

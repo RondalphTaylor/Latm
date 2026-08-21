@@ -24,6 +24,7 @@ class SportsDataProviderName(StrEnum):
     """Sports-data providers available in the current read-only build."""
 
     BALLDONTLIE = "balldontlie"
+    MLB = "mlb"
 
 
 class Settings(BaseSettings):
@@ -46,8 +47,10 @@ class Settings(BaseSettings):
     sports_data_provider: SportsDataProviderName = SportsDataProviderName.BALLDONTLIE
     balldontlie_api_key: SecretStr | None = None
     balldontlie_api_base_url: str = "https://api.balldontlie.io/v1"
+    mlb_api_base_url: str = "https://statsapi.mlb.com/api/v1"
     sports_provider_max_pages: int = Field(default=10, ge=1, le=100)
     sports_provider_request_interval_seconds: float = Field(default=12.1, ge=0.0, le=60.0)
+    mlb_provider_request_interval_seconds: float = Field(default=0.25, ge=0.0, le=60.0)
     matching_min_confidence: Decimal = Field(
         default=Decimal("0.90"), ge=Decimal("0"), le=Decimal("1")
     )

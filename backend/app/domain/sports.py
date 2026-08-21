@@ -13,10 +13,11 @@ class SportsLeague(StrEnum):
     """Leagues supported by the normalized sports-data layer."""
 
     NBA = "nba"
+    MLB = "mlb"
 
 
 class SportsEventStatus(StrEnum):
-    """Provider-neutral lifecycle states for an NBA game."""
+    """Provider-neutral lifecycle states for a sports event."""
 
     SCHEDULED = "scheduled"
     IN_PROGRESS = "in_progress"
@@ -27,7 +28,7 @@ class SportsEventStatus(StrEnum):
 
 
 class Team(BaseModel):
-    """Provider-independent NBA team."""
+    """Provider-independent sports team."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -45,7 +46,7 @@ class Team(BaseModel):
 
 
 class SportsEvent(BaseModel):
-    """Provider-independent NBA game with reproducible source metadata."""
+    """Provider-independent game with reproducible source metadata."""
 
     model_config = ConfigDict(frozen=True)
 

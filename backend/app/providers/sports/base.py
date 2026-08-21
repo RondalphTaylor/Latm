@@ -23,7 +23,7 @@ class SportsProviderAuthenticationError(SportsDataProviderError):
 
 
 class SportsDataProvider(Protocol):
-    """Read-only provider boundary used by NBA ingestion business logic."""
+    """Read-only provider boundary used by sports-ingestion business logic."""
 
     name: str
 

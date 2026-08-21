@@ -9,11 +9,12 @@ from pydantic import SecretStr
 
 from app.api.sports import (
     _build_balldontlie_provider,
+    _build_mlb_provider,
     get_sports_data_provider,
     get_sports_ingestion_service,
     get_sports_repository,
 )
-from app.core.config import Settings
+from app.core.config import Settings, SportsDataProviderName
 from app.main import create_app
 from app.models.sports import SportsEventRecord, TeamRecord
 from app.providers.sports.base import SportsProviderUnavailableError
@@ -108,6 +109,7 @@ class FakeSportsRepository(SportsRepository):
     async def list_teams(
         self,
         *,
+        league: str | None,
         provider_name: str | None,
         limit: int,
         offset: int,
@@ -124,6 +126,7 @@ class FakeSportsRepository(SportsRepository):
         *,
         start_date: date | None,
         end_date: date | None,
+        league: str | None,
         event_status: str | None,
         team_id: UUID | None,
         provider_name: str | None,
@@ -133,6 +136,7 @@ class FakeSportsRepository(SportsRepository):
         self.event_arguments = {
             "start_date": start_date,
             "end_date": end_date,
+            "league": league,
             "event_status": event_status,
             "team_id": team_id,
             "provider_name": provider_name,
@@ -199,9 +203,9 @@ def test_lists_teams_and_returns_event_with_away_team() -> None:
     _, test_client = sports_client(repository=repository)
 
     with test_client:
-        teams_response = test_client.get("/teams?provider=balldontlie")
+        teams_response = test_client.get("/teams?league=nba&provider=balldontlie")
         events_response = test_client.get(
-            f"/events?start_date=2026-08-01&end_date=2026-08-02&status=final"
+            f"/events?start_date=2026-08-01&end_date=2026-08-02&league=nba&status=final"
             f"&team_id={HOME_TEAM_ID}&provider=balldontlie&limit=25&offset=2"
         )
 
@@ -213,6 +217,7 @@ def test_lists_teams_and_returns_event_with_away_team() -> None:
     assert repository.event_arguments == {
         "start_date": date(2026, 8, 1),
         "end_date": date(2026, 8, 2),
+        "league": "nba",
         "event_status": "final",
         "team_id": HOME_TEAM_ID,
         "provider_name": "balldontlie",
@@ -284,6 +289,7 @@ def test_missing_api_key_only_blocks_ingestion(client: TestClient) -> None:
 
 def test_provider_dependency_reuses_adapter_for_cross_request_pacing() -> None:
     _build_balldontlie_provider.cache_clear()
+    _build_mlb_provider.cache_clear()
     settings = Settings(
         database_url=SecretStr("postgresql+asyncpg://test:test@localhost/test"),
         balldontlie_api_key=SecretStr("test-key"),
@@ -291,9 +297,14 @@ def test_provider_dependency_reuses_adapter_for_cross_request_pacing() -> None:
 
     first = get_sports_data_provider(settings)
     second = get_sports_data_provider(settings)
+    mlb_first = get_sports_data_provider(settings, SportsDataProviderName.MLB)
+    mlb_second = get_sports_data_provider(settings, SportsDataProviderName.MLB)
 
     assert first is second
+    assert mlb_first is mlb_second
+    assert mlb_first.name == "mlb"
     _build_balldontlie_provider.cache_clear()
+    _build_mlb_provider.cache_clear()
 
 
 def test_event_date_validation_returns_422() -> None:
@@ -307,3 +318,14 @@ def test_event_date_validation_returns_422() -> None:
 
     assert response.status_code == 422
     assert response.json() == {"detail": "start_date must not be after end_date"}
+
+
+def test_invalid_league_filters_return_422() -> None:
+    _, test_client = sports_client(repository=FakeSportsRepository())
+
+    with test_client:
+        team_response = test_client.get("/teams?league=nfl")
+        event_response = test_client.get("/events?league=nfl")
+
+    assert team_response.status_code == 422
+    assert event_response.status_code == 422

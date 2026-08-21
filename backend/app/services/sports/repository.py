@@ -38,17 +38,21 @@ class SportsUpsertResult:
 
 
 class SportsRepository:
-    """Persist and query normalized NBA teams and games."""
+    """Persist and query normalized sports teams and events."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
     @staticmethod
     def _provider_values(provider_names: set[str]) -> list[dict[str, object]]:
+        display_names = {
+            "balldontlie": "BALLDONTLIE",
+            "mlb": "MLB Stats API",
+        }
         return [
             {
                 "name": name,
-                "display_name": "BALLDONTLIE" if name == "balldontlie" else name.title(),
+                "display_name": display_names.get(name, name.title()),
                 "is_read_only": True,
             }
             for name in sorted(provider_names)
@@ -225,12 +229,15 @@ class SportsRepository:
     async def list_teams(
         self,
         *,
+        league: str | None,
         provider_name: str | None,
         limit: int,
         offset: int,
     ) -> list[TeamRecord]:
-        """Return persisted NBA teams."""
+        """Return persisted teams using provider-neutral filters."""
         statement = select(TeamRecord).order_by(TeamRecord.full_name).limit(limit).offset(offset)
+        if league is not None:
+            statement = statement.where(TeamRecord.league == league)
         if provider_name is not None:
             statement = statement.where(TeamRecord.provider_name == provider_name)
         result = await self._session.scalars(statement)
@@ -246,13 +253,14 @@ class SportsRepository:
         *,
         start_date: date | None,
         end_date: date | None,
+        league: str | None,
         event_status: str | None,
         team_id: UUID | None,
         provider_name: str | None,
         limit: int,
         offset: int,
     ) -> list[SportsEventRecord]:
-        """Return persisted NBA events using provider-neutral filters."""
+        """Return persisted sports events using provider-neutral filters."""
         statement = (
             select(SportsEventRecord)
             .options(
@@ -267,6 +275,8 @@ class SportsRepository:
             statement = statement.where(SportsEventRecord.event_date >= start_date)
         if end_date is not None:
             statement = statement.where(SportsEventRecord.event_date <= end_date)
+        if league is not None:
+            statement = statement.where(SportsEventRecord.league == league)
         if event_status is not None:
             statement = statement.where(SportsEventRecord.status == event_status)
         if team_id is not None:

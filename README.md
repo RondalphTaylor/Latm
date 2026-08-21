@@ -1,8 +1,8 @@
 # LATM Prediction Market Platform
 
-An auditable prediction-market research platform focused initially on NBA markets. The current MVP ingests read-only Kalshi market data and authenticated BALLDONTLIE NBA data, deterministically links supported single-game contracts to normalized events, generates versioned event-level Elo base forecasts from local game history, records research-only YES/NO raw-edge opportunities, produces versioned advisory capital allocations against an isolated paper bankroll, records deterministic paper-only risk decisions, simulates provider-free paper positions, evaluates forecast and trading performance, and exposes the full state through a responsive read-only dashboard.
+An auditable prediction-market research platform focused initially on NBA markets. The current MVP ingests read-only Kalshi market data and authenticated BALLDONTLIE NBA data, deterministically links supported single-game contracts to normalized events, generates versioned event-level Elo base forecasts from local game history, records research-only YES/NO raw-edge opportunities, produces versioned advisory capital allocations against an isolated paper bankroll, records deterministic paper-only risk decisions, simulates provider-free paper positions, evaluates forecast and trading performance, and exposes the full state through a responsive read-only dashboard. A bounded offseason pilot also ingests official MLB teams, schedules, and results into the shared provider-neutral sports tables; MLB forecasting and trading are not enabled.
 
-> **Trading safety:** the only supported execution mode is `paper`. The Kalshi adapter accesses public production market data without credentials, while the BALLDONTLIE key authorizes sports-data reads only. Neither adapter contains order placement, financial-account access, or live-trading implementation.
+> **Trading safety:** the only supported execution mode is `paper`. The Kalshi adapter accesses public production market data without credentials, the BALLDONTLIE key authorizes NBA sports-data reads only, and the MLB adapter uses public official sports data without credentials. None of these adapters contains order placement, financial-account access, or live-trading implementation.
 
 ## Prerequisites
 
@@ -75,6 +75,26 @@ Invoke-RestMethod "http://localhost:8000/events/<internal-event-uuid>"
 ```
 
 Game ingestion accepts at most 31 inclusive calendar days per request. Repeated ingestion updates stable team and event identities instead of creating duplicates. A missing API key disables only the two ingestion endpoints with a `503`; persisted read APIs and health endpoints remain available.
+
+## MLB offseason pilot ingestion
+
+The read-only `mlb` adapter uses the public official MLB Stats API and requires no credential. Select it per ingestion request while retaining BALLDONTLIE as the configured NBA default:
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8000/teams/ingest?provider=mlb"
+Invoke-RestMethod -Method Post "http://localhost:8000/events/ingest?provider=mlb&start_date=2026-08-20&end_date=2026-08-20"
+```
+
+Inspect only MLB records with explicit league and provider filters:
+
+```powershell
+Invoke-RestMethod "http://localhost:8000/teams?league=mlb&provider=mlb"
+Invoke-RestMethod "http://localhost:8000/events?league=mlb&provider=mlb&start_date=2026-08-20&end_date=2026-08-20"
+```
+
+Alternatively, set `SPORTS_DATA_PROVIDER=mlb` to make MLB the ingestion default. `MLB_API_BASE_URL` and `MLB_PROVIDER_REQUEST_INTERVAL_SECONDS` configure the source and conservative pacing. The adapter validates and retains official source snapshots for active teams, scheduled/live/final games, scores, inning state, venue, and series metadata.
+
+This is an ingestion foundation only. MLB market classification, event matching, probable pitchers, confirmed lineups, Statcast features, forecasting, calibration, and paper-trading eligibility have not been implemented. Existing matching and every downstream decision path remain explicitly NBA-only.
 
 ## Market-to-event matching
 
@@ -320,4 +340,4 @@ infra/compose.yaml    Backend, frontend, and PostgreSQL development stack
 docs/                 Product, architecture, safety, and progress documentation
 ```
 
-See `AGENTS.md`, `ARCHITECTURE.md`, and `ROADMAP.md` for project constraints and phased scope. Paper entry, monitoring, settlement, evaluation, and the read-only dashboard are implemented without any live provider path or human-approval action. The next roadmap target is Phase 12, the research and evidence pipeline.
+See `AGENTS.md`, `ARCHITECTURE.md`, and `ROADMAP.md` for project constraints and phased scope. Paper entry, monitoring, settlement, evaluation, and the read-only dashboard are implemented without any live provider path or human-approval action. Phase 12 remains the next evidence milestone; the user-approved offseason MLB pilot is being delivered as bounded, independently tested slices without enabling MLB trading prematurely.
