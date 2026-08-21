@@ -281,6 +281,17 @@ Validation passed all 406 backend tests (7 database-integration tests skipped by
 
 The existing matcher, Elo model, forecast evaluation, opportunity, sizing, risk, execution, and position paths remain explicitly NBA-only. MLB market classification, matching, probable-pitcher and lineup snapshots, Statcast features, an MLB model, and all MLB trading eligibility remain future independently validated slices.
 
+## Previous-phase schema repair
+
+**Status:** Complete
+**Completed:** 2026-08-21
+
+Migration `0012_phase8_trade_repair` repairs early development databases that carried the final Phase 8 revision identifier before all finalized paper-trade checks were present. It transactionally replaces the incomplete terminal-state check and restores the missing mark-basis and fill-accounting constraints. Existing rows must pass the finalized rules during upgrade; invalid historical accounting therefore fails closed instead of being grandfathered.
+
+The repair is safe on clean databases because it recreates the same constraints already defined by migration `0009`. Its downgrade intentionally retains those Phase 8 invariants: removing a repair revision must not weaken the schema that revision `0009` promises.
+
+Final repair validation passed all 415 backend tests against PostgreSQL, Ruff, strict mypy, all 7 frontend tests, frontend lint/type checking, and the production build. Both the reproduced legacy database and a temporary database migrated from an empty schema reached `0012` with no Alembic drift; the temporary audit database was removed after verification.
+
 ## Next phase
 
 Continue the bounded MLB pilot with Kalshi MLB market classification and deterministic MLB market-to-game matching, without reusing NBA aliases or enabling downstream trading. Phase 12 research/evidence work remains the next broader roadmap milestone.

@@ -24,6 +24,7 @@ def test_execution_models_expose_single_use_and_open_intent_backstops() -> None:
 
     assert "uq_trades_risk_decision" in trade_constraints
     assert "ck_trades_terminal_state" in trade_constraints
+    assert "ck_trades_mark_basis" in trade_constraints
     assert "ck_trades_fill_accounting" in trade_constraints
     assert "uq_positions_opening_trade" in position_constraints
     assert "ck_positions_accounting" in position_constraints
