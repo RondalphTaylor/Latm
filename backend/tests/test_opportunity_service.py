@@ -140,6 +140,7 @@ def source_bundle() -> OpportunitySourceBundle:
     match = MarketEventMatchRecord(
         id=MATCH_ID,
         market_id=MARKET_ID,
+        league="nba",
         sports_event_id=EVENT_ID,
         status="matched",
         confidence=Decimal("0.99"),

@@ -8,7 +8,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.api.markets import get_market_ingestion_service, get_market_repository
-from app.domain.markets import MarketStatusFilter
+from app.domain.markets import MarketStatusFilter, SportsMarketType
+from app.domain.sports import SportsLeague
 from app.main import create_app
 from app.models.markets import (
     MarketOutcomeRecord,
@@ -39,6 +40,11 @@ def market_record(*, with_resolution: bool = False) -> PredictionMarketRecord:
         rules_secondary=None,
         status="open",
         is_nba=True,
+        sports_league="nba",
+        sports_market_type="single_game_winner",
+        sports_classification_method="official_series_metadata",
+        sports_classification_version="kalshi-official-series-v1",
+        sports_classification_fingerprint="b" * 64,
         open_time=observed_at,
         close_time=None,
         occurrence_time=None,
@@ -113,6 +119,8 @@ class FakeMarketRepository(MarketRepository):
         nba_only: bool,
         provider_name: str | None,
         status: str | None,
+        league: SportsLeague | None,
+        sports_market_type: SportsMarketType | None,
         limit: int,
         offset: int,
     ) -> list[PredictionMarketRecord]:
@@ -120,6 +128,8 @@ class FakeMarketRepository(MarketRepository):
             "nba_only": nba_only,
             "provider_name": provider_name,
             "status": status,
+            "league": league,
+            "sports_market_type": sports_market_type,
             "limit": limit,
             "offset": offset,
         }
@@ -141,11 +151,19 @@ class FakeIngestionService(MarketIngestionService):
         self,
         *,
         nba_only: bool = True,
+        league: SportsLeague | None = None,
         status: MarketStatusFilter | None = MarketStatusFilter.OPEN,
     ) -> IngestionResult:
         if self.should_fail:
             raise ProviderUnavailableError("provider offline")
-        return IngestionResult(provider="kalshi", fetched=8, nba_markets=2, persisted=2)
+        return IngestionResult(
+            provider="kalshi",
+            fetched=8,
+            nba_markets=2,
+            mlb_markets=3,
+            selected_league=league,
+            persisted=2,
+        )
 
 
 def market_client(
@@ -174,10 +192,14 @@ def test_list_markets_returns_typed_latest_snapshot_and_forwards_filters() -> No
     assert payload[0]["id"] == str(MARKET_ID)
     assert payload[0]["latest_price"]["yes_bid"] == "0.5400"
     assert payload[0]["outcomes"][0]["side"] == "yes"
+    assert payload[0]["sports_league"] == "nba"
+    assert payload[0]["sports_market_type"] == "single_game_winner"
     assert repository.list_arguments == {
         "nba_only": True,
         "provider_name": "kalshi",
         "status": "open",
+        "league": None,
+        "sports_market_type": None,
         "limit": 25,
         "offset": 5,
     }
@@ -229,8 +251,27 @@ def test_ingestion_endpoint_reports_counts() -> None:
         "provider": "kalshi",
         "fetched": 8,
         "nba_markets": 2,
+        "mlb_markets": 3,
+        "selected_league": None,
         "persisted": 2,
     }
+
+
+def test_mlb_ingestion_and_list_filters_are_typed() -> None:
+    repository = FakeMarketRepository(None)
+    service = FakeIngestionService()
+    _, test_client = market_client(repository=repository, ingestion_service=service)
+
+    with test_client:
+        ingest_response = test_client.post("/markets/ingest?league=mlb&status=open")
+        list_response = test_client.get("/markets?league=mlb&sports_market_type=single_game_winner")
+
+    assert ingest_response.status_code == 200
+    assert ingest_response.json()["selected_league"] == "mlb"
+    assert list_response.status_code == 200
+    assert repository.list_arguments is not None
+    assert repository.list_arguments["league"] is SportsLeague.MLB
+    assert repository.list_arguments["sports_market_type"] is SportsMarketType.SINGLE_GAME_WINNER
 
 
 def test_ingestion_provider_failure_returns_safe_502() -> None:

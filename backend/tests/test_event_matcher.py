@@ -15,11 +15,14 @@ from app.domain.matching import (
     SportsEventMatchInput,
     TeamMatchInput,
 )
+from app.domain.sports import SportsLeague
 from app.services.matching.matcher import MATCHER_VERSION, MarketEventMatcher
 
 BOS_ID = UUID("a7129d9c-0d4c-44d6-8a2d-dda4dc34cf82")
 NYK_ID = UUID("92d9bccf-dd34-4f1f-8886-9d2e884940d1")
 PHI_ID = UUID("b5ed29f7-c2aa-4ceb-94d9-9fca483f8670")
+ATL_ID = UUID("0fc456cc-66c1-42b4-92b4-5019881669df")
+MIL_ID = UUID("eac043ad-aea9-4fb2-a020-632f337e9e9d")
 MARKET_ID = UUID("3da220e1-b6d0-45e9-b507-7e75dc95a353")
 EVENT_ID = UUID("8701782a-4d22-4147-9d60-edbf2e243adc")
 SECOND_EVENT_ID = UUID("4c7009f8-07c4-4a0e-bddb-6dafed2f7915")
@@ -74,12 +77,16 @@ def market(
     occurrence_time: datetime | None = TIP_TIME,
     close_time: datetime | None = TIP_TIME + timedelta(hours=2),
     last_seen_at: datetime = OBSERVED_AT,
+    league: SportsLeague = SportsLeague.NBA,
+    rules_primary: str | None = None,
 ) -> MarketMatchInput:
     return MarketMatchInput(
         id=MARKET_ID,
+        league=league,
         title=title,
         subtitle=subtitle,
         market_type="binary",
+        rules_primary=rules_primary,
         occurrence_time=occurrence_time,
         close_time=close_time,
         last_seen_at=last_seen_at,
@@ -187,7 +194,7 @@ def test_cross_sport_false_positive_and_multi_team_future_are_unmatched() -> Non
     )
 
     assert soccer.status is MarketEventMatchStatus.UNMATCHED
-    assert soccer.method == "non_nba_sport_signal"
+    assert soccer.method == "incompatible_sport_signal"
     assert future.status is MarketEventMatchStatus.UNMATCHED
     assert future.method == "non_single_game_market"
 
@@ -266,3 +273,132 @@ def test_domain_rejects_ineligible_or_linkless_matched_decision() -> None:
 
     with pytest.raises(ValidationError):
         MarketEventMatchDecision.model_validate(payload)
+
+
+def test_mlb_game_matches_for_research_but_is_never_pipeline_eligible() -> None:
+    mlb_teams = (
+        TeamMatchInput(
+            id=ATL_ID,
+            abbreviation="ATL",
+            city="Atlanta",
+            name="Braves",
+            full_name="Atlanta Braves",
+        ),
+        TeamMatchInput(
+            id=MIL_ID,
+            abbreviation="MIL",
+            city="Milwaukee",
+            name="Brewers",
+            full_name="Milwaukee Brewers",
+        ),
+    )
+    mlb_event = event(home_team_id=MIL_ID, away_team_id=ATL_ID)
+    mlb_market = market(
+        league=SportsLeague.MLB,
+        title="Milwaukee wins",
+        subtitle="ATL vs MIL (Aug 23)",
+        rules_primary=(
+            "If the Milwaukee Brewers defeat the Atlanta Braves in the professional "
+            "baseball game, this market resolves Yes."
+        ),
+    )
+
+    decision = MarketEventMatcher(policy()).match(
+        mlb_market,
+        teams=mlb_teams,
+        events=(mlb_event,),
+        evaluated_at=OBSERVED_AT,
+    )
+
+    assert decision.league is SportsLeague.MLB
+    assert decision.status is MarketEventMatchStatus.MATCHED
+    assert decision.sports_event_id == EVENT_ID
+    assert not decision.automatic_trading_eligible
+    assert decision.evidence["league"] == "mlb"
+
+    unsafe_payload = decision.model_dump()
+    unsafe_payload["automatic_trading_eligible"] = True
+    with pytest.raises(ValidationError, match="league safety gate"):
+        MarketEventMatchDecision.model_validate(unsafe_payload)
+
+
+def test_mlb_matcher_rejects_other_baseball_leagues() -> None:
+    decision = MarketEventMatcher(policy()).match(
+        market(
+            league=SportsLeague.MLB,
+            title="KBO baseball game: ATL vs MIL",
+        ),
+        teams=(
+            TeamMatchInput(
+                id=ATL_ID,
+                abbreviation="ATL",
+                city="Atlanta",
+                name="Braves",
+                full_name="Atlanta Braves",
+            ),
+            TeamMatchInput(
+                id=MIL_ID,
+                abbreviation="MIL",
+                city="Milwaukee",
+                name="Brewers",
+                full_name="Milwaukee Brewers",
+            ),
+        ),
+        events=(event(home_team_id=MIL_ID, away_team_id=ATL_ID),),
+        evaluated_at=OBSERVED_AT,
+    )
+
+    assert decision.status is MarketEventMatchStatus.UNMATCHED
+    assert decision.method == "incompatible_sport_signal"
+
+
+def test_mlb_qualified_los_angeles_alias_does_not_select_both_teams() -> None:
+    angels_id = UUID("4fc2c7fb-cf26-43af-ad9f-069876a03470")
+    dodgers_id = UUID("94db4bbe-a0ee-4d20-98cd-e7b9e302a136")
+    texas_id = UUID("70366b49-af3d-417a-8422-e2fd5e2506a7")
+    first_pitch = TIP_TIME
+    decision = MarketEventMatcher(policy()).match(
+        market(
+            league=SportsLeague.MLB,
+            title="Los Angeles A wins",
+            subtitle="LAA vs TEX (Aug 1)",
+            rules_primary=(
+                "If Los Angeles A defeats Texas in the professional baseball game, "
+                "this market resolves Yes."
+            ),
+        ),
+        teams=(
+            TeamMatchInput(
+                id=angels_id,
+                abbreviation="LAA",
+                city="Anaheim",
+                name="Angels",
+                full_name="Los Angeles Angels",
+            ),
+            TeamMatchInput(
+                id=dodgers_id,
+                abbreviation="LAD",
+                city="Los Angeles",
+                name="Dodgers",
+                full_name="Los Angeles Dodgers",
+            ),
+            TeamMatchInput(
+                id=texas_id,
+                abbreviation="TEX",
+                city="Arlington",
+                name="Rangers",
+                full_name="Texas Rangers",
+            ),
+        ),
+        events=(
+            event(
+                start_time=first_pitch,
+                home_team_id=texas_id,
+                away_team_id=angels_id,
+            ),
+        ),
+        evaluated_at=OBSERVED_AT,
+    )
+
+    assert decision.status is MarketEventMatchStatus.MATCHED
+    assert {signal.team_id for signal in decision.team_signals} == {angels_id, texas_id}

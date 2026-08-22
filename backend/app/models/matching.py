@@ -54,9 +54,14 @@ class MarketEventMatchRecord(Base):
             name="ck_market_event_matches_status",
         ),
         CheckConstraint(
+            "league IN ('nba', 'mlb')",
+            name="ck_market_event_matches_league",
+        ),
+        CheckConstraint(
             "(status = 'matched' AND sports_event_id IS NOT NULL "
             "AND confidence >= min_confidence "
-            "AND automatic_trading_eligible = true) OR "
+            "AND ((league = 'nba' AND automatic_trading_eligible = true) "
+            "OR (league = 'mlb' AND automatic_trading_eligible = false))) OR "
             "(status IN ('ambiguous', 'unmatched') AND sports_event_id IS NULL "
             "AND automatic_trading_eligible = false)",
             name="ck_market_event_matches_safety_state",
@@ -66,6 +71,7 @@ class MarketEventMatchRecord(Base):
             "market_id",
             "evaluated_at",
         ),
+        Index("ix_market_event_matches_league_evaluated", "league", "evaluated_at"),
         Index(
             "ix_market_event_matches_status_eligible",
             "status",
@@ -79,6 +85,7 @@ class MarketEventMatchRecord(Base):
     market_id: Mapped[UUID] = mapped_column(
         ForeignKey("markets.id", ondelete="CASCADE"), nullable=False
     )
+    league: Mapped[str] = mapped_column(String(20), nullable=False)
     sports_event_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("sports_events.id", ondelete="RESTRICT")
     )

@@ -49,6 +49,24 @@ class PredictionMarketRecord(Base):
             name="uq_markets_provider_market_id",
         ),
         Index("ix_markets_is_nba_status", "is_nba", "status"),
+        CheckConstraint(
+            "(sports_league IS NULL AND sports_market_type IS NULL "
+            "AND sports_classification_method IS NULL "
+            "AND sports_classification_version IS NULL "
+            "AND sports_classification_fingerprint IS NULL) OR "
+            "(sports_league IN ('nba', 'mlb') "
+            "AND sports_market_type = 'single_game_winner' "
+            "AND sports_classification_method IS NOT NULL "
+            "AND sports_classification_version IS NOT NULL "
+            "AND length(sports_classification_fingerprint) = 64)",
+            name="ck_markets_sports_classification",
+        ),
+        Index(
+            "ix_markets_sports_classification_status",
+            "sports_league",
+            "sports_market_type",
+            "status",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True)
@@ -66,6 +84,11 @@ class PredictionMarketRecord(Base):
     rules_secondary: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(50), nullable=False)
     is_nba: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    sports_league: Mapped[str | None] = mapped_column(String(20))
+    sports_market_type: Mapped[str | None] = mapped_column(String(50))
+    sports_classification_method: Mapped[str | None] = mapped_column(String(50))
+    sports_classification_version: Mapped[str | None] = mapped_column(String(50))
+    sports_classification_fingerprint: Mapped[str | None] = mapped_column(String(64))
     open_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     close_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     occurrence_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

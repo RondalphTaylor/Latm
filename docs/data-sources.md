@@ -1292,9 +1292,17 @@ Official starting lineups + probable pitchers
 Then:
 Baseball Savant / Statcast quantitative features
 
-Separately:
-Kalshi MLB market classification and contract matching
+Also implemented:
+Kalshi MLB market classification and research-only contract matching
 ```
+
+The Kalshi slice uses public official event/market data without credentials. It selects the exact
+`KXMLBGAME` series through the provider API and validates event product metadata declaring
+`competition=Pro Baseball` and `competition_scope=Game`. It does not infer product identity from a
+ticker substring. Each accepted classification is versioned and fingerprinted; spread, prop,
+future, other-league, and incomplete-metadata contracts are unsupported. Official MLB schedule data
+may establish the underlying game link, but only Kalshi's typed official resolution can settle the
+financial contract.
 
 MLB.com starting-lineup and probable-pitcher surfaces and Baseball Savant were verified as the
 preferred official inputs, but they are not yet consumed. Each must receive a typed, timestamped

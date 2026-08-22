@@ -1,6 +1,6 @@
 # LATM Prediction Market Platform
 
-An auditable prediction-market research platform focused initially on NBA markets. The current MVP ingests read-only Kalshi market data and authenticated BALLDONTLIE NBA data, deterministically links supported single-game contracts to normalized events, generates versioned event-level Elo base forecasts from local game history, records research-only YES/NO raw-edge opportunities, produces versioned advisory capital allocations against an isolated paper bankroll, records deterministic paper-only risk decisions, simulates provider-free paper positions, evaluates forecast and trading performance, and exposes the full state through a responsive read-only dashboard. A bounded offseason pilot also ingests official MLB teams, schedules, and results into the shared provider-neutral sports tables; MLB forecasting and trading are not enabled.
+An auditable prediction-market research platform focused initially on NBA markets. The current MVP ingests read-only Kalshi market data and authenticated BALLDONTLIE NBA data, deterministically links supported single-game contracts to normalized events, generates versioned event-level Elo base forecasts from local game history, records research-only YES/NO raw-edge opportunities, produces versioned advisory capital allocations against an isolated paper bankroll, records deterministic paper-only risk decisions, simulates provider-free paper positions, evaluates forecast and trading performance, and exposes the full state through a responsive read-only dashboard. A bounded offseason pilot also ingests official MLB teams, schedules, and results, classifies exact Kalshi MLB game-winner contracts, and matches them to official games for research. MLB forecasting and trading remain disabled.
 
 > **Trading safety:** the only supported execution mode is `paper`. The Kalshi adapter accesses public production market data without credentials, the BALLDONTLIE key authorizes NBA sports-data reads only, and the MLB adapter uses public official sports data without credentials. None of these adapters contains order placement, financial-account access, or live-trading implementation.
 
@@ -94,7 +94,23 @@ Invoke-RestMethod "http://localhost:8000/events?league=mlb&provider=mlb&start_da
 
 Alternatively, set `SPORTS_DATA_PROVIDER=mlb` to make MLB the ingestion default. `MLB_API_BASE_URL` and `MLB_PROVIDER_REQUEST_INTERVAL_SECONDS` configure the source and conservative pacing. The adapter validates and retains official source snapshots for active teams, scheduled/live/final games, scores, inning state, venue, and series metadata.
 
-This is an ingestion foundation only. MLB market classification, event matching, probable pitchers, confirmed lineups, Statcast features, forecasting, calibration, and paper-trading eligibility have not been implemented. Existing matching and every downstream decision path remain explicitly NBA-only.
+Ingest only the exact official Kalshi MLB game-winner series and inspect its typed classifications:
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8000/markets/ingest?league=mlb&status=open"
+Invoke-RestMethod "http://localhost:8000/markets?league=mlb&sports_market_type=single_game_winner"
+```
+
+The classifier accepts only Kalshi `KXMLBGAME` binary markets whose official event metadata declares `Pro Baseball` and `Game`. MLB spreads, props, futures, other baseball leagues, missing metadata, and ticker substrings fail closed. Classification method, policy version, and semantic fingerprint are persisted with every accepted market.
+
+After the corresponding official MLB schedule window is local, run and inspect research-only matching:
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8000/matches/run?league=mlb&start_date=2026-08-21&end_date=2026-08-24"
+Invoke-RestMethod "http://localhost:8000/matches?league=mlb&latest_only=true"
+```
+
+MLB uses its own aliases and exact first-pitch proximity. A confident MLB decision can be `matched`, but both domain and database invariants require `automatic_trading_eligible=false`. Probable pitchers, confirmed lineups, Statcast features, an MLB forecast model, calibration, opportunities, sizing, risk, and execution have not been implemented for MLB.
 
 ## Market-to-event matching
 
@@ -113,9 +129,9 @@ Invoke-RestMethod "http://localhost:8000/markets/<internal-market-uuid>/match"
 Invoke-RestMethod "http://localhost:8000/matches/<internal-match-uuid>"
 ```
 
-Matcher V1 uses boundary-aware canonical names, nicknames, official uppercase abbreviations, curated aliases, and occurrence-time proximity. A result is `matched` only at confidence `0.90` or higher with at least a `0.10` lead over another candidate inside the 36-hour window. These values are configurable, recorded with every result, and are heuristic matching scores—not calibrated probabilities.
+Matcher V2 uses league-specific boundary-aware canonical names, nicknames, official uppercase abbreviations, curated aliases, and occurrence-time proximity. Ambiguous MLB city names are never treated as standalone team evidence. A result is `matched` only at confidence `0.90` or higher with at least a `0.10` lead over another candidate inside the 36-hour window. These values are configurable, recorded with every result, and are heuristic matching scores—not calibrated probabilities.
 
-Identical semantic inputs do not create duplicate attempts; changed market text, schedules, candidates, policy, or matcher version append a new historical result. Explicit cross-sport signals, missing teams, multi-team contracts, distant dates, and uncertain candidates remain `unmatched` or `ambiguous`. Only a sufficiently confident `matched` result records the matching prerequisite for automatic paper trading. The matcher itself cannot execute, and every paper entry must still pass sizing, risk, and final execution revalidation.
+Identical semantic inputs do not create duplicate attempts; changed league, market text, schedules, candidates, policy, or matcher version append a new historical result. Explicit cross-sport signals, missing teams, multi-team contracts, distant dates, and uncertain candidates remain `unmatched` or `ambiguous`. Only a sufficiently confident matched NBA result can record the matching prerequisite for automatic paper trading. MLB matches are research-only. The matcher itself cannot execute, and every paper entry must still pass sizing, risk, and final execution revalidation.
 
 ## Base forecasting
 

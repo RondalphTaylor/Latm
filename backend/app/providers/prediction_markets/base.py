@@ -26,6 +26,7 @@ class PredictionMarketProvider(Protocol):
         self,
         *,
         status: MarketStatusFilter | None = None,
+        series_ticker: str | None = None,
     ) -> list[PredictionMarket]: ...
 
     async def get_market(self, provider_market_id: str) -> PredictionMarket: ...

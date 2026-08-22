@@ -261,16 +261,37 @@ def test_list_markets_follows_cursor_pagination() -> None:
     assert requests[1].url.params["cursor"] == "next-page"
 
 
+def test_list_markets_forwards_exact_series_filter() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"events": [], "cursor": ""})
+
+    result = asyncio.run(
+        provider_for(httpx.MockTransport(handler)).list_markets(
+            status=MarketStatusFilter.OPEN,
+            series_ticker="KXMLBGAME",
+        )
+    )
+
+    assert result == []
+    assert requests[0].url.params["series_ticker"] == "KXMLBGAME"
+
+
 def test_get_market_normalizes_single_market_response() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path.endswith("/markets/KXNBAGAME-26AUG01BOSNYK-BOS")
-        return httpx.Response(200, json={"market": market_payload()})
+        if request.url.path.endswith("/markets/KXNBAGAME-26AUG01BOSNYK-BOS"):
+            return httpx.Response(200, json={"market": market_payload()})
+        assert request.url.path.endswith("/events/KXNBAGAME-26AUG01BOSNYK")
+        return httpx.Response(200, json={"event": event_payload()})
 
     market = asyncio.run(
         provider_for(httpx.MockTransport(handler)).get_market("KXNBAGAME-26AUG01BOSNYK-BOS")
     )
 
     assert market.provider_event_id == "KXNBAGAME-26AUG01BOSNYK"
+    assert market.series_ticker == "KXNBAGAME"
     assert market.price is not None
     assert market.price.last_price == Decimal("0.5500")
 

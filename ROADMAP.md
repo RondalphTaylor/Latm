@@ -1325,10 +1325,11 @@ Phase 20 is complete when:
 
 # Phase 21: Additional Sports
 
-**Implementation status:** Started on 2026-08-20 with a bounded offseason MLB ingestion
-foundation. The shipped slice adds official read-only MLB team, schedule, and result normalization,
-selectable ingestion, shared persistence, and league-filtered reads. It does not yet add MLB market
-classification, matching, forecasting, evidence, opportunities, evaluation, or trading.
+**Implementation status:** In progress. The ingestion foundation adds official read-only MLB team,
+schedule, and result normalization, selectable ingestion, shared persistence, and league-filtered
+reads. The second slice adds exact Kalshi `KXMLBGAME` classification and deterministic MLB
+market-to-game matching. Every MLB match remains research-only and trading-ineligible. MLB feature
+snapshots, forecasting, evidence, opportunities, evaluation, and trading are not implemented.
 
 ## Goal
 
@@ -1521,6 +1522,10 @@ Phase 9
 Phase 10
 
 Phase 11
+
+MLB ingestion foundation
+
+MLB market classification and research-only matching
 ```
 
 The project should not begin with AI agents or real trading.

@@ -107,6 +107,14 @@ class KalshiMarketResponse(BaseModel):
     market: KalshiMarketPayload
 
 
+class KalshiEventResponse(BaseModel):
+    """Kalshi single-event response wrapper."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    event: KalshiEventPayload
+
+
 def _json_dict(model: BaseModel) -> dict[str, JsonValue]:
     value = model.model_dump(mode="json")
     return {str(key): item for key, item in value.items()}
@@ -291,6 +299,7 @@ class KalshiPredictionMarketProvider:
         self,
         *,
         status: MarketStatusFilter | None = None,
+        series_ticker: str | None = None,
     ) -> list[PredictionMarket]:
         """Retrieve all pages of Kalshi events and normalize their nested markets."""
         markets: dict[str, PredictionMarket] = {}
@@ -312,6 +321,8 @@ class KalshiPredictionMarketProvider:
                     params["cursor"] = cursor
                 if status is not None:
                     params["status"] = status.value
+                if series_ticker is not None:
+                    params["series_ticker"] = series_ticker
 
                 raw_payload = await self._get_json(client, "/events", params=params)
                 try:
@@ -353,12 +364,22 @@ class KalshiPredictionMarketProvider:
             transport=self._transport,
         ) as client:
             raw_payload = await self._get_json(client, f"/markets/{provider_market_id}")
+            try:
+                payload = KalshiMarketResponse.model_validate(raw_payload)
+            except ValidationError as exc:
+                raise ProviderResponseError("Kalshi market response failed validation") from exc
+            event = None
+            if payload.market.event_ticker is not None:
+                raw_event = await self._get_json(
+                    client,
+                    f"/events/{payload.market.event_ticker}",
+                )
+                try:
+                    event = KalshiEventResponse.model_validate(raw_event).event
+                except ValidationError as exc:
+                    raise ProviderResponseError("Kalshi event response failed validation") from exc
         try:
-            payload = KalshiMarketResponse.model_validate(raw_payload)
-        except ValidationError as exc:
-            raise ProviderResponseError("Kalshi market response failed validation") from exc
-        try:
-            return normalize_kalshi_market(payload.market, event=None, retrieved_at=retrieved_at)
+            return normalize_kalshi_market(payload.market, event=event, retrieved_at=retrieved_at)
         except ValidationError as exc:
             raise ProviderResponseError(
                 f"Kalshi market {provider_market_id} failed normalization"

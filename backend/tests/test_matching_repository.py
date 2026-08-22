@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ClauseElement, Executable
 
 from app.domain.matching import MarketEventMatchDecision
+from app.domain.sports import SportsLeague
 from app.models.matching import MarketEventMatchRecord
 from app.services.matching.repository import (
     MatchingRepository,
@@ -73,6 +74,7 @@ def test_database_model_declares_policy_and_safety_constraints() -> None:
         "ck_market_event_matches_time_window",
         "ck_market_event_matches_fingerprint_length",
         "ck_market_event_matches_status",
+        "ck_market_event_matches_league",
         "ck_market_event_matches_safety_state",
         "uq_market_event_matches_semantic_input",
     } <= constraint_names
@@ -122,6 +124,7 @@ def test_latest_query_ranks_before_applying_safety_filters() -> None:
             market_id=UUID("3da220e1-b6d0-45e9-b507-7e75dc95a353"),
             sports_event_id=None,
             automatic_trading_eligible=True,
+            league=SportsLeague.NBA,
             limit=25,
             offset=2,
         )
@@ -146,19 +149,28 @@ def test_query_input_statements_are_bounded_and_provider_scoped() -> None:
             market_id=None,
             limit=100,
             offset=0,
+            league=SportsLeague.MLB,
         )
     )
-    asyncio.run(repository.list_teams_for_matching(provider_name="balldontlie"))
+    asyncio.run(
+        repository.list_teams_for_matching(
+            provider_name="mlb",
+            league=SportsLeague.MLB,
+        )
+    )
     asyncio.run(
         repository.list_events_for_matching(
             provider_name="balldontlie",
             start_date=start.date(),
             end_date=start.date(),
+            league=SportsLeague.MLB,
         )
     )
 
     market_sql, team_sql, event_sql = (str(statement) for statement in session.statements)
-    assert "markets.is_nba IS true" in market_sql
+    assert "markets.sports_league" in market_sql
+    assert "markets.sports_market_type" in market_sql
     assert "coalesce(markets.occurrence_time, markets.close_time)" in market_sql
     assert "teams.provider_name" in team_sql
     assert "sports_events.provider_name" in event_sql
+    assert "sports_events.league" in event_sql

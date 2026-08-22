@@ -173,6 +173,7 @@ async def _run_integration() -> None:
                     MarketEventMatchRecord(
                         id=MATCH_ID,
                         market_id=MARKET_ID,
+                        league="nba",
                         sports_event_id=TARGET_ID,
                         status="matched",
                         confidence=Decimal("1.0000"),

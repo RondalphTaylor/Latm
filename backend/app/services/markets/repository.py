@@ -11,7 +11,8 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.domain.markets import PredictionMarket
+from app.domain.markets import PredictionMarket, SportsMarketType
+from app.domain.sports import SportsLeague
 from app.models.markets import (
     MarketOutcomeRecord,
     MarketPriceRecord,
@@ -19,7 +20,7 @@ from app.models.markets import (
     PredictionMarketRecord,
     Provider,
 )
-from app.services.markets.filtering import is_likely_nba_market
+from app.services.markets.filtering import classify_sports_market, is_likely_nba_market
 
 _LATM_MARKET_NAMESPACE = UUID("2b1a53e9-5257-4bfd-94b2-65a16e111eb5")
 _UPSERT_BATCH_SIZE = 500
@@ -101,6 +102,11 @@ class MarketRepository:
                     "rules_secondary",
                     "status",
                     "is_nba",
+                    "sports_league",
+                    "sports_market_type",
+                    "sports_classification_method",
+                    "sports_classification_version",
+                    "sports_classification_fingerprint",
                     "open_time",
                     "close_time",
                     "occurrence_time",
@@ -166,6 +172,7 @@ class MarketRepository:
         resolution_values: list[dict[str, object]] = []
         for market in markets:
             market_id = market_record_id(market.provider_name, market.provider_market_id)
+            classification = classify_sports_market(market)
             market_values.append(
                 {
                     "id": market_id,
@@ -181,6 +188,23 @@ class MarketRepository:
                     "rules_secondary": market.rules_secondary,
                     "status": market.status,
                     "is_nba": is_likely_nba_market(market),
+                    "sports_league": (
+                        classification.league.value if classification is not None else None
+                    ),
+                    "sports_market_type": (
+                        classification.sports_market_type.value
+                        if classification is not None
+                        else None
+                    ),
+                    "sports_classification_method": (
+                        classification.method if classification is not None else None
+                    ),
+                    "sports_classification_version": (
+                        classification.version if classification is not None else None
+                    ),
+                    "sports_classification_fingerprint": (
+                        classification.fingerprint if classification is not None else None
+                    ),
                     "open_time": market.open_time,
                     "close_time": market.close_time,
                     "occurrence_time": market.occurrence_time,
@@ -262,6 +286,8 @@ class MarketRepository:
         nba_only: bool,
         provider_name: str | None,
         status: str | None,
+        league: SportsLeague | None,
+        sports_market_type: SportsMarketType | None,
         limit: int,
         offset: int,
     ) -> list[PredictionMarketRecord]:
@@ -283,6 +309,12 @@ class MarketRepository:
             statement = statement.where(PredictionMarketRecord.provider_name == provider_name)
         if status is not None:
             statement = statement.where(PredictionMarketRecord.status == status)
+        if league is not None:
+            statement = statement.where(PredictionMarketRecord.sports_league == league.value)
+        if sports_market_type is not None:
+            statement = statement.where(
+                PredictionMarketRecord.sports_market_type == sports_market_type.value
+            )
         result = await self._session.scalars(statement)
         return list(result.all())
 

@@ -7,6 +7,8 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator, model_validator
 
+from app.domain.sports import SportsLeague
+
 ProbabilityPrice = Annotated[Decimal, Field(ge=Decimal("0"), le=Decimal("1"))]
 NonNegativeDecimal = Annotated[Decimal, Field(ge=Decimal("0"))]
 
@@ -25,6 +27,24 @@ class MarketStatusFilter(StrEnum):
     OPEN = "open"
     CLOSED = "closed"
     SETTLED = "settled"
+
+
+class SportsMarketType(StrEnum):
+    """Supported sports contract shapes with explicit provider metadata."""
+
+    SINGLE_GAME_WINNER = "single_game_winner"
+
+
+class SportsMarketClassification(BaseModel):
+    """Versioned structured classification for a supported sports market."""
+
+    model_config = ConfigDict(frozen=True)
+
+    league: SportsLeague
+    sports_market_type: SportsMarketType
+    method: str = Field(min_length=1, max_length=50)
+    version: str = Field(min_length=1, max_length=50)
+    fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class MarketOutcome(BaseModel):

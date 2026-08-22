@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
+from app.domain.markets import SportsMarketType
+from app.domain.sports import SportsLeague
 from app.models.markets import PredictionMarketRecord
 
 
@@ -71,6 +73,11 @@ class MarketResponse(BaseModel):
     rules_secondary: str | None
     status: str
     is_nba: bool
+    sports_league: SportsLeague | None
+    sports_market_type: SportsMarketType | None
+    sports_classification_method: str | None
+    sports_classification_version: str | None
+    sports_classification_fingerprint: str | None
     open_time: datetime | None
     close_time: datetime | None
     occurrence_time: datetime | None
@@ -128,6 +135,17 @@ class MarketResponse(BaseModel):
             rules_secondary=record.rules_secondary,
             status=record.status,
             is_nba=record.is_nba,
+            sports_league=(
+                SportsLeague(record.sports_league) if record.sports_league is not None else None
+            ),
+            sports_market_type=(
+                SportsMarketType(record.sports_market_type)
+                if record.sports_market_type is not None
+                else None
+            ),
+            sports_classification_method=record.sports_classification_method,
+            sports_classification_version=record.sports_classification_version,
+            sports_classification_fingerprint=record.sports_classification_fingerprint,
             open_time=record.open_time,
             close_time=record.close_time,
             occurrence_time=record.occurrence_time,
@@ -157,4 +175,6 @@ class MarketIngestionResponse(BaseModel):
     provider: str
     fetched: int
     nba_markets: int
+    mlb_markets: int
+    selected_league: SportsLeague | None
     persisted: int

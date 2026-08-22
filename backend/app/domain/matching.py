@@ -8,6 +8,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator, model_validator
 
+from app.domain.sports import SportsLeague
+
 Confidence = Annotated[Decimal, Field(ge=Decimal("0"), le=Decimal("1"))]
 
 
@@ -20,7 +22,7 @@ class MarketEventMatchStatus(StrEnum):
 
 
 class TeamAliasSource(StrEnum):
-    """Auditable sources of deterministic NBA team evidence."""
+    """Auditable sources of deterministic team evidence."""
 
     FULL_NAME = "full_name"
     NICKNAME = "nickname"
@@ -79,6 +81,7 @@ class MarketMatchInput(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     id: UUID
+    league: SportsLeague = SportsLeague.NBA
     title: str = Field(min_length=1)
     subtitle: str | None = None
     rules_primary: str | None = None
@@ -133,6 +136,7 @@ class MarketEventMatchDecision(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     market_id: UUID
+    league: SportsLeague = SportsLeague.NBA
     sports_event_id: UUID | None
     status: MarketEventMatchStatus
     confidence: Confidence
@@ -165,8 +169,9 @@ class MarketEventMatchDecision(BaseModel):
                 raise ValueError("matched decisions require a sports_event_id")
             if self.confidence < self.min_confidence:
                 raise ValueError("matched decisions must meet min_confidence")
-            if not self.automatic_trading_eligible:
-                raise ValueError("matched decisions must record eligibility")
+            expected_eligibility = self.league is SportsLeague.NBA
+            if self.automatic_trading_eligible is not expected_eligibility:
+                raise ValueError("matched decision eligibility must follow the league safety gate")
         else:
             if self.sports_event_id is not None:
                 raise ValueError("ambiguous and unmatched decisions cannot select an event")

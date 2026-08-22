@@ -196,6 +196,7 @@ async def _seed_sources(session: AsyncSession) -> None:
             MarketEventMatchRecord(
                 id=MATCH_ID,
                 market_id=MARKET_ID,
+                league="nba",
                 sports_event_id=EVENT_ID,
                 status="matched",
                 confidence=Decimal("0.9900"),

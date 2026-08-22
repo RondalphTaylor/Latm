@@ -279,7 +279,18 @@ Team and event ingestion can select `provider=mlb` per request without replacing
 
 Validation passed all 406 backend tests (7 database-integration tests skipped by default), Ruff, strict mypy, all 7 frontend tests, frontend lint/type checking, and the production build. A live read-only smoke against the official source persisted all 30 active MLB teams and 15 games for August 21, 2026, then returned them through the league-filtered API without changing the configured NBA default.
 
-The existing matcher, Elo model, forecast evaluation, opportunity, sizing, risk, execution, and position paths remain explicitly NBA-only. MLB market classification, matching, probable-pitcher and lineup snapshots, Statcast features, an MLB model, and all MLB trading eligibility remain future independently validated slices.
+The Elo model, forecast evaluation, opportunity, sizing, risk, execution, and position paths remain explicitly NBA-only. Probable-pitcher and lineup snapshots, Statcast features, an MLB model, and all MLB trading eligibility remain future independently validated slices.
+
+## Offseason MLB market classification and matching
+
+**Status:** Complete
+**Completed:** 2026-08-21
+
+The second MLB pilot slice uses current official Kalshi series and event metadata rather than ticker parsing. Only binary `KXMLBGAME` events declared as `Pro Baseball` / `Game` become typed `mlb` / `single_game_winner` markets. The classification method, version, and semantic fingerprint are persisted and exposed through league-aware market filters. Props, spreads, futures, other baseball leagues, and incomplete metadata fail closed.
+
+Matcher V2 adds a separate MLB alias policy, exact league/provider repository filters, first-pitch comparison, append-only league provenance, and explicit handling for qualified Chicago, Los Angeles, and New York labels. Matched MLB rows are valid research links, but the domain and PostgreSQL safety constraint require `automatic_trading_eligible=false`; NBA is still the only league that can satisfy the matching prerequisite consumed by later phases.
+
+Validation passed all 424 backend tests against PostgreSQL, including an end-to-end MLB database case, plus Ruff, strict mypy, migration upgrade/downgrade, and Alembic drift checks. A live read-only smoke ingested 96 open official MLB game-winner contracts and refreshed 55 official games for August 21–24, 2026. All 96 contracts matched exactly after the schedule refresh and zero were trading-eligible.
 
 ## Previous-phase schema repair
 
@@ -294,4 +305,4 @@ Final repair validation passed all 415 backend tests against PostgreSQL, Ruff, s
 
 ## Next phase
 
-Continue the bounded MLB pilot with Kalshi MLB market classification and deterministic MLB market-to-game matching, without reusing NBA aliases or enabling downstream trading. Phase 12 research/evidence work remains the next broader roadmap milestone.
+Continue the bounded MLB pilot with typed official probable-pitcher and confirmed-lineup snapshots, still without enabling MLB forecasts or trading. Phase 12 research/evidence work remains the next broader roadmap milestone.

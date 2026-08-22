@@ -1,8 +1,22 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 
-from app.domain.markets import PredictionMarket
+from app.domain.markets import (
+    PredictionMarket,
+    SportsMarketClassification,
+    SportsMarketType,
+)
+from app.domain.sports import SportsLeague
+
+SPORTS_CLASSIFICATION_VERSION = "kalshi-official-series-v1"
+SPORTS_CLASSIFICATION_METHOD = "official_series_metadata"
+_SUPPORTED_SERIES = {
+    SportsLeague.NBA: "KXNBAGAME",
+    SportsLeague.MLB: "KXMLBGAME",
+}
 
 _NBA_TEAM_NAMES = (
     "atlanta hawks",
@@ -113,3 +127,73 @@ def is_likely_nba_market(market: PredictionMarket) -> bool:
         1 for nickname in _NBA_NICKNAMES if _contains_token(descriptive_text, nickname)
     )
     return team_matches >= 2 or abbreviation_matches >= 2 or nickname_matches >= 2
+
+
+def supported_series_ticker(league: SportsLeague) -> str:
+    """Return the exact official Kalshi single-game-winner series for a league."""
+    return _SUPPORTED_SERIES[league]
+
+
+def _event_product_metadata(market: PredictionMarket) -> dict[str, object]:
+    event = market.raw_data.get("event")
+    if not isinstance(event, dict):
+        return {}
+    metadata = event.get("product_metadata")
+    return (
+        {str(key): value for key, value in metadata.items()} if isinstance(metadata, dict) else {}
+    )
+
+
+def classify_sports_market(
+    market: PredictionMarket,
+) -> SportsMarketClassification | None:
+    """Classify only exact, provider-declared single-game winner contracts."""
+    if (
+        market.provider_name != "kalshi"
+        or market.category != "Sports"
+        or market.market_type.casefold() != "binary"
+        or market.provider_event_id is None
+    ):
+        return None
+    league = next(
+        (
+            candidate
+            for candidate, series_ticker in _SUPPORTED_SERIES.items()
+            if market.series_ticker == series_ticker
+        ),
+        None,
+    )
+    if league is None:
+        return None
+
+    product_metadata = _event_product_metadata(market)
+    expected_competition = "Pro Baseball" if league is SportsLeague.MLB else None
+    if product_metadata.get("competition_scope") != "Game":
+        return None
+    if (
+        expected_competition is not None
+        and product_metadata.get("competition") != expected_competition
+    ):
+        return None
+
+    payload = {
+        "provider_name": market.provider_name,
+        "provider_market_id": market.provider_market_id,
+        "provider_event_id": market.provider_event_id,
+        "series_ticker": market.series_ticker,
+        "category": market.category,
+        "market_type": market.market_type.casefold(),
+        "competition": product_metadata.get("competition"),
+        "competition_scope": product_metadata.get("competition_scope"),
+        "sports_market_type": SportsMarketType.SINGLE_GAME_WINNER.value,
+        "method": SPORTS_CLASSIFICATION_METHOD,
+        "version": SPORTS_CLASSIFICATION_VERSION,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return SportsMarketClassification(
+        league=league,
+        sports_market_type=SportsMarketType.SINGLE_GAME_WINNER,
+        method=SPORTS_CLASSIFICATION_METHOD,
+        version=SPORTS_CLASSIFICATION_VERSION,
+        fingerprint=hashlib.sha256(encoded).hexdigest(),
+    )

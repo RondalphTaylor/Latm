@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import PredictionMarketProviderName, Settings, get_settings
 from app.db.session import get_session
-from app.domain.markets import MarketStatusFilter
+from app.domain.markets import MarketStatusFilter, SportsMarketType
+from app.domain.sports import SportsLeague
 from app.providers.prediction_markets.base import (
     PredictionMarketProvider,
     PredictionMarketProviderError,
@@ -57,13 +58,18 @@ def get_market_ingestion_service(
 async def ingest_markets(
     service: Annotated[MarketIngestionService, Depends(get_market_ingestion_service)],
     nba_only: Annotated[bool, Query()] = True,
+    league: Annotated[SportsLeague | None, Query()] = None,
     market_status: Annotated[MarketStatusFilter | None, Query(alias="status")] = (
         MarketStatusFilter.OPEN
     ),
 ) -> MarketIngestionResponse:
     """Fetch public market data and persist it locally without any trading action."""
     try:
-        result = await service.ingest(nba_only=nba_only, status=market_status)
+        result = await service.ingest(
+            nba_only=nba_only,
+            league=league,
+            status=market_status,
+        )
     except PredictionMarketProviderError as exc:
         logger.warning("Prediction-market ingestion failed safely: %s", exc)
         raise HTTPException(
@@ -82,6 +88,8 @@ async def list_markets(
         str | None,
         Query(alias="status", min_length=1, max_length=50),
     ] = None,
+    league: Annotated[SportsLeague | None, Query()] = None,
+    sports_market_type: Annotated[SportsMarketType | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[MarketResponse]:
@@ -90,6 +98,8 @@ async def list_markets(
         nba_only=nba_only,
         provider_name=provider,
         status=market_status,
+        league=league,
+        sports_market_type=sports_market_type,
         limit=limit,
         offset=offset,
     )

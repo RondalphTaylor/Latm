@@ -12,11 +12,15 @@ from app.domain.markets import (
     OutcomeSide,
     PredictionMarket,
 )
+from app.domain.sports import SportsLeague
 from app.services.markets.ingestion import MarketIngestionService
 from app.services.markets.repository import MarketRepository
 
 
 def market(*, ticker: str, title: str, series_ticker: str, category: str) -> PredictionMarket:
+    product_metadata: dict[str, str] = {}
+    if series_ticker == "KXMLBGAME":
+        product_metadata = {"competition": "Pro Baseball", "competition_scope": "Game"}
     return PredictionMarket(
         provider_name="kalshi",
         provider_market_id=ticker,
@@ -30,7 +34,7 @@ def market(*, ticker: str, title: str, series_ticker: str, category: str) -> Pre
             MarketOutcome(provider_outcome_id="yes", side=OutcomeSide.YES, label="Yes"),
             MarketOutcome(provider_outcome_id="no", side=OutcomeSide.NO, label="No"),
         ),
-        raw_data={},
+        raw_data={"event": {"product_metadata": product_metadata}},
         retrieved_at=datetime(2026, 8, 1, tzinfo=UTC),
     )
 
@@ -43,12 +47,21 @@ class StaticProvider:
     def __init__(self, markets: list[PredictionMarket]) -> None:
         self.markets = markets
         self.status: MarketStatusFilter | None = None
+        self.series_ticker: str | None = None
 
     async def list_markets(
-        self, *, status: MarketStatusFilter | None = None
+        self,
+        *,
+        status: MarketStatusFilter | None = None,
+        series_ticker: str | None = None,
     ) -> list[PredictionMarket]:
         self.status = status
-        return self.markets
+        self.series_ticker = series_ticker
+        return [
+            market
+            for market in self.markets
+            if series_ticker is None or market.series_ticker == series_ticker
+        ]
 
     async def get_market(self, provider_market_id: str) -> PredictionMarket:
         return next(
@@ -92,6 +105,8 @@ def test_ingestion_filters_to_nba_before_persistence() -> None:
     assert provider.status is MarketStatusFilter.OPEN
     assert result.fetched == 2
     assert result.nba_markets == 1
+    assert result.mlb_markets == 0
+    assert result.selected_league is None
     assert result.persisted == 1
     assert repository.markets[0].provider_market_id == "KXNBAGAME-1"
 
@@ -126,3 +141,38 @@ def test_settled_ingestion_preserves_typed_authoritative_resolution() -> None:
     assert provider.status is MarketStatusFilter.SETTLED
     assert result.persisted == 1
     assert repository.markets[0].resolution == normalized_market.resolution
+
+
+def test_mlb_ingestion_uses_exact_official_series_and_classification() -> None:
+    provider = StaticProvider(
+        [
+            market(
+                ticker="KXMLBGAME-26AUG23ATLMIL-MIL",
+                title="Milwaukee wins",
+                series_ticker="KXMLBGAME",
+                category="Sports",
+            ),
+            market(
+                ticker="KXMLBSPREAD-26AUG23ATLMIL-MIL1",
+                title="Milwaukee wins by over 1.5 runs",
+                series_ticker="KXMLBSPREAD",
+                category="Sports",
+            ),
+        ]
+    )
+    repository = CapturingRepository()
+
+    result = asyncio.run(
+        MarketIngestionService(provider=provider, repository=repository).ingest(
+            league=SportsLeague.MLB
+        )
+    )
+
+    assert provider.series_ticker == "KXMLBGAME"
+    assert result.fetched == 1
+    assert result.nba_markets == 0
+    assert result.mlb_markets == 1
+    assert result.selected_league is SportsLeague.MLB
+    assert [item.provider_market_id for item in repository.markets] == [
+        "KXMLBGAME-26AUG23ATLMIL-MIL"
+    ]

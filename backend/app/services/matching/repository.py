@@ -10,7 +10,9 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import noload, selectinload
 
+from app.domain.markets import SportsMarketType
 from app.domain.matching import MarketEventMatchDecision
+from app.domain.sports import SportsLeague
 from app.models.markets import PredictionMarketRecord
 from app.models.matching import MarketEventMatchRecord
 from app.models.sports import SportsEventRecord, TeamRecord
@@ -41,11 +43,16 @@ class MatchingRepository:
         market_id: UUID | None,
         limit: int,
         offset: int,
+        league: SportsLeague,
     ) -> list[PredictionMarketRecord]:
-        """Return a deterministic bounded batch of NBA-discovery markets."""
+        """Return a deterministic batch of exact league-classified game markets."""
         statement = (
             select(PredictionMarketRecord)
-            .where(PredictionMarketRecord.is_nba.is_(True))
+            .where(
+                PredictionMarketRecord.sports_league == league.value,
+                PredictionMarketRecord.sports_market_type
+                == SportsMarketType.SINGLE_GAME_WINNER.value,
+            )
             .options(
                 selectinload(PredictionMarketRecord.outcomes),
                 noload(PredictionMarketRecord.prices),
@@ -68,13 +75,18 @@ class MatchingRepository:
         result = await self._session.scalars(statement)
         return list(result.unique().all())
 
-    async def list_teams_for_matching(self, *, provider_name: str) -> list[TeamRecord]:
-        """Return the configured provider's normalized NBA teams."""
+    async def list_teams_for_matching(
+        self,
+        *,
+        provider_name: str,
+        league: SportsLeague,
+    ) -> list[TeamRecord]:
+        """Return one provider's normalized teams for the requested league."""
         statement = (
             select(TeamRecord)
             .where(
                 TeamRecord.provider_name == provider_name,
-                TeamRecord.league == "nba",
+                TeamRecord.league == league.value,
             )
             .order_by(TeamRecord.id)
         )
@@ -87,13 +99,14 @@ class MatchingRepository:
         provider_name: str,
         start_date: date,
         end_date: date,
+        league: SportsLeague,
     ) -> list[SportsEventRecord]:
         """Return a date-bounded candidate event set without provider calls."""
         statement = (
             select(SportsEventRecord)
             .where(
                 SportsEventRecord.provider_name == provider_name,
-                SportsEventRecord.league == "nba",
+                SportsEventRecord.league == league.value,
                 SportsEventRecord.event_date >= start_date,
                 SportsEventRecord.event_date <= end_date,
             )
@@ -129,6 +142,7 @@ class MatchingRepository:
         return {
             "id": match_record_id(decision),
             "market_id": decision.market_id,
+            "league": decision.league.value,
             "sports_event_id": decision.sports_event_id,
             "status": decision.status.value,
             "confidence": decision.confidence,
@@ -156,6 +170,7 @@ class MatchingRepository:
         market_id: UUID | None,
         sports_event_id: UUID | None,
         automatic_trading_eligible: bool | None,
+        league: SportsLeague | None,
         limit: int,
         offset: int,
     ) -> list[MarketEventMatchRecord]:
@@ -191,6 +206,8 @@ class MatchingRepository:
             statement = statement.where(
                 MarketEventMatchRecord.automatic_trading_eligible == automatic_trading_eligible
             )
+        if league is not None:
+            statement = statement.where(MarketEventMatchRecord.league == league.value)
         statement = (
             statement.order_by(
                 MarketEventMatchRecord.evaluated_at.desc(),

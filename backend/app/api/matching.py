@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings, get_settings
 from app.db.session import get_session
 from app.domain.matching import MarketEventMatchStatus, MatchingPolicy
+from app.domain.sports import SportsLeague
 from app.schemas.matching import MarketEventMatchResponse, MatchingRunResponse
 from app.services.matching.matcher import MATCHER_VERSION, MarketEventMatcher
 from app.services.matching.repository import MatchingRepository
@@ -43,14 +44,12 @@ def get_matching_policy(
 def get_matching_service(
     repository: Annotated[MatchingRepository, Depends(get_matching_repository)],
     policy: Annotated[MatchingPolicy, Depends(get_matching_policy)],
-    settings: Annotated[Settings, Depends(get_settings)],
 ) -> MarketEventMatchingService:
     """Build the local-only deterministic matching coordinator."""
     return MarketEventMatchingService(
         repository=repository,
         matcher=MarketEventMatcher(policy),
         policy=policy,
-        sports_provider_name=settings.sports_data_provider.value,
     )
 
 
@@ -62,6 +61,7 @@ async def run_matching(
     market_id: Annotated[UUID | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 250,
     offset: Annotated[int, Query(ge=0)] = 0,
+    league: Annotated[SportsLeague, Query()] = SportsLeague.NBA,
 ) -> MatchingRunResponse:
     """Run a bounded deterministic match batch against local snapshots."""
     try:
@@ -71,6 +71,7 @@ async def run_matching(
             market_id=market_id,
             limit=limit,
             offset=offset,
+            league=league,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -101,6 +102,7 @@ async def list_matches(
     market_id: Annotated[UUID | None, Query()] = None,
     sports_event_id: Annotated[UUID | None, Query()] = None,
     eligible: Annotated[bool | None, Query()] = None,
+    league: Annotated[SportsLeague | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[MarketEventMatchResponse]:
@@ -111,6 +113,7 @@ async def list_matches(
         market_id=market_id,
         sports_event_id=sports_event_id,
         automatic_trading_eligible=eligible,
+        league=league,
         limit=limit,
         offset=offset,
     )

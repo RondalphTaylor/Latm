@@ -8,6 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter
 
 from app.domain.matching import CandidateScore, MarketEventMatchStatus, TeamSignal
+from app.domain.sports import SportsLeague
 from app.models.matching import MarketEventMatchRecord
 
 _EVIDENCE_ADAPTER = TypeAdapter(dict[str, JsonValue])
@@ -20,6 +21,7 @@ class MarketEventMatchResponse(BaseModel):
 
     id: UUID
     market_id: UUID
+    league: SportsLeague
     sports_event_id: UUID | None
     status: MarketEventMatchStatus
     confidence: Annotated[Decimal, Field(ge=Decimal("0"), le=Decimal("1"))]
@@ -42,6 +44,7 @@ class MarketEventMatchResponse(BaseModel):
         return cls(
             id=record.id,
             market_id=record.market_id,
+            league=SportsLeague(record.league),
             sports_event_id=record.sports_event_id,
             status=MarketEventMatchStatus(record.status),
             confidence=record.confidence,
@@ -68,6 +71,7 @@ class MatchingRunResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     matcher_version: str
+    league: SportsLeague
     start_date: date
     end_date: date
     examined: int

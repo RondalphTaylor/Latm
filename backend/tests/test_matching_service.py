@@ -8,6 +8,7 @@ from uuid import UUID
 import pytest
 
 from app.domain.matching import MarketEventMatchDecision, MatchingPolicy
+from app.domain.sports import SportsLeague
 from app.models.markets import MarketOutcomeRecord, PredictionMarketRecord
 from app.models.sports import SportsEventRecord, TeamRecord
 from app.services.matching.matcher import MATCHER_VERSION, MarketEventMatcher
@@ -60,6 +61,11 @@ def market_record() -> PredictionMarketRecord:
         rules_secondary=None,
         status="open",
         is_nba=True,
+        sports_league="nba",
+        sports_market_type="single_game_winner",
+        sports_classification_method="official_series_metadata",
+        sports_classification_version="kalshi-official-series-v1",
+        sports_classification_fingerprint="b" * 64,
         open_time=None,
         close_time=TIP_TIME + timedelta(hours=2),
         occurrence_time=TIP_TIME,
@@ -159,7 +165,6 @@ def service(repository: FakeMatchingRepository) -> MarketEventMatchingService:
         repository=repository,  # type: ignore[arg-type]
         matcher=MarketEventMatcher(matching_policy),
         policy=matching_policy,
-        sports_provider_name="balldontlie",
     )
 
 
@@ -177,16 +182,29 @@ def test_matching_run_persists_and_summarizes_decisions() -> None:
     )
 
     assert result.examined == 1
+    assert result.league is SportsLeague.NBA
     assert result.persisted == 1
     assert result.matched == 1
     assert result.ambiguous == 0
     assert result.unmatched == 0
     assert repository.decisions[0].sports_event_id == EVENT_ID
-    assert repository.calls["teams"] == {"provider_name": "balldontlie"}
+    assert repository.calls["markets"] == {
+        "reference_start": datetime(2026, 7, 30, 12, tzinfo=UTC),
+        "reference_end": datetime(2026, 8, 3, 12, tzinfo=UTC),
+        "market_id": None,
+        "limit": 250,
+        "offset": 0,
+        "league": SportsLeague.NBA,
+    }
+    assert repository.calls["teams"] == {
+        "provider_name": "balldontlie",
+        "league": SportsLeague.NBA,
+    }
     assert repository.calls["events"] == {
         "provider_name": "balldontlie",
         "start_date": date(2026, 7, 30),
         "end_date": date(2026, 8, 3),
+        "league": SportsLeague.NBA,
     }
 
 

@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.api.matching import get_matching_repository, get_matching_service
 from app.core.config import Settings, get_settings
+from app.domain.sports import SportsLeague
 from app.main import create_app
 from app.models.matching import MarketEventMatchRecord
 from app.services.matching.service import MatchingRunResult
@@ -25,6 +26,7 @@ def match_record() -> MarketEventMatchRecord:
     return MarketEventMatchRecord(
         id=MATCH_ID,
         market_id=MARKET_ID,
+        league="nba",
         sports_event_id=EVENT_ID,
         status="matched",
         confidence=Decimal("1.0000"),
@@ -108,11 +110,13 @@ class FakeMatchingService:
         market_id: UUID | None,
         limit: int,
         offset: int,
+        league: SportsLeague = SportsLeague.NBA,
     ) -> MatchingRunResult:
         if start_date > end_date:
             raise ValueError("start_date must not be after end_date")
         return MatchingRunResult(
             matcher_version="deterministic-team-time-v1",
+            league=league,
             start_date=start_date,
             end_date=end_date,
             examined=3,
@@ -155,6 +159,7 @@ def test_run_matching_returns_audit_summary() -> None:
     assert response.json()["matched"] == 1
     assert response.json()["ambiguous"] == 1
     assert response.json()["unmatched"] == 1
+    assert response.json()["league"] == "nba"
 
 
 def test_run_uses_local_snapshots_without_sports_api_key() -> None:
@@ -191,6 +196,7 @@ def test_list_and_detail_expose_auditable_safety_state() -> None:
         "market_id": MARKET_ID,
         "sports_event_id": EVENT_ID,
         "automatic_trading_eligible": True,
+        "league": None,
         "limit": 25,
         "offset": 2,
     }

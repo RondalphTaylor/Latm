@@ -499,9 +499,9 @@ schedules, lifecycle state, scores, venue, and series metadata. Both providers p
 same normalized tables with stable provider identities and explicit league values.
 
 This shared storage does not make the downstream pipeline sport-agnostic by implication. The
-implemented matcher, Elo model, forecast evaluation, opportunity, risk, and trading services retain
-their explicit `league=nba` gates. MLB market matching and forecasting require separately versioned
-sport-specific implementations.
+matcher now supports separately versioned NBA and MLB alias policies, while the Elo model, forecast
+evaluation, opportunity, risk, and trading services retain their explicit NBA gates. A persisted MLB
+match is always research-only and database-constrained to `automatic_trading_eligible=false`.
 
 ---
 
@@ -559,9 +559,9 @@ Ambiguous matches should not be automatically traded.
 
 The system should store the matching result and confidence.
 
-The initial deterministic matcher uses exact, boundary-aware NBA aliases and event-time proximity. A `MATCHED` result requires the configured minimum confidence and sufficient separation from the runner-up; otherwise plausible results remain `AMBIGUOUS`. Matching scores are inspectible heuristics, not calibrated forecast probabilities.
+The deterministic matcher uses exact, boundary-aware league-specific aliases and event-time proximity. NBA and MLB alias dictionaries are separate. Ambiguous MLB city names such as Chicago, Los Angeles, and New York cannot independently identify a team; qualified official labels or stronger evidence are required. A `MATCHED` result requires the configured minimum confidence and sufficient separation from the runner-up; otherwise plausible results remain `AMBIGUOUS`. Matching scores are inspectible heuristics, not calibrated forecast probabilities.
 
-Match attempts are append-oriented and keyed by a matcher version plus semantic input fingerprint. Unchanged reruns are idempotent, while changed market text, schedules, candidate events, policies, or matcher versions preserve a new audit record. The broad market-ingestion `is_nba` flag is discovery input only and never establishes match or trading eligibility by itself.
+Match attempts are append-oriented and keyed by a matcher version plus semantic input fingerprint. Unchanged reruns are idempotent, while changed league, market text, schedules, candidate events, policies, or matcher versions preserve a new audit record. Supported sports markets first require an exact persisted provider-metadata classification; the broad legacy `is_nba` flag is discovery input only. NBA matched rows may satisfy the matching prerequisite, while MLB matched rows are structurally ineligible for all downstream decision and execution paths.
 
 ---
 

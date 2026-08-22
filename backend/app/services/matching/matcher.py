@@ -17,13 +17,18 @@ from app.domain.matching import (
     TeamMatchInput,
     TeamSignal,
 )
+from app.domain.sports import SportsLeague
 from app.services.matching.aliases import (
     extract_team_signals,
     has_non_nba_sport_signal,
     normalize_match_text,
 )
+from app.services.matching.mlb_aliases import (
+    extract_mlb_team_signals,
+    has_non_mlb_sport_signal,
+)
 
-MATCHER_VERSION = "deterministic-team-time-v1"
+MATCHER_VERSION = "deterministic-team-time-v2"
 _CONFIDENCE_QUANTUM = Decimal("0.0001")
 _TEAM_WEIGHT = Decimal("0.70")
 _TEMPORAL_WEIGHT = Decimal("0.30")
@@ -40,6 +45,8 @@ def _market_text(market: MarketMatchInput) -> tuple[str, str]:
     fields = (
         market.title,
         market.subtitle,
+        market.rules_primary,
+        market.rules_secondary,
         *market.outcome_labels,
     )
     original_text = " ".join(value for value in fields if value)
@@ -119,8 +126,13 @@ def _fingerprint(
     payload = {
         "market": {
             "id": str(market.id),
+            "league": market.league.value,
             "title": market.title,
             "subtitle": market.subtitle,
+            "rules_primary": market.rules_primary,
+            "rules_secondary": market.rules_secondary,
+            "category": market.category,
+            "market_type": market.market_type,
             "outcome_labels": market.outcome_labels,
             "occurrence_time": market.occurrence_time.isoformat()
             if market.occurrence_time is not None
@@ -145,7 +157,7 @@ def _fingerprint(
 
 
 class MarketEventMatcher:
-    """Deterministically match one normalized NBA market to one game."""
+    """Deterministically match one classified sports market to one game."""
 
     def __init__(self, policy: MatchingPolicy) -> None:
         self._policy = policy
@@ -161,7 +173,12 @@ class MarketEventMatcher:
         """Return a conservative match decision with inspectible evidence."""
         evaluation_time = evaluated_at or datetime.now(UTC)
         original_text, text = _market_text(market)
-        signals = extract_team_signals(text, teams, original_text=original_text)
+        if market.league is SportsLeague.MLB:
+            signals = extract_mlb_team_signals(text, teams, original_text=original_text)
+            incompatible_sport_signal = has_non_mlb_sport_signal(text)
+        else:
+            signals = extract_team_signals(text, teams, original_text=original_text)
+            incompatible_sport_signal = has_non_nba_sport_signal(text)
         signal_by_team = {signal.team_id: signal for signal in signals}
         signal_ids = set(signal_by_team)
         team_pairs = {frozenset((left, right)) for left, right in combinations(signal_ids, 2)}
@@ -182,17 +199,17 @@ class MarketEventMatcher:
             "market_last_seen_at": market.last_seen_at.isoformat(),
             "reference_time_source": reference_source,
             "reference_time": reference_time.isoformat() if reference_time is not None else None,
-            "non_nba_sport_signal": has_non_nba_sport_signal(text),
+            "league": market.league.value,
+            "incompatible_sport_signal": incompatible_sport_signal,
         }
 
-        non_nba_sport_signal = has_non_nba_sport_signal(text)
-        if non_nba_sport_signal:
+        if incompatible_sport_signal:
             return self._decision(
                 market=market,
                 status=MarketEventMatchStatus.UNMATCHED,
                 confidence=Decimal("0"),
-                method="non_nba_sport_signal",
-                reason="market text contains an explicit non-NBA sport signal",
+                method="incompatible_sport_signal",
+                reason="market text contains an explicit incompatible sport signal",
                 fingerprint=fingerprint,
                 signals=signals,
                 candidates=(),
@@ -205,7 +222,7 @@ class MarketEventMatcher:
                 status=MarketEventMatchStatus.UNMATCHED,
                 confidence=Decimal("0"),
                 method="insufficient_team_evidence",
-                reason="market text did not identify two NBA teams",
+                reason=f"market text did not identify two {market.league.value.upper()} teams",
                 fingerprint=fingerprint,
                 signals=signals,
                 candidates=(),
@@ -242,7 +259,7 @@ class MarketEventMatcher:
                 status=MarketEventMatchStatus.UNMATCHED,
                 confidence=confidence,
                 method="non_single_game_market",
-                reason="market text identified more than two NBA teams",
+                reason=f"market text identified more than two {market.league.value.upper()} teams",
                 fingerprint=fingerprint,
                 signals=signals,
                 candidates=candidates,
@@ -255,7 +272,10 @@ class MarketEventMatcher:
                 status=MarketEventMatchStatus.UNMATCHED,
                 confidence=Decimal("0"),
                 method="no_team_pair_event",
-                reason="no persisted event contains the identified NBA team pair",
+                reason=(
+                    "no persisted event contains the identified "
+                    f"{market.league.value.upper()} team pair"
+                ),
                 fingerprint=fingerprint,
                 signals=signals,
                 candidates=(),
@@ -354,9 +374,10 @@ class MarketEventMatcher:
         evaluated_at: datetime,
         sports_event_id: UUID | None = None,
     ) -> MarketEventMatchDecision:
-        eligible = status is MarketEventMatchStatus.MATCHED
+        eligible = status is MarketEventMatchStatus.MATCHED and market.league is SportsLeague.NBA
         return MarketEventMatchDecision(
             market_id=market.id,
+            league=market.league,
             sports_event_id=sports_event_id,
             status=status,
             confidence=_quantize(confidence),

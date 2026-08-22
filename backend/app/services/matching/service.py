@@ -13,12 +13,17 @@ from app.domain.matching import (
     SportsEventMatchInput,
     TeamMatchInput,
 )
+from app.domain.sports import SportsLeague
 from app.models.markets import PredictionMarketRecord
 from app.models.sports import SportsEventRecord, TeamRecord
 from app.services.matching.matcher import MarketEventMatcher
 from app.services.matching.repository import MatchingRepository
 
 _MAX_MATCHING_RANGE_DAYS = 31
+_SPORTS_PROVIDER_BY_LEAGUE = {
+    SportsLeague.NBA: "balldontlie",
+    SportsLeague.MLB: "mlb",
+}
 
 
 class MatchingRunResult(BaseModel):
@@ -27,6 +32,7 @@ class MatchingRunResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     matcher_version: str
+    league: SportsLeague
     start_date: date
     end_date: date
     examined: int = Field(ge=0)
@@ -45,12 +51,10 @@ class MarketEventMatchingService:
         repository: MatchingRepository,
         matcher: MarketEventMatcher,
         policy: MatchingPolicy,
-        sports_provider_name: str,
     ) -> None:
         self._repository = repository
         self._matcher = matcher
         self._policy = policy
-        self._sports_provider_name = sports_provider_name
 
     async def run(
         self,
@@ -60,6 +64,7 @@ class MarketEventMatchingService:
         market_id: UUID | None,
         limit: int,
         offset: int,
+        league: SportsLeague = SportsLeague.NBA,
     ) -> MatchingRunResult:
         """Evaluate and append a bounded batch of semantic match decisions."""
         self._validate_date_range(start_date, end_date)
@@ -81,14 +86,18 @@ class MarketEventMatchingService:
             market_id=market_id,
             limit=limit,
             offset=offset,
+            league=league,
         )
+        sports_provider_name = _SPORTS_PROVIDER_BY_LEAGUE[league]
         teams = await self._repository.list_teams_for_matching(
-            provider_name=self._sports_provider_name
+            provider_name=sports_provider_name,
+            league=league,
         )
         events = await self._repository.list_events_for_matching(
-            provider_name=self._sports_provider_name,
+            provider_name=sports_provider_name,
             start_date=start_date - timedelta(days=event_padding_days),
             end_date=end_date + timedelta(days=event_padding_days),
+            league=league,
         )
 
         team_inputs = tuple(self._team_input(team) for team in teams)
@@ -110,6 +119,7 @@ class MarketEventMatchingService:
         }
         return MatchingRunResult(
             matcher_version=self._policy.matcher_version,
+            league=league,
             start_date=start_date,
             end_date=end_date,
             examined=len(decisions),
@@ -152,8 +162,11 @@ class MarketEventMatchingService:
 
     @staticmethod
     def _market_input(record: PredictionMarketRecord) -> MarketMatchInput:
+        if record.sports_league is None:
+            raise ValueError("matching requires an exact persisted sports classification")
         return MarketMatchInput(
             id=record.id,
+            league=SportsLeague(record.sports_league),
             title=record.title,
             subtitle=record.subtitle,
             rules_primary=record.rules_primary,
