@@ -48,9 +48,19 @@ class Settings(BaseSettings):
     balldontlie_api_key: SecretStr | None = None
     balldontlie_api_base_url: str = "https://api.balldontlie.io/v1"
     mlb_api_base_url: str = "https://statsapi.mlb.com/api/v1"
+    baseball_savant_base_url: str = "https://baseballsavant.mlb.com"
     sports_provider_max_pages: int = Field(default=10, ge=1, le=100)
     sports_provider_request_interval_seconds: float = Field(default=12.1, ge=0.0, le=60.0)
     mlb_provider_request_interval_seconds: float = Field(default=0.25, ge=0.0, le=60.0)
+    baseball_savant_request_timeout_seconds: float = Field(default=30.0, gt=0.0, le=120.0)
+    baseball_savant_request_interval_seconds: float = Field(default=1.0, ge=0.0, le=60.0)
+    baseball_savant_lookback_days: int = Field(default=30, ge=1, le=90)
+    baseball_savant_max_response_bytes: int = Field(
+        default=20_000_000,
+        ge=100_000,
+        le=100_000_000,
+    )
+    baseball_savant_max_rows: int = Field(default=50_000, ge=100, le=250_000)
     matching_min_confidence: Decimal = Field(
         default=Decimal("0.90"), ge=Decimal("0"), le=Decimal("1")
     )

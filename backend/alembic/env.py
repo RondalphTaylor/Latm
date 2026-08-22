@@ -18,6 +18,7 @@ from app.models import (  # noqa: F401
     MarketPriceRecord,
     MarketResolutionRecord,
     MlbLineupSnapshotRecord,
+    MlbStatcastFeatureSnapshotRecord,
     ModelVersionRecord,
     OpportunityRecord,
     PaperPositionRecord,

@@ -1,14 +1,17 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
+    Integer,
     String,
     UniqueConstraint,
 )
@@ -28,6 +31,11 @@ class MlbLineupSnapshotRecord(Base):
             "sports_event_id",
             "input_fingerprint",
             name="uq_mlb_lineup_snapshots_semantic_input",
+        ),
+        UniqueConstraint(
+            "id",
+            "sports_event_id",
+            name="uq_mlb_lineup_snapshots_id_event",
         ),
         CheckConstraint("provider_name = 'mlb'", name="ck_mlb_lineup_snapshots_provider"),
         CheckConstraint("home_team_id <> away_team_id", name="ck_mlb_lineup_snapshots_teams"),
@@ -108,3 +116,107 @@ class MlbLineupSnapshotRecord(Base):
     source_snapshot: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
 
     sports_event: Mapped[SportsEventRecord] = relationship(lazy="joined")
+
+
+class MlbStatcastFeatureSnapshotRecord(Base):
+    """Append-only official Statcast quantitative features for one posted lineup."""
+
+    __tablename__ = "mlb_statcast_feature_snapshots"
+    __table_args__ = (
+        UniqueConstraint(
+            "lineup_snapshot_id",
+            "input_fingerprint",
+            name="uq_mlb_statcast_feature_snapshots_semantic_input",
+        ),
+        ForeignKeyConstraint(
+            ["lineup_snapshot_id", "sports_event_id"],
+            ["mlb_lineup_snapshots.id", "mlb_lineup_snapshots.sports_event_id"],
+            name="fk_mlb_statcast_feature_snapshots_lineup_event",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "provider_name = 'baseball_savant'",
+            name="ck_mlb_statcast_feature_snapshots_provider",
+        ),
+        CheckConstraint(
+            "observation_basis IN ('operational_pregame', 'retrospective')",
+            name="ck_mlb_statcast_feature_snapshots_basis",
+        ),
+        CheckConstraint(
+            "(observation_basis = 'operational_pregame' "
+            "AND operational_pregame_eligible = true "
+            "AND source_retrieved_at < scheduled_start_time) OR "
+            "(observation_basis = 'retrospective' "
+            "AND operational_pregame_eligible = false "
+            "AND source_retrieved_at >= scheduled_start_time)",
+            name="ck_mlb_statcast_feature_snapshots_eligibility",
+        ),
+        CheckConstraint(
+            "window_end_date < target_event_date "
+            "AND window_end_date - window_start_date + 1 = lookback_days",
+            name="ck_mlb_statcast_feature_snapshots_window",
+        ),
+        CheckConstraint(
+            "lookback_days BETWEEN 1 AND 90",
+            name="ck_mlb_statcast_feature_snapshots_lookback",
+        ),
+        CheckConstraint(
+            "jsonb_array_length(home_batters) = 9 AND jsonb_array_length(away_batters) = 9",
+            name="ck_mlb_statcast_feature_snapshots_batters",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(source_rows) = 'array'",
+            name="ck_mlb_statcast_feature_snapshots_source_rows",
+        ),
+        CheckConstraint(
+            "policy_fingerprint ~ '^[0-9a-f]{64}$' "
+            "AND source_fingerprint ~ '^[0-9a-f]{64}$' "
+            "AND input_fingerprint ~ '^[0-9a-f]{64}$'",
+            name="ck_mlb_statcast_feature_snapshots_fingerprints",
+        ),
+        Index(
+            "ix_mlb_statcast_feature_snapshots_event_retrieved",
+            "sports_event_id",
+            "source_retrieved_at",
+        ),
+        Index(
+            "ix_mlb_statcast_feature_snapshots_eligible_retrieved",
+            "operational_pregame_eligible",
+            "source_retrieved_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    sports_event_id: Mapped[UUID] = mapped_column(
+        ForeignKey("sports_events.id", ondelete="RESTRICT"), nullable=False
+    )
+    lineup_snapshot_id: Mapped[UUID] = mapped_column(nullable=False)
+    provider_name: Mapped[str] = mapped_column(
+        ForeignKey("providers.name", ondelete="RESTRICT"), nullable=False
+    )
+    provider_event_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    target_event_date: Mapped[date] = mapped_column(Date, nullable=False)
+    scheduled_start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    window_start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    window_end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    lookback_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_retrieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    observation_basis: Mapped[str] = mapped_column(String(30), nullable=False)
+    operational_pregame_eligible: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    policy_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    policy_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    policy_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    home_starting_pitcher: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    away_starting_pitcher: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    home_batters: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False)
+    away_batters: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False)
+    source_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    input_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_manifest: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    source_rows: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False)
+
+    sports_event: Mapped[SportsEventRecord] = relationship(lazy="joined")
+    lineup_snapshot: Mapped[MlbLineupSnapshotRecord] = relationship(
+        lazy="joined",
+        overlaps="sports_event",
+    )

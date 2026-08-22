@@ -279,7 +279,7 @@ Team and event ingestion can select `provider=mlb` per request without replacing
 
 Validation passed all 406 backend tests (7 database-integration tests skipped by default), Ruff, strict mypy, all 7 frontend tests, frontend lint/type checking, and the production build. A live read-only smoke against the official source persisted all 30 active MLB teams and 15 games for August 21, 2026, then returned them through the league-filtered API without changing the configured NBA default.
 
-The Elo model, forecast evaluation, opportunity, sizing, risk, execution, and position paths remain explicitly NBA-only. Probable-pitcher and lineup snapshots were delivered in the next bounded slice; Statcast features, an MLB model, and all MLB trading eligibility remain future independently validated slices.
+The Elo model, forecast evaluation, opportunity, sizing, risk, execution, and position paths remain explicitly NBA-only. Probable-pitcher/lineup and Statcast quantitative snapshots were delivered in subsequent bounded slices; an MLB model and all MLB trading eligibility remain future independently validated work.
 
 ## Offseason MLB market classification and matching
 
@@ -303,6 +303,21 @@ Persistence revalidates event, home team, away team, and scheduled start under t
 
 Validation passed all 439 backend tests against PostgreSQL, including provider, API, replay, identity-reconciliation, and database-invariant cases, plus Ruff, strict mypy, migration upgrade/downgrade, and Alembic drift checks. The feature adds no MLB forecast, opportunity, sizing, risk, execution, settlement, provider account, or order path.
 
+## Offseason MLB Baseball Savant / Statcast quantitative snapshots
+
+**Status:** Complete
+**Completed:** 2026-08-22
+
+The fourth MLB pilot slice adds a credential-free, read-only Baseball Savant Statcast Search CSV adapter and deterministic V1 quantitative contract. One explicit complete lineup drives two bounded requests for its two probable pitchers and 18 posted batters over the exact 30 calendar days ending the day before the target event. Typed pitch rows, response hashes, retrieval time, player metrics, explicit sample counts, and source/policy/input fingerprints are retained in an append-only snapshot tied to the exact event and lineup.
+
+Pitcher profiles expose release velocity/spin and contact allowed; batter profiles expose contact quality. Hard-hit, barrel, expected-wOBA-on-contact, and observed-wOBA measures use exact Decimal aggregation. Missing values remain unavailable. The official live smoke revealed three rows with a wOBA value but no denominator; V1 preserves and counts those incomplete rows while excluding them from observed-wOBA aggregation instead of silently treating them as zero or discarding the otherwise valid response.
+
+Domain, service, and PostgreSQL constraints require an exact complete lineup lineage, a source window ending before the target game, deterministic replay, and consistent operational eligibility. Retrieval strictly before first pitch is `operational_pregame`; later retrieval is retained as `retrospective` and cannot qualify for a future operational model. Public responses expose bounded profiles, manifests, and row counts while keeping the potentially large pitch-row payload internal.
+
+The live official-source smoke for game 823509 retained 6,536 pitch rows, populated both pitcher and all 18 batter profiles, counted three incomplete wOBA rows, and replayed to the same stable record. Because collection occurred after first pitch, it was correctly labeled retrospective and ineligible. This slice adds no MLB probability, calibration, opportunity, sizing, risk, execution, settlement, account, or order path.
+
+Final validation passed all 464 backend tests against PostgreSQL, Ruff formatting and linting, strict mypy, migration `0015_mlb_statcast_features` upgrade/downgrade, Alembic head/drift checks, all 7 frontend tests, frontend lint/type checking and production build, Compose rendering, and a zero-vulnerability production dependency audit.
+
 ## Previous-phase schema repair
 
 **Status:** Complete
@@ -316,4 +331,4 @@ Final repair validation passed all 415 backend tests against PostgreSQL, Ruff, s
 
 ## Next phase
 
-Continue the bounded MLB pilot with a typed Baseball Savant / Statcast quantitative feature contract, still without enabling MLB forecasts or trading. Phase 12 research/evidence work remains the next broader roadmap milestone.
+Continue the bounded MLB pilot with leakage-safe feature selection and MLB base-model design, including an explicit train/evaluation split before any probability is exposed. MLB trading remains disabled. Phase 12 research/evidence work remains the next broader roadmap milestone.

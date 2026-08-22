@@ -1,6 +1,6 @@
 # LATM Prediction Market Platform
 
-An auditable prediction-market research platform focused initially on NBA markets. The current MVP ingests read-only Kalshi market data and authenticated BALLDONTLIE NBA data, deterministically links supported single-game contracts to normalized events, generates versioned event-level Elo base forecasts from local game history, records research-only YES/NO raw-edge opportunities, produces versioned advisory capital allocations against an isolated paper bankroll, records deterministic paper-only risk decisions, simulates provider-free paper positions, evaluates forecast and trading performance, and exposes the full state through a responsive read-only dashboard. A bounded offseason pilot also ingests official MLB teams, schedules, results, probable pitchers, and posted batting orders, classifies exact Kalshi MLB game-winner contracts, and matches them to official games for research. MLB forecasting and trading remain disabled.
+An auditable prediction-market research platform focused initially on NBA markets. The current MVP ingests read-only Kalshi market data and authenticated BALLDONTLIE NBA data, deterministically links supported single-game contracts to normalized events, generates versioned event-level Elo base forecasts from local game history, records research-only YES/NO raw-edge opportunities, produces versioned advisory capital allocations against an isolated paper bankroll, records deterministic paper-only risk decisions, simulates provider-free paper positions, evaluates forecast and trading performance, and exposes the full state through a responsive read-only dashboard. A bounded offseason pilot also ingests official MLB teams, schedules, results, probable pitchers, posted batting orders, and Baseball Savant / Statcast quantitative snapshots, then classifies exact Kalshi MLB game-winner contracts and matches them to official games for research. MLB forecasting and trading remain disabled.
 
 > **Trading safety:** the only supported execution mode is `paper`. The Kalshi adapter accesses public production market data without credentials, the BALLDONTLIE key authorizes NBA sports-data reads only, and the MLB adapter uses public official sports data without credentials. None of these adapters contains order placement, financial-account access, or live-trading implementation.
 
@@ -92,7 +92,7 @@ Invoke-RestMethod "http://localhost:8000/teams?league=mlb&provider=mlb"
 Invoke-RestMethod "http://localhost:8000/events?league=mlb&provider=mlb&start_date=2026-08-20&end_date=2026-08-20"
 ```
 
-Alternatively, set `SPORTS_DATA_PROVIDER=mlb` to make MLB the ingestion default. `MLB_API_BASE_URL` and `MLB_PROVIDER_REQUEST_INTERVAL_SECONDS` configure the source and conservative pacing. The adapter validates and retains official source snapshots for active teams, scheduled/live/final games, scores, inning state, venue, and series metadata.
+Alternatively, set `SPORTS_DATA_PROVIDER=mlb` to make MLB the ingestion default. `MLB_API_BASE_URL` and `MLB_PROVIDER_REQUEST_INTERVAL_SECONDS` configure the source and conservative pacing. The adapter validates and retains official source snapshots for active teams, scheduled/live/final games, scores, inning state, venue, and series metadata. `BASEBALL_SAVANT_*` separately configures the Statcast CSV source, pacing, 30-day feature window, and response caps.
 
 After an official MLB event is local, explicitly observe its probable pitchers and batting orders:
 
@@ -103,6 +103,19 @@ Invoke-RestMethod "http://localhost:8000/mlb-lineup-snapshots?observation_phase=
 ```
 
 These observations come from MLB's official versioned game feed and are append-only. Probable pitchers may be present while either batting order is unavailable; a partially published order is retained as `partial`. A nine-player order is called `posted`, not confirmed, because MLB states that starting lineups are subject to change. `complete_for_pregame_model=true` requires two posted nine-player orders, two probable pitchers, and both the official source update and local retrieval before first pitch. Live and postgame observations remain auditable but are structurally ineligible as pregame model inputs. The endpoint accepts exactly one local event and has no batch, forecast, opportunity, account, or execution control.
+
+Build a quantitative snapshot for one exact complete lineup, then inspect its bounded public view:
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8000/events/<internal-event-uuid>/mlb-statcast-snapshots/ingest?lineup_snapshot_id=<lineup-snapshot-uuid>"
+Invoke-RestMethod "http://localhost:8000/events/<internal-event-uuid>/mlb-statcast-snapshots"
+Invoke-RestMethod "http://localhost:8000/mlb-statcast-snapshots?operational_pregame_eligible=true"
+Invoke-RestMethod "http://localhost:8000/mlb-statcast-snapshots/<statcast-snapshot-uuid>"
+```
+
+Statcast V1 makes two paced, read-only official CSV requests: one for the two probable pitchers and one for the 18 posted batters. Its exact window is the 30 calendar days ending the day before the target game's official date, so same-day and target-game rows cannot enter the features. The append-only record binds the exact event and lineup to typed pitch rows, response hashes, source and policy fingerprints, retrieval time, player sample counts, pitcher velocity/spin, contact quality, hard-hit/barrel rates, xwOBA on contact, and observed wOBA. Missing metrics remain null, and incomplete official wOBA pairs are preserved and counted but excluded from the aggregate.
+
+Only retrieval strictly before first pitch is `operational_pregame` and eligible for a future model; later collection is retained as `retrospective`. The list/detail API omits the potentially large pitch-row payload while exposing its count and source manifest. The source adapter follows the official [Statcast Search CSV field contract](https://baseballsavant.mlb.com/csv-docs); the hard-hit threshold follows MLB's [95 mph definition](https://www.mlb.com/glossary/statcast/hard-hit-rate). This slice computes features only—it does not produce a win probability or activate any MLB opportunity, sizing, risk, execution, or settlement path.
 
 Ingest only the exact official Kalshi MLB game-winner series and inspect its typed classifications:
 
@@ -120,7 +133,7 @@ Invoke-RestMethod -Method Post "http://localhost:8000/matches/run?league=mlb&sta
 Invoke-RestMethod "http://localhost:8000/matches?league=mlb&latest_only=true"
 ```
 
-MLB uses its own aliases and exact first-pitch proximity. A confident MLB decision can be `matched`, but both domain and database invariants require `automatic_trading_eligible=false`. Official probable-pitcher and posted-lineup observations are now available for research, but no model consumes them yet. Statcast features, an MLB forecast model, calibration, opportunities, sizing, risk, and execution have not been implemented for MLB.
+MLB uses its own aliases and exact first-pitch proximity. A confident MLB decision can be `matched`, but both domain and database invariants require `automatic_trading_eligible=false`. Official lineup and Statcast quantitative snapshots are now available for research, but no forecast model consumes them yet. An MLB forecast model, calibration, opportunities, sizing, risk, and execution have not been implemented for MLB.
 
 ## Market-to-event matching
 
@@ -366,4 +379,4 @@ infra/compose.yaml    Backend, frontend, and PostgreSQL development stack
 docs/                 Product, architecture, safety, and progress documentation
 ```
 
-See `AGENTS.md`, `ARCHITECTURE.md`, and `ROADMAP.md` for project constraints and phased scope. Paper entry, monitoring, settlement, evaluation, and the read-only dashboard are implemented without any live provider path or human-approval action. Phase 12 remains the next evidence milestone; the user-approved offseason MLB pilot is being delivered as bounded, independently tested slices without enabling MLB trading prematurely.
+See `AGENTS.md`, `ARCHITECTURE.md`, and `ROADMAP.md` for project constraints and phased scope. Paper entry, monitoring, settlement, evaluation, and the read-only dashboard are implemented without any live provider path or human-approval action. Phase 12 remains the next evidence milestone; the next bounded MLB slice is leakage-safe feature selection and model design, without enabling MLB trading prematurely.

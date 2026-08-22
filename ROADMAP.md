@@ -1329,9 +1329,11 @@ Phase 20 is complete when:
 schedule, and result normalization, selectable ingestion, shared persistence, and league-filtered
 reads. The second slice adds exact Kalshi `KXMLBGAME` classification and deterministic MLB
 market-to-game matching. The third slice adds append-only typed official probable-pitcher and posted
-batting-order observations with explicit pregame/live/postgame provenance. Every MLB match remains
-research-only and trading-ineligible. Statcast features, forecasting, evidence, opportunities,
-evaluation, and trading are not implemented for MLB.
+batting-order observations with explicit pregame/live/postgame provenance. The fourth slice adds an
+append-only, exact-lineup-linked 30-day Baseball Savant / Statcast quantitative snapshot with
+typed source rows and explicit operational-versus-retrospective eligibility. Every MLB match remains
+research-only and trading-ineligible. Forecasting, evidence, opportunities, evaluation, and trading
+are not implemented for MLB.
 
 ## Goal
 
@@ -1530,6 +1532,8 @@ MLB ingestion foundation
 MLB market classification and research-only matching
 
 MLB probable-pitcher and posted-lineup snapshots
+
+MLB Baseball Savant / Statcast quantitative snapshots
 ```
 
 The project should not begin with AI agents or real trading.

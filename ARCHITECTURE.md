@@ -508,12 +508,27 @@ does not claim a lineup is final. A snapshot is complete for future pregame-mode
 orders are posted, both probable pitchers exist, and source update plus retrieval precede first pitch.
 Live and postgame records can be audited but cannot qualify as pregame inputs.
 
+Quantitative MLB inputs use a separate public read-only Baseball Savant / Statcast Search CSV
+adapter and append-only `mlb_statcast_feature_snapshots`. One explicit request binds one exact
+complete lineup snapshot to two bounded multi-player source queries: its two probable pitchers and
+18 posted batters. V1 uses the 30 calendar days ending one day before the target event date. It
+retains a typed subset of every source pitch, response hashes, retrieval time, explicit complete and
+incomplete sample counts, deterministic player aggregates, and source/policy/input fingerprints.
+Incomplete official metric pairs remain source evidence but never enter an aggregate as zero.
+
+The service locks and revalidates the normalized event followed by its lineup parent before an
+append or semantic replay. Cross-event lineage is blocked by a composite foreign key. Retrieval
+strictly before first pitch is labeled `operational_pregame`; later observations are
+`retrospective` and structurally ineligible. Public reads expose bounded player profiles and source
+counts rather than the potentially large internal pitch-row payload. This contract generates no
+probability and has no dependency on prediction-market prices or any execution provider.
+
 This shared storage does not make the downstream pipeline sport-agnostic by implication. The
 matcher now supports separately versioned NBA and MLB alias policies, while the Elo model, forecast
 evaluation, opportunity, risk, and trading services retain their explicit NBA gates. A persisted MLB
 match is always research-only and database-constrained to `automatic_trading_eligible=false`.
-The lineup snapshot slice does not relax any of these downstream gates and no MLB model currently
-reads the new table.
+The lineup and Statcast snapshot slices do not relax any of these downstream gates and no MLB model
+currently reads either table.
 
 ---
 

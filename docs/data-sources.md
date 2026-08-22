@@ -1294,7 +1294,6 @@ Official MLB teams + schedule + results
 
 Official probable-pitcher + posted-lineup snapshots
 
-Then:
 Baseball Savant / Statcast quantitative features
 
 Also implemented:
@@ -1316,9 +1315,23 @@ starting lineups as subject to change, so the platform does not call them confir
 update and retrieval before first pitch with both probable pitchers and two nine-player posted
 orders can be labeled complete for future pregame modeling; no model consumes that flag yet.
 
-Baseball Savant / Statcast remains the next quantitative source and must receive its own typed,
-timestamped contract before it affects a model. Prediction-market prices remain comparison data and
-must not be used as independent factual evidence in the MLB base forecast.
+The quantitative slice uses the public official Baseball Savant Statcast Search CSV surface and its
+documented field meanings. One explicit complete-lineup snapshot produces two multi-player queries:
+two probable pitchers and 18 posted batters. The window is exactly 30 calendar days from target date
+minus 30 through target date minus one. Same-day and target-game rows are therefore excluded.
+
+Each append-only result preserves a typed pitch subset, source response hashes, retrieval time,
+sample counts, and deterministic source/policy/input fingerprints. Pitcher profiles expose velocity,
+spin, and contact allowed; batter profiles expose contact quality. Both retain hard-hit, barrel,
+expected-wOBA-on-contact, and observed-wOBA components with explicit denominators. Incomplete
+official wOBA pairs are preserved and counted but excluded from the aggregate rather than converted
+to zero. Retrieval strictly before first pitch is operationally eligible; later retrieval is labeled
+retrospective. The public response omits full pitch rows while the database keeps them for audit.
+
+This source contract is not a forecast. A separately reviewed model must define leakage-safe as-of
+selection, feature transformations, training/evaluation splits, and calibration before these inputs
+can produce probabilities. Prediction-market prices remain comparison data and must not be used as
+independent factual evidence in the MLB base forecast.
 
 MLB results can evaluate a sports forecast but cannot settle a prediction-market contract. The
 exchange's typed official resolution remains the sole financial settlement authority.
