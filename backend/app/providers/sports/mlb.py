@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 from contextlib import suppress
 from datetime import UTC, date, datetime
 from typing import Any
@@ -8,6 +10,13 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
+from app.domain.mlb_lineups import (
+    MlbLineupEntry,
+    MlbLineupSnapshot,
+    MlbLineupState,
+    MlbObservationPhase,
+    MlbProbablePitcher,
+)
 from app.domain.sports import SportsEvent, SportsEventStatus, SportsLeague, Team
 from app.providers.sports.base import (
     SportsProviderResponseError,
@@ -124,6 +133,150 @@ class MlbScheduleResponse(BaseModel):
     dates: list[MlbScheduleDatePayload] = Field(default_factory=list)
 
 
+class MlbPersonReferencePayload(BaseModel):
+    """Person identity embedded in an official MLB live feed."""
+
+    model_config = ConfigDict(extra="allow")
+
+    id: int
+    full_name: str = Field(alias="fullName", min_length=1)
+
+
+class MlbSidePayload(BaseModel):
+    """Official handedness code for one player."""
+
+    model_config = ConfigDict(extra="allow")
+
+    code: str = Field(pattern=r"^[LRS]$")
+
+
+class MlbPositionPayload(BaseModel):
+    """Official defensive-position abbreviation."""
+
+    model_config = ConfigDict(extra="allow")
+
+    abbreviation: str = Field(min_length=1, max_length=10)
+
+
+class MlbGameDataPlayerPayload(MlbPersonReferencePayload):
+    """Player metadata used to enrich lineup and pitcher identities."""
+
+    primary_position: MlbPositionPayload | None = Field(default=None, alias="primaryPosition")
+    bat_side: MlbSidePayload | None = Field(default=None, alias="batSide")
+    pitch_hand: MlbSidePayload | None = Field(default=None, alias="pitchHand")
+
+
+class MlbBoxscorePlayerPayload(BaseModel):
+    """One player entry in a live-feed team boxscore."""
+
+    model_config = ConfigDict(extra="allow")
+
+    person: MlbPersonReferencePayload
+    position: MlbPositionPayload
+
+
+class MlbBoxscoreTeamPayload(BaseModel):
+    """Batting order and player map for one side of a game."""
+
+    model_config = ConfigDict(extra="allow")
+
+    batting_order: list[int] = Field(default_factory=list, alias="battingOrder", max_length=9)
+    players: dict[str, MlbBoxscorePlayerPayload] = Field(default_factory=dict)
+
+
+class MlbBoxscoreTeamsPayload(BaseModel):
+    """Both official boxscore sides."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    home: MlbBoxscoreTeamPayload
+    away: MlbBoxscoreTeamPayload
+
+
+class MlbBoxscorePayload(BaseModel):
+    """Validated boxscore subset from the live feed."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    teams: MlbBoxscoreTeamsPayload
+
+
+class MlbLiveDataPayload(BaseModel):
+    """Validated live-data subset used for lineup observations."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    boxscore: MlbBoxscorePayload
+
+
+class MlbLiveFeedDateTimePayload(BaseModel):
+    """Scheduled start embedded in live-feed game data."""
+
+    model_config = ConfigDict(extra="allow")
+
+    date_time: datetime = Field(alias="dateTime")
+
+
+class MlbLiveFeedTeamReferencePayload(BaseModel):
+    """Team identity embedded in live-feed game data."""
+
+    model_config = ConfigDict(extra="allow")
+
+    id: int
+
+
+class MlbLiveFeedTeamsPayload(BaseModel):
+    """Home and away team identities from the live feed."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    home: MlbLiveFeedTeamReferencePayload
+    away: MlbLiveFeedTeamReferencePayload
+
+
+class MlbProbablePitchersPayload(BaseModel):
+    """Optional official probable pitchers for both sides."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    home: MlbPersonReferencePayload | None = None
+    away: MlbPersonReferencePayload | None = None
+
+
+class MlbLiveFeedGameDataPayload(BaseModel):
+    """Validated game-data subset for one lineup observation."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    datetime: MlbLiveFeedDateTimePayload
+    status: MlbGameStatusPayload
+    teams: MlbLiveFeedTeamsPayload
+    probable_pitchers: MlbProbablePitchersPayload = Field(
+        default_factory=MlbProbablePitchersPayload,
+        alias="probablePitchers",
+    )
+    players: dict[str, MlbGameDataPlayerPayload] = Field(default_factory=dict)
+
+
+class MlbLiveFeedMetadataPayload(BaseModel):
+    """Official source update marker for a live-feed document."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    timestamp: str = Field(alias="timeStamp", pattern=r"^\d{8}_\d{6}$")
+
+
+class MlbLiveFeedPayload(BaseModel):
+    """Small validated contract over the official MLB live feed."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    game_pk: int = Field(alias="gamePk")
+    metadata: MlbLiveFeedMetadataPayload = Field(alias="metaData")
+    game_data: MlbLiveFeedGameDataPayload = Field(alias="gameData")
+    live_data: MlbLiveDataPayload = Field(alias="liveData")
+
+
 def _json_dict(model: BaseModel) -> dict[str, JsonValue]:
     value = model.model_dump(mode="json", by_alias=True)
     return {str(key): item for key, item in value.items()}
@@ -202,6 +355,133 @@ def normalize_mlb_game(payload: MlbGamePayload, *, retrieved_at: datetime) -> Sp
     )
 
 
+def _lineup_state(entries: tuple[MlbLineupEntry, ...]) -> MlbLineupState:
+    if not entries:
+        return MlbLineupState.UNAVAILABLE
+    if len(entries) == 9:
+        return MlbLineupState.POSTED
+    return MlbLineupState.PARTIAL
+
+
+def _normalize_probable_pitcher(
+    person: MlbPersonReferencePayload | None,
+    players: dict[str, MlbGameDataPlayerPayload],
+) -> MlbProbablePitcher | None:
+    if person is None:
+        return None
+    player = players.get(f"ID{person.id}")
+    return MlbProbablePitcher(
+        provider_player_id=str(person.id),
+        full_name=person.full_name,
+        pitch_hand=(
+            player.pitch_hand.code if player is not None and player.pitch_hand is not None else None
+        ),
+    )
+
+
+def _normalize_lineup(
+    team: MlbBoxscoreTeamPayload,
+    players: dict[str, MlbGameDataPlayerPayload],
+) -> tuple[MlbLineupEntry, ...]:
+    entries: list[MlbLineupEntry] = []
+    for order, player_id in enumerate(team.batting_order, start=1):
+        boxscore_player = team.players.get(f"ID{player_id}")
+        if boxscore_player is None:
+            raise ValueError(f"batting-order player {player_id} is missing from the boxscore")
+        game_player = players.get(f"ID{player_id}")
+        entries.append(
+            MlbLineupEntry(
+                batting_order=order,
+                provider_player_id=str(player_id),
+                full_name=boxscore_player.person.full_name,
+                position=boxscore_player.position.abbreviation,
+                bat_side=(
+                    game_player.bat_side.code
+                    if game_player is not None and game_player.bat_side is not None
+                    else None
+                ),
+            )
+        )
+    return tuple(entries)
+
+
+def normalize_mlb_lineup_snapshot(
+    payload: MlbLiveFeedPayload,
+    *,
+    retrieved_at: datetime,
+) -> MlbLineupSnapshot:
+    """Normalize a bounded, auditable probable-pitcher and batting-order snapshot."""
+    source_updated_at = datetime.strptime(
+        payload.metadata.timestamp,
+        "%Y%m%d_%H%M%S",
+    ).replace(tzinfo=UTC)
+    scheduled_start_time = payload.game_data.datetime.date_time
+    abstract_state = payload.game_data.status.abstract_game_state
+    if abstract_state.casefold() == "final":
+        observation_phase = MlbObservationPhase.POSTGAME
+    elif abstract_state.casefold() == "live" or retrieved_at >= scheduled_start_time:
+        observation_phase = MlbObservationPhase.LIVE
+    else:
+        observation_phase = MlbObservationPhase.PREGAME
+
+    boxscore_teams = payload.live_data.boxscore.teams
+    players = payload.game_data.players
+    home_lineup = _normalize_lineup(boxscore_teams.home, players)
+    away_lineup = _normalize_lineup(boxscore_teams.away, players)
+    home_lineup_state = _lineup_state(home_lineup)
+    away_lineup_state = _lineup_state(away_lineup)
+    probable_pitchers = payload.game_data.probable_pitchers
+    home_pitcher = _normalize_probable_pitcher(probable_pitchers.home, players)
+    away_pitcher = _normalize_probable_pitcher(probable_pitchers.away, players)
+    complete = (
+        observation_phase is MlbObservationPhase.PREGAME
+        and source_updated_at <= retrieved_at
+        and source_updated_at < scheduled_start_time
+        and retrieved_at < scheduled_start_time
+        and home_lineup_state is MlbLineupState.POSTED
+        and away_lineup_state is MlbLineupState.POSTED
+        and home_pitcher is not None
+        and away_pitcher is not None
+    )
+    source_snapshot: dict[str, JsonValue] = {
+        "provider": "mlb",
+        "gamePk": payload.game_pk,
+        "sourceUpdatedAt": source_updated_at.isoformat(),
+        "scheduledStartTime": scheduled_start_time.isoformat(),
+        "status": payload.game_data.status.model_dump(mode="json", by_alias=True),
+        "teams": payload.game_data.teams.model_dump(mode="json"),
+        "probablePitchers": {
+            "home": home_pitcher.model_dump(mode="json") if home_pitcher is not None else None,
+            "away": away_pitcher.model_dump(mode="json") if away_pitcher is not None else None,
+        },
+        "homeLineup": [entry.model_dump(mode="json") for entry in home_lineup],
+        "awayLineup": [entry.model_dump(mode="json") for entry in away_lineup],
+    }
+    encoded = json.dumps(source_snapshot, sort_keys=True, separators=(",", ":")).encode()
+    input_fingerprint = hashlib.sha256(encoded).hexdigest()
+    return MlbLineupSnapshot(
+        provider_name="mlb",
+        provider_event_id=str(payload.game_pk),
+        home_provider_team_id=str(payload.game_data.teams.home.id),
+        away_provider_team_id=str(payload.game_data.teams.away.id),
+        scheduled_start_time=scheduled_start_time,
+        source_updated_at=source_updated_at,
+        retrieved_at=retrieved_at,
+        source_abstract_state=abstract_state,
+        source_detailed_state=payload.game_data.status.detailed_state,
+        observation_phase=observation_phase,
+        home_probable_pitcher=home_pitcher,
+        away_probable_pitcher=away_pitcher,
+        home_lineup_state=home_lineup_state,
+        away_lineup_state=away_lineup_state,
+        home_lineup=home_lineup,
+        away_lineup=away_lineup,
+        complete_for_pregame_model=complete,
+        input_fingerprint=input_fingerprint,
+        source_snapshot=source_snapshot,
+    )
+
+
 class MlbStatsSportsDataProvider:
     """Read-only adapter for official MLB team, schedule, and result data."""
 
@@ -218,6 +498,11 @@ class MlbStatsSportsDataProvider:
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
+        self._live_feed_base_url = (
+            f"{self._base_url.removesuffix('/v1')}/v1.1"
+            if self._base_url.endswith("/v1")
+            else self._base_url
+        )
         self._timeout = httpx.Timeout(timeout_seconds)
         self._max_retries = max_retries
         self._request_interval_seconds = request_interval_seconds
@@ -370,3 +655,21 @@ class MlbStatsSportsDataProvider:
             return normalize_mlb_game(game, retrieved_at=retrieved_at)
         except (StopIteration, ValidationError) as exc:
             raise SportsProviderResponseError("MLB game response failed validation") from exc
+
+    async def get_lineup_snapshot(self, provider_event_id: str) -> MlbLineupSnapshot:
+        """Retrieve one typed probable-pitcher and batting-order observation."""
+        retrieved_at = datetime.now(UTC)
+        async with self._client() as client:
+            raw_payload = await self._get_json(
+                client,
+                f"{self._live_feed_base_url}/game/{provider_event_id}/feed/live",
+            )
+        try:
+            payload = MlbLiveFeedPayload.model_validate(raw_payload)
+            if str(payload.game_pk) != provider_event_id:
+                raise SportsProviderResponseError("MLB live feed returned the wrong game identity")
+            return normalize_mlb_lineup_snapshot(payload, retrieved_at=retrieved_at)
+        except ValidationError as exc:
+            raise SportsProviderResponseError("MLB live feed failed lineup validation") from exc
+        except ValueError as exc:
+            raise SportsProviderResponseError("MLB live feed contained an invalid lineup") from exc

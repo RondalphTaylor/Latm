@@ -279,7 +279,7 @@ Team and event ingestion can select `provider=mlb` per request without replacing
 
 Validation passed all 406 backend tests (7 database-integration tests skipped by default), Ruff, strict mypy, all 7 frontend tests, frontend lint/type checking, and the production build. A live read-only smoke against the official source persisted all 30 active MLB teams and 15 games for August 21, 2026, then returned them through the league-filtered API without changing the configured NBA default.
 
-The Elo model, forecast evaluation, opportunity, sizing, risk, execution, and position paths remain explicitly NBA-only. Probable-pitcher and lineup snapshots, Statcast features, an MLB model, and all MLB trading eligibility remain future independently validated slices.
+The Elo model, forecast evaluation, opportunity, sizing, risk, execution, and position paths remain explicitly NBA-only. Probable-pitcher and lineup snapshots were delivered in the next bounded slice; Statcast features, an MLB model, and all MLB trading eligibility remain future independently validated slices.
 
 ## Offseason MLB market classification and matching
 
@@ -291,6 +291,17 @@ The second MLB pilot slice uses current official Kalshi series and event metadat
 Matcher V2 adds a separate MLB alias policy, exact league/provider repository filters, first-pitch comparison, append-only league provenance, and explicit handling for qualified Chicago, Los Angeles, and New York labels. Matched MLB rows are valid research links, but the domain and PostgreSQL safety constraint require `automatic_trading_eligible=false`; NBA is still the only league that can satisfy the matching prerequisite consumed by later phases.
 
 Validation passed all 424 backend tests against PostgreSQL, including an end-to-end MLB database case, plus Ruff, strict mypy, migration upgrade/downgrade, and Alembic drift checks. A live read-only smoke ingested 96 open official MLB game-winner contracts and refreshed 55 official games for August 21–24, 2026. All 96 contracts matched exactly after the schedule refresh and zero were trading-eligible.
+
+## Offseason MLB probable-pitcher and lineup snapshots
+
+**Status:** Complete
+**Completed:** 2026-08-22
+
+The third MLB pilot slice reads a bounded typed subset of MLB's official versioned game feed for one explicit local event. It appends probable-pitcher identities and handedness plus unavailable, partial, or posted batting orders with player, order, position, and batting-side metadata. Exact semantic retries replay the same stable record; a changed official source update or content appends history.
+
+Persistence revalidates event, home team, away team, and scheduled start under the event-parent lock. Both Pydantic and PostgreSQL constrain a posted order to nine players and bind `complete_for_pregame_model` to two posted orders, two probable pitchers, and source/retrieval timestamps before first pitch. Live and postgame observations remain visible for audit but cannot qualify. “Posted” deliberately does not mean confirmed because MLB lineups remain subject to change.
+
+Validation passed all 439 backend tests against PostgreSQL, including provider, API, replay, identity-reconciliation, and database-invariant cases, plus Ruff, strict mypy, migration upgrade/downgrade, and Alembic drift checks. The feature adds no MLB forecast, opportunity, sizing, risk, execution, settlement, provider account, or order path.
 
 ## Previous-phase schema repair
 
@@ -305,4 +316,4 @@ Final repair validation passed all 415 backend tests against PostgreSQL, Ruff, s
 
 ## Next phase
 
-Continue the bounded MLB pilot with typed official probable-pitcher and confirmed-lineup snapshots, still without enabling MLB forecasts or trading. Phase 12 research/evidence work remains the next broader roadmap milestone.
+Continue the bounded MLB pilot with a typed Baseball Savant / Statcast quantitative feature contract, still without enabling MLB forecasts or trading. Phase 12 research/evidence work remains the next broader roadmap milestone.

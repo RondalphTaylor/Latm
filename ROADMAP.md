@@ -1328,8 +1328,10 @@ Phase 20 is complete when:
 **Implementation status:** In progress. The ingestion foundation adds official read-only MLB team,
 schedule, and result normalization, selectable ingestion, shared persistence, and league-filtered
 reads. The second slice adds exact Kalshi `KXMLBGAME` classification and deterministic MLB
-market-to-game matching. Every MLB match remains research-only and trading-ineligible. MLB feature
-snapshots, forecasting, evidence, opportunities, evaluation, and trading are not implemented.
+market-to-game matching. The third slice adds append-only typed official probable-pitcher and posted
+batting-order observations with explicit pregame/live/postgame provenance. Every MLB match remains
+research-only and trading-ineligible. Statcast features, forecasting, evidence, opportunities,
+evaluation, and trading are not implemented for MLB.
 
 ## Goal
 
@@ -1526,6 +1528,8 @@ Phase 11
 MLB ingestion foundation
 
 MLB market classification and research-only matching
+
+MLB probable-pitcher and posted-lineup snapshots
 ```
 
 The project should not begin with AI agents or real trading.

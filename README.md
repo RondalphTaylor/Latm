@@ -1,6 +1,6 @@
 # LATM Prediction Market Platform
 
-An auditable prediction-market research platform focused initially on NBA markets. The current MVP ingests read-only Kalshi market data and authenticated BALLDONTLIE NBA data, deterministically links supported single-game contracts to normalized events, generates versioned event-level Elo base forecasts from local game history, records research-only YES/NO raw-edge opportunities, produces versioned advisory capital allocations against an isolated paper bankroll, records deterministic paper-only risk decisions, simulates provider-free paper positions, evaluates forecast and trading performance, and exposes the full state through a responsive read-only dashboard. A bounded offseason pilot also ingests official MLB teams, schedules, and results, classifies exact Kalshi MLB game-winner contracts, and matches them to official games for research. MLB forecasting and trading remain disabled.
+An auditable prediction-market research platform focused initially on NBA markets. The current MVP ingests read-only Kalshi market data and authenticated BALLDONTLIE NBA data, deterministically links supported single-game contracts to normalized events, generates versioned event-level Elo base forecasts from local game history, records research-only YES/NO raw-edge opportunities, produces versioned advisory capital allocations against an isolated paper bankroll, records deterministic paper-only risk decisions, simulates provider-free paper positions, evaluates forecast and trading performance, and exposes the full state through a responsive read-only dashboard. A bounded offseason pilot also ingests official MLB teams, schedules, results, probable pitchers, and posted batting orders, classifies exact Kalshi MLB game-winner contracts, and matches them to official games for research. MLB forecasting and trading remain disabled.
 
 > **Trading safety:** the only supported execution mode is `paper`. The Kalshi adapter accesses public production market data without credentials, the BALLDONTLIE key authorizes NBA sports-data reads only, and the MLB adapter uses public official sports data without credentials. None of these adapters contains order placement, financial-account access, or live-trading implementation.
 
@@ -94,6 +94,16 @@ Invoke-RestMethod "http://localhost:8000/events?league=mlb&provider=mlb&start_da
 
 Alternatively, set `SPORTS_DATA_PROVIDER=mlb` to make MLB the ingestion default. `MLB_API_BASE_URL` and `MLB_PROVIDER_REQUEST_INTERVAL_SECONDS` configure the source and conservative pacing. The adapter validates and retains official source snapshots for active teams, scheduled/live/final games, scores, inning state, venue, and series metadata.
 
+After an official MLB event is local, explicitly observe its probable pitchers and batting orders:
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8000/events/<internal-event-uuid>/mlb-lineup-snapshots/ingest"
+Invoke-RestMethod "http://localhost:8000/events/<internal-event-uuid>/mlb-lineup-snapshots"
+Invoke-RestMethod "http://localhost:8000/mlb-lineup-snapshots?observation_phase=pregame&complete_for_pregame_model=true"
+```
+
+These observations come from MLB's official versioned game feed and are append-only. Probable pitchers may be present while either batting order is unavailable; a partially published order is retained as `partial`. A nine-player order is called `posted`, not confirmed, because MLB states that starting lineups are subject to change. `complete_for_pregame_model=true` requires two posted nine-player orders, two probable pitchers, and both the official source update and local retrieval before first pitch. Live and postgame observations remain auditable but are structurally ineligible as pregame model inputs. The endpoint accepts exactly one local event and has no batch, forecast, opportunity, account, or execution control.
+
 Ingest only the exact official Kalshi MLB game-winner series and inspect its typed classifications:
 
 ```powershell
@@ -110,7 +120,7 @@ Invoke-RestMethod -Method Post "http://localhost:8000/matches/run?league=mlb&sta
 Invoke-RestMethod "http://localhost:8000/matches?league=mlb&latest_only=true"
 ```
 
-MLB uses its own aliases and exact first-pitch proximity. A confident MLB decision can be `matched`, but both domain and database invariants require `automatic_trading_eligible=false`. Probable pitchers, confirmed lineups, Statcast features, an MLB forecast model, calibration, opportunities, sizing, risk, and execution have not been implemented for MLB.
+MLB uses its own aliases and exact first-pitch proximity. A confident MLB decision can be `matched`, but both domain and database invariants require `automatic_trading_eligible=false`. Official probable-pitcher and posted-lineup observations are now available for research, but no model consumes them yet. Statcast features, an MLB forecast model, calibration, opportunities, sizing, risk, and execution have not been implemented for MLB.
 
 ## Market-to-event matching
 

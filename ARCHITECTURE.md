@@ -498,10 +498,22 @@ offseason pilot adds a public read-only official MLB Stats API adapter for activ
 schedules, lifecycle state, scores, venue, and series metadata. Both providers persist into the
 same normalized tables with stable provider identities and explicit league values.
 
+MLB probable pitchers and batting orders use a narrower official live-feed adapter contract and an
+append-only `mlb_lineup_snapshots` table rather than mutating `sports_events`. One explicit request
+observes one already-normalized MLB event, then revalidates game, home team, away team, and scheduled
+start under an event-parent lock before insertion. The semantic fingerprint includes the official
+source update and bounded typed payload, so exact retries replay while source changes append history.
+Unavailable and partial orders are preserved. `posted` means exactly nine unique batting slots; it
+does not claim a lineup is final. A snapshot is complete for future pregame-model use only when both
+orders are posted, both probable pitchers exist, and source update plus retrieval precede first pitch.
+Live and postgame records can be audited but cannot qualify as pregame inputs.
+
 This shared storage does not make the downstream pipeline sport-agnostic by implication. The
 matcher now supports separately versioned NBA and MLB alias policies, while the Elo model, forecast
 evaluation, opportunity, risk, and trading services retain their explicit NBA gates. A persisted MLB
 match is always research-only and database-constrained to `automatic_trading_eligible=false`.
+The lineup snapshot slice does not relax any of these downstream gates and no MLB model currently
+reads the new table.
 
 ---
 

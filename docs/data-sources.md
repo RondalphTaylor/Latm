@@ -1267,6 +1267,12 @@ The current MLB pilot uses the official public MLB Stats API:
 https://statsapi.mlb.com/api/v1
 ```
 
+Pregame snapshot ingestion uses the official versioned live-feed surface under:
+
+```text
+https://statsapi.mlb.com/api/v1.1/game/{gamePk}/feed/live
+```
+
 The implemented read-only adapter uses:
 
 ```text
@@ -1286,8 +1292,7 @@ The source progression for an MLB forecast pilot is:
 Implemented:
 Official MLB teams + schedule + results
 
-Next:
-Official starting lineups + probable pitchers
+Official probable-pitcher + posted-lineup snapshots
 
 Then:
 Baseball Savant / Statcast quantitative features
@@ -1304,10 +1309,16 @@ future, other-league, and incomplete-metadata contracts are unsupported. Officia
 may establish the underlying game link, but only Kalshi's typed official resolution can settle the
 financial contract.
 
-MLB.com starting-lineup and probable-pitcher surfaces and Baseball Savant were verified as the
-preferred official inputs, but they are not yet consumed. Each must receive a typed, timestamped
-source contract before it affects a model. Prediction-market prices remain comparison data and must
-not be used as independent factual evidence in the MLB base forecast.
+The probable-pitcher and lineup slice consumes a bounded typed subset of the official MLB versioned
+game feed. It preserves unavailable, partial, and posted orders as append-only observations and
+records source-update, retrieval, scheduled-start, and game-phase provenance. MLB describes posted
+starting lineups as subject to change, so the platform does not call them confirmed. Only a source
+update and retrieval before first pitch with both probable pitchers and two nine-player posted
+orders can be labeled complete for future pregame modeling; no model consumes that flag yet.
+
+Baseball Savant / Statcast remains the next quantitative source and must receive its own typed,
+timestamped contract before it affects a model. Prediction-market prices remain comparison data and
+must not be used as independent factual evidence in the MLB base forecast.
 
 MLB results can evaluate a sports forecast but cannot settle a prediction-market contract. The
 exchange's typed official resolution remains the sole financial settlement authority.
