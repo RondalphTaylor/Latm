@@ -1511,6 +1511,13 @@ test, and untouched prospective-holdout intervals. Random shuffling is forbidden
 and dataset contract only: no fitted coefficients, probability output, or MLB trading eligibility
 exists yet.
 
+Prospective research collection composes the official schedule, lineup, Statcast, and feature
+services for no more than seven calendar days and 25 returned events per invocation. It advances
+only scheduled games strictly before first pitch and stops at incomplete lineups. Canonical dataset
+selection returns at most one labeled vector per event, always preferring operational pregame
+evidence; retrospective fallback is explicit and research-only. These additions still fit no
+coefficients and cannot generate a probability.
+
 ---
 
 # 53. Recommended Development Principle

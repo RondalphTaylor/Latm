@@ -134,14 +134,30 @@ explicit chronological split policy:
 Invoke-RestMethod -Method Post "http://localhost:8000/mlb-dataset-examples/run?game_feature_vector_id=<vector-uuid>&validation_start=2025-07-01T00:00:00Z&test_start=2026-04-01T00:00:00Z&prospective_holdout_start=2026-07-01T00:00:00Z"
 Invoke-RestMethod "http://localhost:8000/mlb-dataset-examples?split_policy_fingerprint=<fingerprint>"
 Invoke-RestMethod "http://localhost:8000/mlb-dataset-readiness?split_policy_fingerprint=<fingerprint>"
+Invoke-RestMethod "http://localhost:8000/mlb-canonical-dataset?split_policy_fingerprint=<fingerprint>"
 ```
 
 The append-only example freezes the final scores, team/event semantics, source observation time and
 raw provider snapshot, vector identity, split boundaries, and all semantic fingerprints. Scheduled,
 live, postponed, scoreless, tied, mismatched, or incomplete-vector inputs fail closed. Inventory
-reports operational and retrospective examples separately and deliberately does not claim to be a
-canonical training dataset: one-vector-per-event selection, minimum sample thresholds, fitting, and
-probability output remain disabled.
+reports operational and retrospective examples separately. The canonical read selects at most one
+example per event, preferring operational pregame provenance and otherwise choosing the newest
+feature/outcome evidence deterministically. Retrospective fallback must be opted into and remains
+research-only. Minimum sample thresholds, fitting, and probability output remain disabled.
+
+Run bounded prospective collection for an explicit schedule window:
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8000/mlb-research-collection/run?start_date=2026-08-23&end_date=2026-08-23&limit=25"
+```
+
+The collector refreshes the official schedule, observes each upcoming game's official lineup, and
+advances only complete pregame lineups through the existing Statcast and feature-vector services.
+It processes at most seven calendar days and 25 returned events per call. Each event reports a
+terminal reason, partial progress is retained, and failures do not cause the collector to invent
+inputs or cross first pitch. There is intentionally no in-process scheduler: invoke this endpoint
+from an external timer near expected lineup publication. It is read-only with respect to providers,
+research-only, emits no probability, and has no account or trading controls.
 
 Ingest only the exact official Kalshi MLB game-winner series and inspect its typed classifications:
 

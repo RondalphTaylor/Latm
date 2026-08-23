@@ -9,7 +9,10 @@ from app.api.mlb_modeling import (
     get_mlb_game_feature_service,
 )
 from app.main import create_app
-from app.services.mlb_modeling.repository import MlbDatasetInventory
+from app.services.mlb_modeling.repository import (
+    MlbCanonicalDatasetSelection,
+    MlbDatasetInventory,
+)
 
 EVENT_ID = UUID("10000000-0000-0000-0000-000000000001")
 
@@ -36,6 +39,17 @@ class InventoryService:
             split_counts={"train": 2, "test": 1},
             operational_split_counts={"test": 1},
             retrospective_split_counts={"train": 2},
+        )
+
+    async def canonical_dataset(self, **kwargs: object) -> MlbCanonicalDatasetSelection:
+        return MlbCanonicalDatasetSelection(
+            split_policy_fingerprint=str(kwargs["split_policy_fingerprint"]),
+            include_retrospective_research=bool(kwargs["include_retrospective_research"]),
+            selected_example_count=0,
+            operational_example_count=0,
+            retrospective_example_count=0,
+            split_counts={},
+            examples=(),
         )
 
 
@@ -109,3 +123,19 @@ def test_dataset_label_boundaries_fail_validation_before_service() -> None:
         response = client.post(f"/mlb-dataset-examples/run?{query}")
 
     assert response.status_code == 422
+
+
+def test_canonical_dataset_contract_remains_non_fitting_and_non_trading() -> None:
+    app = create_app()
+    app.dependency_overrides[get_mlb_game_feature_service] = InventoryService
+    with TestClient(app) as client:
+        response = client.get(f"/mlb-canonical-dataset?split_policy_fingerprint={'a' * 64}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["selected_example_count"] == 0
+    assert body["include_retrospective_research"] is False
+    assert body["canonical_selection_policy"].startswith("one_per_event")
+    assert body["minimum_sample_threshold_approved"] is False
+    assert body["model_fitting_enabled"] is False
+    assert body["automatic_trading_enabled"] is False

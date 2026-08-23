@@ -15,7 +15,10 @@ from app.domain.mlb_modeling import (
     MlbSelectedFeatureValues,
 )
 from app.models.mlb import MlbGameFeatureVectorRecord, MlbLabeledFeatureExampleRecord
-from app.services.mlb_modeling.repository import MlbDatasetInventory
+from app.services.mlb_modeling.repository import (
+    MlbCanonicalDatasetSelection,
+    MlbDatasetInventory,
+)
 
 
 class MlbGameFeatureVectorResponse(BaseModel):
@@ -215,7 +218,8 @@ class MlbDatasetInventoryResponse(BaseModel):
     @classmethod
     def from_inventory(cls, inventory: MlbDatasetInventory) -> MlbDatasetInventoryResponse:
         warnings = [
-            "inventory counts immutable examples; canonical one-vector-per-event selection is not implemented",
+            "inventory counts immutable examples before canonical one-vector-per-event selection",
+            "use /mlb-canonical-dataset for the deterministic modeling view",
             "no minimum sample threshold or fitted MLB model has been approved",
         ]
         if inventory.retrospective_example_count:
@@ -233,6 +237,59 @@ class MlbDatasetInventoryResponse(BaseModel):
             operational_split_counts=inventory.operational_split_counts,
             retrospective_split_counts=inventory.retrospective_split_counts,
             canonical_training_dataset_available=False,
+            model_fitting_enabled=False,
+            probability_generation_enabled=False,
+            automatic_trading_enabled=False,
+            warnings=tuple(warnings),
+        )
+
+
+class MlbCanonicalDatasetResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    split_policy_fingerprint: str
+    include_retrospective_research: bool
+    selected_example_count: int
+    returned_example_count: int
+    operational_example_count: int
+    retrospective_example_count: int
+    split_counts: dict[str, int]
+    examples: tuple[MlbLabeledFeatureExampleResponse, ...]
+    canonical_selection_policy: Literal[
+        "one_per_event_prefer_operational_then_latest_vector_and_outcome"
+    ]
+    minimum_sample_threshold_approved: Literal[False]
+    model_fitting_enabled: Literal[False]
+    probability_generation_enabled: Literal[False]
+    automatic_trading_enabled: Literal[False]
+    warnings: tuple[str, ...]
+
+    @classmethod
+    def from_selection(cls, selection: MlbCanonicalDatasetSelection) -> MlbCanonicalDatasetResponse:
+        warnings = [
+            "selection is deterministic, but minimum sample thresholds and split dates require approval",
+            "no fitted MLB model or probability output exists",
+        ]
+        if selection.include_retrospective_research:
+            warnings.append(
+                "retrospective fallback examples are research-only and cannot establish live performance"
+            )
+        return cls(
+            split_policy_fingerprint=selection.split_policy_fingerprint,
+            include_retrospective_research=selection.include_retrospective_research,
+            selected_example_count=selection.selected_example_count,
+            returned_example_count=len(selection.examples),
+            operational_example_count=selection.operational_example_count,
+            retrospective_example_count=selection.retrospective_example_count,
+            split_counts=selection.split_counts,
+            examples=tuple(
+                MlbLabeledFeatureExampleResponse.from_record(record)
+                for record in selection.examples
+            ),
+            canonical_selection_policy=(
+                "one_per_event_prefer_operational_then_latest_vector_and_outcome"
+            ),
+            minimum_sample_threshold_approved=False,
             model_fitting_enabled=False,
             probability_generation_enabled=False,
             automatic_trading_enabled=False,

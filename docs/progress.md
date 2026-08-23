@@ -363,6 +363,32 @@ successful final-result/replay/inventory path and database safety rejection. Ruf
 linting, strict mypy, migration `0017_mlb_dataset_examples` downgrade/upgrade and Alembic drift
 checks, all 7 frontend tests, frontend lint/type checking, and the production build also passed.
 
+## Offseason MLB bounded collection and canonical dataset
+
+**Status:** Complete
+**Completed:** 2026-08-22
+
+The seventh MLB pilot slice adds a bounded research collector that refreshes one explicit official
+schedule window and advances only upcoming scheduled events through lineup observation, Statcast
+snapshotting, and the fixed eight-feature vector. Calls cover at most seven days and 25 returned
+events. Every event returns an explicit skip, incomplete, success, or safe-failure reason; completed,
+postponed, and first-pitch-reached games never enter the prospective feature path. Existing
+append-only service transactions retain replayable partial progress without creating a batch-level
+all-or-nothing illusion.
+
+Canonical dataset reads now choose at most one immutable labeled example per event. Operational
+pregame evidence is preferred, followed deterministically by the newest vector, official outcome
+observation, label time, and stable identifier. Retrospective fallback requires an explicit flag and
+remains research-only. Raw inventory, canonical selection, fitting, probability generation, and
+trading eligibility remain separate concepts.
+
+The live official-source smoke refreshed all 15 games for August 23, 2026 and appended 15 official
+lineup observations. None had two posted batting orders yet, so all 15 stopped at
+`lineup_incomplete`; zero Statcast snapshots or model vectors were fabricated. The current canonical
+operational labeled dataset therefore remains empty. Minimum sample thresholds, concrete production
+split dates, model fitting, and probability output are still blocked pending sufficient prospective
+data and explicit approval.
+
 ## Previous-phase schema repair
 
 **Status:** Complete
@@ -376,8 +402,9 @@ Final repair validation passed all 415 backend tests against PostgreSQL, Ruff, s
 
 ## Next phase
 
-Add bounded prospective collection orchestration, then choose one canonical complete vector per
-event and approve minimum sample thresholds plus concrete split dates. Only then fit and evaluate
-the regularized logistic baseline. Do not expose an MLB probability until out-of-sample
-discrimination and calibration are reported.
-MLB trading remains disabled. Phase 12 research/evidence work remains the next broader roadmap milestone.
+Continue invoking bounded prospective collection near official lineup publication and label those
+vectors after final results. Once the canonical operational sample is non-empty, approve minimum
+sample thresholds plus concrete split dates, then fit and evaluate the regularized logistic
+baseline. Do not expose an MLB probability until out-of-sample discrimination and calibration are
+reported. MLB trading remains disabled. Phase 12 research/evidence work remains the next broader
+roadmap milestone.

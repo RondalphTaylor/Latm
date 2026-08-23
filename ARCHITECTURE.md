@@ -538,8 +538,21 @@ locks the mutable normalized event parent, captures database time after the lock
 decisive official score, then freezes the event/source snapshot, exact vector, split boundaries, and
 fingerprints in one transaction. Result corrections append a new semantic fact rather than mutating
 old evidence. Dataset inventory is always keyed by one split-policy fingerprint and separates
-operational from retrospective provenance. It reports duplicate-event examples and explicitly does
-not select a canonical vector, declare a minimum sample size, fit coefficients, or emit a probability.
+operational from retrospective provenance. It reports duplicate-event examples without treating raw
+history as a training set.
+
+The bounded prospective collector is an orchestration layer over the existing official schedule,
+lineup, Statcast, and game-feature services. It accepts at most seven calendar days, returns at most
+25 events per call, and advances only scheduled games strictly before first pitch. Each underlying
+append is independently transactional, so an interrupted batch retains auditable partial progress
+and can be replayed safely. The application does not contain a scheduler; an external timer must
+invoke collection near lineup publication.
+
+Canonical dataset reads rank immutable labeled examples within each event. Operational pregame
+evidence always outranks retrospective evidence, followed by newest feature build, official outcome
+observation, label time, and stable ID. Retrospective fallback is explicit and research-only. The
+selection is deterministic and paginated, but it still declares no approved sample minimum, fits no
+coefficients, and emits no probability.
 
 This shared storage does not make the downstream pipeline sport-agnostic by implication. The
 matcher now supports separately versioned NBA and MLB alias policies, while the Elo model, forecast

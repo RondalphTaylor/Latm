@@ -5,9 +5,10 @@ from datetime import datetime
 from typing import cast
 from uuid import UUID, uuid5
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.selectable import Subquery
 
 from app.domain.mlb_modeling import (
     MlbChronologicalDatasetPolicy,
@@ -54,6 +55,17 @@ class MlbDatasetInventory:
     split_counts: dict[str, int]
     operational_split_counts: dict[str, int]
     retrospective_split_counts: dict[str, int]
+
+
+@dataclass(frozen=True)
+class MlbCanonicalDatasetSelection:
+    split_policy_fingerprint: str
+    include_retrospective_research: bool
+    selected_example_count: int
+    operational_example_count: int
+    retrospective_example_count: int
+    split_counts: dict[str, int]
+    examples: tuple[MlbLabeledFeatureExampleRecord, ...]
 
 
 class MlbGameFeatureRepository:
@@ -398,4 +410,107 @@ class MlbGameFeatureRepository:
             split_counts=split_counts,
             operational_split_counts=operational_counts,
             retrospective_split_counts=retrospective_counts,
+        )
+
+    @staticmethod
+    def _canonical_example_ranking(
+        *, split_policy_fingerprint: str, include_retrospective_research: bool
+    ) -> Subquery:
+        priority = case(
+            (MlbLabeledFeatureExampleRecord.availability_basis == "operational_pregame", 0),
+            else_=1,
+        )
+        statement = (
+            select(
+                MlbLabeledFeatureExampleRecord.id.label("example_id"),
+                MlbLabeledFeatureExampleRecord.availability_basis.label("availability_basis"),
+                MlbLabeledFeatureExampleRecord.split.label("split"),
+                func.row_number()
+                .over(
+                    partition_by=MlbLabeledFeatureExampleRecord.sports_event_id,
+                    order_by=(
+                        priority,
+                        MlbGameFeatureVectorRecord.built_at.desc(),
+                        MlbLabeledFeatureExampleRecord.outcome_source_last_seen_at.desc(),
+                        MlbLabeledFeatureExampleRecord.labeled_at.desc(),
+                        MlbLabeledFeatureExampleRecord.id.desc(),
+                    ),
+                )
+                .label("row_number"),
+            )
+            .join(
+                MlbGameFeatureVectorRecord,
+                MlbGameFeatureVectorRecord.id
+                == MlbLabeledFeatureExampleRecord.game_feature_vector_id,
+            )
+            .where(
+                MlbLabeledFeatureExampleRecord.split_policy_fingerprint == split_policy_fingerprint
+            )
+        )
+        if not include_retrospective_research:
+            statement = statement.where(
+                MlbLabeledFeatureExampleRecord.availability_basis == "operational_pregame"
+            )
+        return statement.subquery()
+
+    async def canonical_dataset(
+        self,
+        *,
+        split_policy_fingerprint: str,
+        include_retrospective_research: bool,
+        limit: int,
+        offset: int,
+    ) -> MlbCanonicalDatasetSelection:
+        """Select one deterministic current candidate per event, preferring operational data."""
+        ranked = self._canonical_example_ranking(
+            split_policy_fingerprint=split_policy_fingerprint,
+            include_retrospective_research=include_retrospective_research,
+        )
+        count_rows = (
+            await self._session.execute(
+                select(
+                    ranked.c.availability_basis,
+                    ranked.c.split,
+                    func.count(ranked.c.example_id),
+                )
+                .where(ranked.c.row_number == 1)
+                .group_by(ranked.c.availability_basis, ranked.c.split)
+            )
+        ).all()
+        records = list(
+            (
+                await self._session.scalars(
+                    select(MlbLabeledFeatureExampleRecord)
+                    .join(ranked, ranked.c.example_id == MlbLabeledFeatureExampleRecord.id)
+                    .where(ranked.c.row_number == 1)
+                    .order_by(
+                        MlbLabeledFeatureExampleRecord.scheduled_start_time,
+                        MlbLabeledFeatureExampleRecord.sports_event_id,
+                    )
+                    .limit(limit)
+                    .offset(offset)
+                )
+            )
+            .unique()
+            .all()
+        )
+        split_counts: dict[str, int] = {}
+        operational = 0
+        retrospective = 0
+        for basis, split, count in count_rows:
+            amount = int(count)
+            split_name = str(split)
+            split_counts[split_name] = split_counts.get(split_name, 0) + amount
+            if basis == "operational_pregame":
+                operational += amount
+            else:
+                retrospective += amount
+        return MlbCanonicalDatasetSelection(
+            split_policy_fingerprint=split_policy_fingerprint,
+            include_retrospective_research=include_retrospective_research,
+            selected_example_count=operational + retrospective,
+            operational_example_count=operational,
+            retrospective_example_count=retrospective,
+            split_counts=split_counts,
+            examples=tuple(records),
         )

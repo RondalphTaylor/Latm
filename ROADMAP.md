@@ -1336,8 +1336,10 @@ research-only and trading-ineligible. The fifth slice adds an append-only eight-
 vector and a pure chronological train/validation/test/prospective-holdout contract. It deliberately
 fits no coefficients and emits no probability. The sixth slice freezes official final outcomes
 against exact vectors and reports operational versus retrospective dataset inventory without
-claiming training readiness. Evidence, opportunities, evaluation, and trading are not implemented
-for MLB.
+claiming training readiness. The seventh slice adds bounded prospective collection and deterministic
+one-vector-per-event canonical selection. The local dataset still has no operational labeled sample,
+so minimum-sample approval, fitting, and out-of-sample evaluation remain blocked. Evidence,
+opportunities, evaluation, and trading are not implemented for MLB.
 
 ## Goal
 

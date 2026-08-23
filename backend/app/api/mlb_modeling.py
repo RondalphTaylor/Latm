@@ -16,6 +16,7 @@ from app.domain.mlb_modeling import (
 )
 from app.domain.mlb_statcast import MlbStatcastObservationBasis
 from app.schemas.mlb_modeling import (
+    MlbCanonicalDatasetResponse,
     MlbDatasetInventoryResponse,
     MlbDatasetLabelResponse,
     MlbGameFeatureBuildResponse,
@@ -188,6 +189,23 @@ async def get_mlb_dataset_readiness(
 ) -> MlbDatasetInventoryResponse:
     inventory = await service.inventory(split_policy_fingerprint)
     return MlbDatasetInventoryResponse.from_inventory(inventory)
+
+
+@router.get("/mlb-canonical-dataset", response_model=MlbCanonicalDatasetResponse)
+async def get_mlb_canonical_dataset(
+    split_policy_fingerprint: Annotated[str, Query(pattern=r"^[0-9a-f]{64}$")],
+    service: Annotated[MlbGameFeatureService, Depends(get_mlb_game_feature_service)],
+    include_retrospective_research: Annotated[bool, Query()] = False,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> MlbCanonicalDatasetResponse:
+    selection = await service.canonical_dataset(
+        split_policy_fingerprint=split_policy_fingerprint,
+        include_retrospective_research=include_retrospective_research,
+        limit=limit,
+        offset=offset,
+    )
+    return MlbCanonicalDatasetResponse.from_selection(selection)
 
 
 @router.get(

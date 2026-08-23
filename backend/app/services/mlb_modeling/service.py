@@ -22,7 +22,11 @@ from app.services.mlb_modeling.engine import (
     DeterministicMlbDatasetContract,
     DeterministicMlbGameFeatureEngine,
 )
-from app.services.mlb_modeling.repository import MlbDatasetInventory, MlbGameFeatureRepository
+from app.services.mlb_modeling.repository import (
+    MlbCanonicalDatasetSelection,
+    MlbDatasetInventory,
+    MlbGameFeatureRepository,
+)
 
 
 @dataclass(frozen=True)
@@ -176,3 +180,18 @@ class MlbGameFeatureService:
 
     async def inventory(self, split_policy_fingerprint: str) -> MlbDatasetInventory:
         return await self._repository.dataset_inventory(split_policy_fingerprint)
+
+    async def canonical_dataset(
+        self,
+        *,
+        split_policy_fingerprint: str,
+        include_retrospective_research: bool,
+        limit: int,
+        offset: int,
+    ) -> MlbCanonicalDatasetSelection:
+        return await self._repository.canonical_dataset(
+            split_policy_fingerprint=split_policy_fingerprint,
+            include_retrospective_research=include_retrospective_research,
+            limit=limit,
+            offset=offset,
+        )

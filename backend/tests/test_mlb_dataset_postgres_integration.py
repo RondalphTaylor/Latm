@@ -267,6 +267,12 @@ async def _run_integration() -> None:
                 first = await service.label(vector_id=VECTOR_ID, split_policy=split_policy)
                 replay = await service.label(vector_id=VECTOR_ID, split_policy=split_policy)
                 inventory = await service.inventory(first.example.split_policy_fingerprint)
+                canonical = await service.canonical_dataset(
+                    split_policy_fingerprint=first.example.split_policy_fingerprint,
+                    include_retrospective_research=False,
+                    limit=100,
+                    offset=0,
+                )
 
                 assert first.created is True
                 assert replay.created is False
@@ -276,6 +282,9 @@ async def _run_integration() -> None:
                 assert inventory.example_count == 1
                 assert inventory.operational_example_count == 1
                 assert inventory.retrospective_example_count == 0
+                assert canonical.selected_example_count == 1
+                assert canonical.operational_example_count == 1
+                assert canonical.examples[0].id == first.example.id
 
                 with pytest.raises(IntegrityError):
                     async with session.begin_nested():
