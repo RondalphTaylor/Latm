@@ -11,6 +11,7 @@ from app.models.markets import (
 from app.models.matching import MarketEventMatchRecord
 from app.models.mlb import (
     MlbGameFeatureVectorRecord,
+    MlbLabeledFeatureExampleRecord,
     MlbLineupSnapshotRecord,
     MlbStatcastFeatureSnapshotRecord,
 )
@@ -37,6 +38,7 @@ __all__ = [
     "MlbLineupSnapshotRecord",
     "MlbStatcastFeatureSnapshotRecord",
     "MlbGameFeatureVectorRecord",
+    "MlbLabeledFeatureExampleRecord",
     "ModelVersionRecord",
     "OpportunityRecord",
     "PortfolioRecord",

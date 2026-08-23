@@ -1,16 +1,26 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
-from app.domain.mlb_modeling import MlbFeatureSelectionPolicy
+from app.domain.mlb_modeling import (
+    MlbChronologicalDatasetPolicy,
+    MlbDatasetSplit,
+    MlbFeatureSelectionPolicy,
+)
+from app.domain.mlb_statcast import MlbStatcastObservationBasis
 from app.schemas.mlb_modeling import (
+    MlbDatasetInventoryResponse,
+    MlbDatasetLabelResponse,
     MlbGameFeatureBuildResponse,
     MlbGameFeatureVectorResponse,
+    MlbLabeledFeatureExampleResponse,
     MlbModelDesignResponse,
 )
 from app.services.mlb_modeling.engine import DeterministicMlbGameFeatureEngine
@@ -111,3 +121,84 @@ async def get_mlb_game_feature_vector(
 async def get_mlb_model_design() -> MlbModelDesignResponse:
     """Expose the frozen candidate contract and explicit disabled capabilities."""
     return MlbModelDesignResponse.current()
+
+
+@router.post("/mlb-dataset-examples/run", response_model=MlbDatasetLabelResponse)
+async def label_mlb_dataset_example(
+    game_feature_vector_id: Annotated[UUID, Query()],
+    validation_start: Annotated[datetime, Query()],
+    test_start: Annotated[datetime, Query()],
+    prospective_holdout_start: Annotated[datetime, Query()],
+    service: Annotated[MlbGameFeatureService, Depends(get_mlb_game_feature_service)],
+) -> MlbDatasetLabelResponse:
+    """Freeze one official final result; this does not fit or run a model."""
+    try:
+        result = await service.label(
+            vector_id=game_feature_vector_id,
+            split_policy=MlbChronologicalDatasetPolicy(
+                validation_start=validation_start,
+                test_start=test_start,
+                prospective_holdout_start=prospective_holdout_start,
+            ),
+        )
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except (ValueError, MlbGameFeatureConflictError) as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return MlbDatasetLabelResponse(
+        created=result.created,
+        example=MlbLabeledFeatureExampleResponse.from_record(result.example),
+    )
+
+
+@router.get(
+    "/mlb-dataset-examples",
+    response_model=list[MlbLabeledFeatureExampleResponse],
+)
+async def list_mlb_dataset_examples(
+    repository: Annotated[MlbGameFeatureRepository, Depends(get_mlb_game_feature_repository)],
+    sports_event_id: Annotated[UUID | None, Query()] = None,
+    game_feature_vector_id: Annotated[UUID | None, Query()] = None,
+    split_policy_fingerprint: Annotated[str | None, Query(pattern=r"^[0-9a-f]{64}$")] = None,
+    availability_basis: Annotated[MlbStatcastObservationBasis | None, Query()] = None,
+    split: Annotated[MlbDatasetSplit | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[MlbLabeledFeatureExampleResponse]:
+    records = await repository.list_labeled_examples(
+        sports_event_id=sports_event_id,
+        game_feature_vector_id=game_feature_vector_id,
+        split_policy_fingerprint=split_policy_fingerprint,
+        availability_basis=(availability_basis.value if availability_basis is not None else None),
+        split=(split.value if split is not None else None),
+        limit=limit,
+        offset=offset,
+    )
+    return [MlbLabeledFeatureExampleResponse.from_record(record) for record in records]
+
+
+@router.get("/mlb-dataset-readiness", response_model=MlbDatasetInventoryResponse)
+async def get_mlb_dataset_readiness(
+    split_policy_fingerprint: Annotated[str, Query(pattern=r"^[0-9a-f]{64}$")],
+    service: Annotated[MlbGameFeatureService, Depends(get_mlb_game_feature_service)],
+) -> MlbDatasetInventoryResponse:
+    inventory = await service.inventory(split_policy_fingerprint)
+    return MlbDatasetInventoryResponse.from_inventory(inventory)
+
+
+@router.get(
+    "/mlb-dataset-examples/{example_id}",
+    response_model=MlbLabeledFeatureExampleResponse,
+)
+async def get_mlb_dataset_example(
+    example_id: UUID,
+    repository: Annotated[MlbGameFeatureRepository, Depends(get_mlb_game_feature_repository)],
+) -> MlbLabeledFeatureExampleResponse:
+    record = await repository.get_labeled_example(example_id)
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="example not found")
+    return MlbLabeledFeatureExampleResponse.from_record(record)

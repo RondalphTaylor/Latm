@@ -238,6 +238,11 @@ class MlbGameFeatureVectorRecord(Base):
             "input_fingerprint",
             name="uq_mlb_game_feature_vectors_semantic_input",
         ),
+        UniqueConstraint(
+            "id",
+            "sports_event_id",
+            name="uq_mlb_game_feature_vectors_id_event",
+        ),
         ForeignKeyConstraint(
             ["statcast_snapshot_id", "sports_event_id", "lineup_snapshot_id"],
             [
@@ -336,3 +341,121 @@ class MlbGameFeatureVectorRecord(Base):
         lazy="joined",
         overlaps="sports_event",
     )
+
+
+class MlbLabeledFeatureExampleRecord(Base):
+    """Append-only official outcome label for one exact MLB feature vector."""
+
+    __tablename__ = "mlb_labeled_feature_examples"
+    __table_args__ = (
+        UniqueConstraint(
+            "game_feature_vector_id",
+            "split_policy_fingerprint",
+            "outcome_fingerprint",
+            name="uq_mlb_labeled_feature_examples_semantic_input",
+        ),
+        ForeignKeyConstraint(
+            ["game_feature_vector_id", "sports_event_id"],
+            ["mlb_game_feature_vectors.id", "mlb_game_feature_vectors.sports_event_id"],
+            name="fk_mlb_labeled_feature_examples_vector_event",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint("outcome_status = 'final'", name="ck_mlb_labeled_examples_final"),
+        CheckConstraint(
+            "home_score >= 0 AND away_score >= 0 AND home_score <> away_score",
+            name="ck_mlb_labeled_examples_score",
+        ),
+        CheckConstraint(
+            "home_won = (home_score > away_score)", name="ck_mlb_labeled_examples_winner"
+        ),
+        CheckConstraint(
+            "availability_basis IN ('operational_pregame', 'retrospective') "
+            "AND split IN ('train', 'validation', 'test', 'prospective_holdout')",
+            name="ck_mlb_labeled_examples_roles",
+        ),
+        CheckConstraint(
+            "validation_start < test_start AND test_start < prospective_holdout_start",
+            name="ck_mlb_labeled_examples_boundaries",
+        ),
+        CheckConstraint(
+            "(split = 'train' AND scheduled_start_time < validation_start) OR "
+            "(split = 'validation' AND scheduled_start_time >= validation_start "
+            "AND scheduled_start_time < test_start) OR "
+            "(split = 'test' AND scheduled_start_time >= test_start "
+            "AND scheduled_start_time < prospective_holdout_start) OR "
+            "(split = 'prospective_holdout' "
+            "AND scheduled_start_time >= prospective_holdout_start)",
+            name="ck_mlb_labeled_examples_split",
+        ),
+        CheckConstraint(
+            "outcome_source_last_seen_at >= scheduled_start_time "
+            "AND labeled_at >= outcome_source_last_seen_at",
+            name="ck_mlb_labeled_examples_timing",
+        ),
+        CheckConstraint(
+            "research_only = true AND probability_generated = false "
+            "AND automatic_trading_eligible = false",
+            name="ck_mlb_labeled_examples_safety",
+        ),
+        CheckConstraint(
+            "feature_vector_input_fingerprint ~ '^[0-9a-f]{64}$' "
+            "AND feature_policy_fingerprint ~ '^[0-9a-f]{64}$' "
+            "AND split_policy_fingerprint ~ '^[0-9a-f]{64}$' "
+            "AND outcome_fingerprint ~ '^[0-9a-f]{64}$' "
+            "AND example_fingerprint ~ '^[0-9a-f]{64}$'",
+            name="ck_mlb_labeled_examples_fingerprints",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(outcome_source_snapshot) = 'object'",
+            name="ck_mlb_labeled_examples_source_snapshot",
+        ),
+        Index(
+            "ix_mlb_labeled_examples_policy_split_start",
+            "split_policy_fingerprint",
+            "split",
+            "scheduled_start_time",
+        ),
+        Index(
+            "ix_mlb_labeled_examples_event_labeled",
+            "sports_event_id",
+            "labeled_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    game_feature_vector_id: Mapped[UUID] = mapped_column(nullable=False)
+    sports_event_id: Mapped[UUID] = mapped_column(
+        ForeignKey("sports_events.id", ondelete="RESTRICT"), nullable=False
+    )
+    feature_vector_input_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    feature_policy_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    availability_basis: Mapped[str] = mapped_column(String(30), nullable=False)
+    scheduled_start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    outcome_status: Mapped[str] = mapped_column(String(30), nullable=False)
+    home_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    away_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    home_won: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    outcome_source_last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    outcome_source_snapshot: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    split: Mapped[str] = mapped_column(String(30), nullable=False)
+    split_policy_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    split_policy_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    validation_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    test_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    prospective_holdout_start: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    split_policy_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    outcome_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    example_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    labeled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    research_only: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    probability_generated: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    automatic_trading_eligible: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+    feature_vector: Mapped[MlbGameFeatureVectorRecord] = relationship(
+        lazy="joined", overlaps="sports_event"
+    )
+    sports_event: Mapped[SportsEventRecord] = relationship(lazy="joined")

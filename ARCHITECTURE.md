@@ -533,12 +533,20 @@ inputs. The versioned dataset contract partitions by scheduled start time, never
 and labels only exact official final results. This layer contains no fitted parameters, probability,
 market price, opportunity, or execution dependency.
 
+Official MLB outcome labels are separate append-only `mlb_labeled_feature_examples`. The service
+locks the mutable normalized event parent, captures database time after the lock, requires a final
+decisive official score, then freezes the event/source snapshot, exact vector, split boundaries, and
+fingerprints in one transaction. Result corrections append a new semantic fact rather than mutating
+old evidence. Dataset inventory is always keyed by one split-policy fingerprint and separates
+operational from retrospective provenance. It reports duplicate-event examples and explicitly does
+not select a canonical vector, declare a minimum sample size, fit coefficients, or emit a probability.
+
 This shared storage does not make the downstream pipeline sport-agnostic by implication. The
 matcher now supports separately versioned NBA and MLB alias policies, while the Elo model, forecast
 evaluation, opportunity, risk, and trading services retain their explicit NBA gates. A persisted MLB
 match is always research-only and database-constrained to `automatic_trading_eligible=false`.
-The lineup, Statcast, and derived-vector slices do not relax any downstream gate. There is still no
-fitted MLB model and no MLB probability enters the opportunity or trading pipeline.
+The lineup, Statcast, derived-vector, and labeled-example slices do not relax any downstream gate.
+There is still no fitted MLB model and no MLB probability enters the opportunity or trading pipeline.
 
 ---
 

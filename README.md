@@ -127,6 +127,22 @@ Invoke-RestMethod "http://localhost:8000/mlb-model-design"
 
 V1 selects eight Decimal differences: four sample-weighted lineup measures (observed wOBA, expected wOBA on contact, hard-hit rate, and barrel rate) in home-minus-away orientation, and the same four starting-pitcher allowed measures in away-minus-home orientation. Positive values therefore consistently favor the home team. Every feature requires complete nine-batter coverage or a non-null starter measure; missing inputs remain null and block operational eligibility. The append-only record preserves side metrics, denominators, missingness, exact lineup/Statcast lineage, and policy/source/input fingerprints. The separate dataset contract assigns train, validation, test, and prospective holdout roles strictly by scheduled first pitch with no random shuffle, and accepts labels only from an exact official final result. No coefficients have been fitted and the API explicitly reports `fitted_model_available=false`, `probability_generation_enabled=false`, and `automatic_trading_enabled=false`.
 
+After the normalized official event is final, freeze its result against one exact vector and one
+explicit chronological split policy:
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8000/mlb-dataset-examples/run?game_feature_vector_id=<vector-uuid>&validation_start=2025-07-01T00:00:00Z&test_start=2026-04-01T00:00:00Z&prospective_holdout_start=2026-07-01T00:00:00Z"
+Invoke-RestMethod "http://localhost:8000/mlb-dataset-examples?split_policy_fingerprint=<fingerprint>"
+Invoke-RestMethod "http://localhost:8000/mlb-dataset-readiness?split_policy_fingerprint=<fingerprint>"
+```
+
+The append-only example freezes the final scores, team/event semantics, source observation time and
+raw provider snapshot, vector identity, split boundaries, and all semantic fingerprints. Scheduled,
+live, postponed, scoreless, tied, mismatched, or incomplete-vector inputs fail closed. Inventory
+reports operational and retrospective examples separately and deliberately does not claim to be a
+canonical training dataset: one-vector-per-event selection, minimum sample thresholds, fitting, and
+probability output remain disabled.
+
 Ingest only the exact official Kalshi MLB game-winner series and inspect its typed classifications:
 
 ```powershell

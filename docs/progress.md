@@ -340,6 +340,29 @@ Final validation passed all 479 backend tests with PostgreSQL integrations enabl
 and linting, strict mypy, migration `0016_mlb_game_features` downgrade/upgrade and Alembic drift
 checks, all 7 frontend tests, frontend lint/type checking, and the production build.
 
+## Offseason MLB official outcome labels and dataset inventory
+
+**Status:** Complete
+**Completed:** 2026-08-22
+
+The sixth MLB pilot slice adds immutable official final-result labels for one exact feature vector
+under caller-supplied, fingerprinted chronological split boundaries. Event-parent locking prevents a
+result update from crossing the labeling transaction. Each row freezes scores, winner, source time
+and payload, vector and feature-policy identity, split assignment, and outcome/example fingerprints.
+Semantic replay returns the original stable record while a corrected official result can append new
+evidence.
+
+Read APIs expose label history and an inventory keyed by split-policy fingerprint. Counts separate
+operational pregame from retrospective examples, report duplicate-event rows, and keep canonical
+dataset selection, fitting, probability generation, and trading disabled. The official local smoke
+attempted to label game 823509 while its normalized status remained scheduled and scoreless; the
+service correctly returned `409` and persisted no label instead of inventing an outcome.
+
+Final validation passed all 482 backend tests with PostgreSQL integrations enabled, including the
+successful final-result/replay/inventory path and database safety rejection. Ruff formatting and
+linting, strict mypy, migration `0017_mlb_dataset_examples` downgrade/upgrade and Alembic drift
+checks, all 7 frontend tests, frontend lint/type checking, and the production build also passed.
+
 ## Previous-phase schema repair
 
 **Status:** Complete
@@ -353,7 +376,8 @@ Final repair validation passed all 415 backend tests against PostgreSQL, Ruff, s
 
 ## Next phase
 
-Collect a sufficiently broad set of operational pregame snapshots and official completed outcomes,
-then freeze concrete chronological split dates and fit/evaluate the regularized logistic baseline.
-Do not expose an MLB probability until out-of-sample discrimination and calibration are reported.
+Add bounded prospective collection orchestration, then choose one canonical complete vector per
+event and approve minimum sample thresholds plus concrete split dates. Only then fit and evaluate
+the regularized logistic baseline. Do not expose an MLB probability until out-of-sample
+discrimination and calibration are reported.
 MLB trading remains disabled. Phase 12 research/evidence work remains the next broader roadmap milestone.

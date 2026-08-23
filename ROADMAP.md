@@ -1334,8 +1334,10 @@ append-only, exact-lineup-linked 30-day Baseball Savant / Statcast quantitative 
 typed source rows and explicit operational-versus-retrospective eligibility. Every MLB match remains
 research-only and trading-ineligible. The fifth slice adds an append-only eight-feature matchup
 vector and a pure chronological train/validation/test/prospective-holdout contract. It deliberately
-fits no coefficients and emits no probability. Evidence, opportunities, evaluation, and trading
-are not implemented for MLB.
+fits no coefficients and emits no probability. The sixth slice freezes official final outcomes
+against exact vectors and reports operational versus retrospective dataset inventory without
+claiming training readiness. Evidence, opportunities, evaluation, and trading are not implemented
+for MLB.
 
 ## Goal
 

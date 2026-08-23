@@ -1,19 +1,21 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
 from app.domain.mlb_modeling import (
     SELECTED_MLB_FEATURES,
+    MlbDatasetSplit,
     MlbMatchupFeatureCoverage,
     MlbMatchupSourceMetrics,
     MlbSelectedFeatureName,
     MlbSelectedFeatureValues,
 )
-from app.models.mlb import MlbGameFeatureVectorRecord
+from app.models.mlb import MlbGameFeatureVectorRecord, MlbLabeledFeatureExampleRecord
+from app.services.mlb_modeling.repository import MlbDatasetInventory
 
 
 class MlbGameFeatureVectorResponse(BaseModel):
@@ -119,4 +121,120 @@ class MlbModelDesignResponse(BaseModel):
             fitted_model_available=False,
             probability_generation_enabled=False,
             automatic_trading_enabled=False,
+        )
+
+
+class MlbLabeledFeatureExampleResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: UUID
+    game_feature_vector_id: UUID
+    sports_event_id: UUID
+    feature_vector_input_fingerprint: str
+    feature_policy_fingerprint: str
+    availability_basis: str
+    scheduled_start_time: datetime
+    outcome_status: Literal["final"]
+    home_score: int
+    away_score: int
+    home_won: bool
+    outcome_source_last_seen_at: datetime
+    outcome_source_snapshot: dict[str, Any]
+    split: MlbDatasetSplit
+    split_policy_name: str
+    split_policy_version: str
+    validation_start: datetime
+    test_start: datetime
+    prospective_holdout_start: datetime
+    split_policy_fingerprint: str
+    outcome_fingerprint: str
+    example_fingerprint: str
+    labeled_at: datetime
+    research_only: Literal[True]
+    probability_generated: Literal[False]
+    automatic_trading_eligible: Literal[False]
+
+    @classmethod
+    def from_record(
+        cls, record: MlbLabeledFeatureExampleRecord
+    ) -> MlbLabeledFeatureExampleResponse:
+        return cls(
+            id=record.id,
+            game_feature_vector_id=record.game_feature_vector_id,
+            sports_event_id=record.sports_event_id,
+            feature_vector_input_fingerprint=record.feature_vector_input_fingerprint,
+            feature_policy_fingerprint=record.feature_policy_fingerprint,
+            availability_basis=record.availability_basis,
+            scheduled_start_time=record.scheduled_start_time,
+            outcome_status=record.outcome_status,
+            home_score=record.home_score,
+            away_score=record.away_score,
+            home_won=record.home_won,
+            outcome_source_last_seen_at=record.outcome_source_last_seen_at,
+            outcome_source_snapshot=record.outcome_source_snapshot,
+            split=MlbDatasetSplit(record.split),
+            split_policy_name=record.split_policy_name,
+            split_policy_version=record.split_policy_version,
+            validation_start=record.validation_start,
+            test_start=record.test_start,
+            prospective_holdout_start=record.prospective_holdout_start,
+            split_policy_fingerprint=record.split_policy_fingerprint,
+            outcome_fingerprint=record.outcome_fingerprint,
+            example_fingerprint=record.example_fingerprint,
+            labeled_at=record.labeled_at,
+            research_only=record.research_only,
+            probability_generated=record.probability_generated,
+            automatic_trading_eligible=record.automatic_trading_eligible,
+        )
+
+
+class MlbDatasetLabelResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    created: bool
+    example: MlbLabeledFeatureExampleResponse
+
+
+class MlbDatasetInventoryResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    split_policy_fingerprint: str
+    example_count: int
+    unique_event_count: int
+    duplicate_event_example_count: int
+    operational_example_count: int
+    retrospective_example_count: int
+    split_counts: dict[str, int]
+    operational_split_counts: dict[str, int]
+    retrospective_split_counts: dict[str, int]
+    canonical_training_dataset_available: Literal[False]
+    model_fitting_enabled: Literal[False]
+    probability_generation_enabled: Literal[False]
+    automatic_trading_enabled: Literal[False]
+    warnings: tuple[str, ...]
+
+    @classmethod
+    def from_inventory(cls, inventory: MlbDatasetInventory) -> MlbDatasetInventoryResponse:
+        warnings = [
+            "inventory counts immutable examples; canonical one-vector-per-event selection is not implemented",
+            "no minimum sample threshold or fitted MLB model has been approved",
+        ]
+        if inventory.retrospective_example_count:
+            warnings.append(
+                "retrospective examples are reported separately and cannot establish live pregame performance"
+            )
+        return cls(
+            split_policy_fingerprint=inventory.split_policy_fingerprint,
+            example_count=inventory.example_count,
+            unique_event_count=inventory.unique_event_count,
+            duplicate_event_example_count=(inventory.example_count - inventory.unique_event_count),
+            operational_example_count=inventory.operational_example_count,
+            retrospective_example_count=inventory.retrospective_example_count,
+            split_counts=inventory.split_counts,
+            operational_split_counts=inventory.operational_split_counts,
+            retrospective_split_counts=inventory.retrospective_split_counts,
+            canonical_training_dataset_available=False,
+            model_fitting_enabled=False,
+            probability_generation_enabled=False,
+            automatic_trading_enabled=False,
+            warnings=tuple(warnings),
         )
