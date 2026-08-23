@@ -1339,8 +1339,10 @@ against exact vectors and reports operational versus retrospective dataset inven
 claiming training readiness. The seventh slice adds bounded prospective collection and deterministic
 one-vector-per-event canonical selection. The eighth slice freezes the user-approved 500/150/150/200
 chronological readiness policy and adds bounded, explicitly retrospective completed-game backfill.
-The operational prospective holdout still has no labeled sample, so fitting and out-of-sample
-evaluation remain disabled. Evidence,
+The ninth slice implements the dependency-free, deterministic regularized-logistic fitting and
+untouched-test evaluation engine, but the live readiness gate prevents it from fitting the
+undersized dataset. The operational prospective holdout still has no labeled sample, so model
+persistence and probability publication remain disabled. Evidence,
 opportunities, evaluation, and trading are not implemented for MLB.
 
 ## Goal

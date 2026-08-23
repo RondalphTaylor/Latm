@@ -566,6 +566,14 @@ and the resulting vector and label stay ineligible for operational use. Each cal
 seven dates and ten returned events, using the same append-only lineage and official final-result
 checks as explicit single-record ingestion.
 
+The research-only MLB fitter is a dependency-free deterministic L2 logistic implementation over the
+fixed eight-feature order. It learns population means and scales only from each fitting prefix,
+fits ascending regularization candidates with Newton updates, selects by validation mean Brier
+score, then refits the selected strength on train plus validation and evaluates the untouched test
+split. It fingerprints policy, ordered example evidence, and coefficients. Prospective-holdout rows
+are rejected from fitting. The current preview service is hard-gated by approved readiness and does
+not persist or publish its artifact.
+
 This shared storage does not make the downstream pipeline sport-agnostic by implication. The
 matcher now supports separately versioned NBA and MLB alias policies, while the Elo model, forecast
 evaluation, opportunity, risk, and trading services retain their explicit NBA gates. A persisted MLB

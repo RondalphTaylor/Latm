@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "latm-backend"
-version = "0.11.9"
+version = "0.11.10"
 description = "Backend for the LATM prediction-market research platform."
 requires-python = ">=3.13,<3.14"
 dependencies = [

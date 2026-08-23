@@ -136,6 +136,7 @@ Invoke-RestMethod "http://localhost:8000/mlb-dataset-examples?split_policy_finge
 Invoke-RestMethod "http://localhost:8000/mlb-dataset-readiness?split_policy_fingerprint=<fingerprint>"
 Invoke-RestMethod "http://localhost:8000/mlb-canonical-dataset?split_policy_fingerprint=<fingerprint>"
 Invoke-RestMethod "http://localhost:8000/mlb-approved-dataset-readiness"
+Invoke-RestMethod "http://localhost:8000/mlb-logistic-fitting-design"
 ```
 
 The append-only example freezes the final scores, team/event semantics, source observation time and
@@ -176,6 +177,19 @@ postgame, but the resulting Statcast snapshot, vector, and label are permanently
 research-only. Operational eligibility still requires the original observation and retrieval times
 strictly before first pitch. The readiness endpoint reports exact eligible counts and shortfalls;
 it does not enable fitting, probability output, or trading.
+
+The dependency-free research fitter uses population standardization learned from fitting rows,
+Newton optimization with L2 candidates `0.01`, `0.1`, `1`, and `10`, validation mean Brier score for
+selection, and a final train-plus-validation refit evaluated once on the untouched test interval.
+Prospective-holdout examples are rejected from fitting. The preview route currently returns `409`
+with exact split shortfalls and performs no fit until all 500/150/150 exploratory gates pass:
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8000/mlb-research-model-fit/preview"
+```
+
+A successful future preview will still be unpersisted and research-only; it cannot publish an
+operational probability or enter any opportunity or trading path.
 
 Ingest only the exact official Kalshi MLB game-winner series and inspect its typed classifications:
 

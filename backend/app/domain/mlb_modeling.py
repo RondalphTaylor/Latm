@@ -424,3 +424,138 @@ def approved_mlb_dataset_readiness_policy() -> MlbDatasetReadinessPolicy:
     """Return the immutable policy approved on 2026-08-22."""
 
     return MlbDatasetReadinessPolicy()
+
+
+class MlbRegularizedLogisticPolicy(BaseModel):
+    """Frozen research-only fitting policy for the eight-feature MLB candidate."""
+
+    model_config = ConfigDict(frozen=True)
+
+    model_name: Literal["mlb_pregame_regularized_logistic"] = "mlb_pregame_regularized_logistic"
+    policy_version: Literal["v1"] = "v1"
+    algorithm: Literal["l2_regularized_logistic_newton"] = "l2_regularized_logistic_newton"
+    selected_features: tuple[MlbSelectedFeatureName, ...] = SELECTED_MLB_FEATURES
+    regularization_candidates: tuple[Decimal, ...] = (
+        Decimal("0.01"),
+        Decimal("0.1"),
+        Decimal("1"),
+        Decimal("10"),
+    )
+    maximum_iterations: int = Field(default=100, ge=1, le=1000)
+    convergence_tolerance: Decimal = Field(default=Decimal("0.000000001"), gt=0)
+    probability_clip: Decimal = Field(default=Decimal("0.000001"), gt=0, lt=Decimal("0.5"))
+    standardization: Literal["population_mean_std_from_fit_rows"] = (
+        "population_mean_std_from_fit_rows"
+    )
+    selection_metric: Literal["validation_mean_brier"] = "validation_mean_brier"
+    final_refit: Literal["train_plus_validation"] = "train_plus_validation"
+    random_shuffle: Literal[False] = False
+
+    @model_validator(mode="after")
+    def validate_fixed_contract(self) -> Self:
+        if self.selected_features != SELECTED_MLB_FEATURES:
+            raise ValueError("MLB logistic V1 requires the exact selected feature order")
+        if not self.regularization_candidates:
+            raise ValueError("MLB logistic V1 requires regularization candidates")
+        if any(value <= 0 for value in self.regularization_candidates):
+            raise ValueError("MLB logistic regularization must be positive")
+        if tuple(sorted(set(self.regularization_candidates))) != self.regularization_candidates:
+            raise ValueError("MLB logistic regularization candidates must be unique and ascending")
+        return self
+
+
+class MlbLogisticTrainingExample(BaseModel):
+    """One canonical complete labeled vector supplied to the pure fitter."""
+
+    model_config = ConfigDict(frozen=True)
+
+    example_id: UUID
+    sports_event_id: UUID
+    scheduled_start_time: datetime
+    split: MlbDatasetSplit
+    availability_basis: MlbStatcastObservationBasis
+    feature_values: MlbSelectedFeatureValues
+    home_won: bool
+    example_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("scheduled_start_time")
+    @classmethod
+    def training_time_is_aware(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("MLB fitting example time must be timezone-aware")
+        return value
+
+    @model_validator(mode="after")
+    def training_features_are_complete(self) -> Self:
+        if any(value is None for value in self.feature_values.ordered_values()):
+            raise ValueError("MLB fitting examples require all selected features")
+        return self
+
+
+class MlbBinaryModelMetrics(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    sample_size: int = Field(ge=1)
+    home_win_count: int = Field(ge=0)
+    decisive_prediction_count: int = Field(ge=0)
+    correct_prediction_count: int = Field(ge=0)
+    mean_brier_score: Decimal = Field(ge=0, le=1, decimal_places=12)
+    mean_log_loss: Decimal = Field(ge=0, decimal_places=12)
+    prediction_accuracy: Decimal | None = Field(default=None, ge=0, le=1, decimal_places=12)
+
+
+class MlbRegularizationCandidateResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    regularization_strength: Decimal = Field(gt=0)
+    converged: bool
+    iterations: int = Field(ge=1)
+    validation_metrics: MlbBinaryModelMetrics
+
+
+class MlbFittedResearchModel(BaseModel):
+    """Pure fitted artifact; persistence and probability publication are separate gates."""
+
+    model_config = ConfigDict(frozen=True)
+
+    model_name: str
+    effective_model_version: str
+    algorithm: str
+    fitting_policy_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    training_data_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    model_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    selected_regularization_strength: Decimal = Field(gt=0)
+    standardized_intercept: Decimal = Field(decimal_places=12)
+    standardized_coefficients: dict[MlbSelectedFeatureName, Decimal]
+    feature_means: dict[MlbSelectedFeatureName, Decimal]
+    feature_scales: dict[MlbSelectedFeatureName, Decimal]
+    train_example_count: int = Field(ge=1)
+    validation_example_count: int = Field(ge=1)
+    test_example_count: int = Field(ge=1)
+    validation_metrics: MlbBinaryModelMetrics
+    test_metrics: MlbBinaryModelMetrics
+    candidate_results: tuple[MlbRegularizationCandidateResult, ...]
+    research_only: Literal[True] = True
+    operational_probability_enabled: Literal[False] = False
+    automatic_trading_enabled: Literal[False] = False
+
+    @model_validator(mode="after")
+    def validate_fitted_artifact(self) -> Self:
+        expected = set(SELECTED_MLB_FEATURES)
+        if (
+            set(self.standardized_coefficients) != expected
+            or set(self.feature_means) != expected
+            or set(self.feature_scales) != expected
+        ):
+            raise ValueError("MLB fitted artifacts require the exact selected feature set")
+        if any(scale <= 0 for scale in self.feature_scales.values()):
+            raise ValueError("MLB fitted feature scales must be positive")
+        if self.validation_metrics.sample_size != self.validation_example_count:
+            raise ValueError("validation metric count must match the fitted artifact")
+        if self.test_metrics.sample_size != self.test_example_count:
+            raise ValueError("test metric count must match the fitted artifact")
+        if self.selected_regularization_strength not in {
+            item.regularization_strength for item in self.candidate_results
+        }:
+            raise ValueError("selected regularization must appear in candidate results")
+        return self

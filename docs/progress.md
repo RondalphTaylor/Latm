@@ -412,6 +412,24 @@ Its 7,245 retained pitch observations occupy about 259 KiB in PostgreSQL's compr
 Readiness changed from a test shortfall of 150 to 149; train, validation, and operational holdout
 shortfalls remain 500, 150, and 200. No probability or trading capability was enabled.
 
+## Offseason MLB deterministic logistic fitting contract
+
+**Status:** Complete
+**Completed:** 2026-08-23
+
+The ninth MLB pilot slice implements a dependency-free deterministic L2 logistic fitter for the
+fixed eight-feature candidate. Population means and scales are learned only from each fitting
+prefix. Four ascending regularization strengths are fit with Newton updates and selected strictly
+by validation mean Brier score; the chosen strength is refit on train plus validation and evaluated
+once on the untouched test split. Prospective-holdout rows are rejected from fitting.
+
+The artifact retains standardized coefficients, intercept, means, scales, candidate convergence,
+validation and test Brier/log-loss/accuracy metrics, ordered-data and policy fingerprints, and an
+effective model version. It is explicitly unpersisted and research-only. The live preview returns
+`409` with exact split shortfalls until the approved exploratory counts pass; with 14 official test
+examples collected, current shortfalls are 500 train, 150 validation, and 136 test. Operational
+probability output and all MLB trading paths remain disabled.
+
 ## Previous-phase schema repair
 
 **Status:** Complete
@@ -426,8 +444,8 @@ Final repair validation passed all 415 backend tests against PostgreSQL, Ruff, s
 ## Next phase
 
 Continue bounded retrospective backfill until the 500/150/150 exploratory thresholds are met while
-collecting and labeling operational games toward the 200-game prospective holdout. Then fit and
-evaluate the regularized logistic baseline as a research artifact. Do not expose an operational MLB
-probability until both retrospective out-of-sample and prospective discrimination/calibration are
-reported. MLB trading remains disabled. Phase 12 research/evidence work remains the next broader
-roadmap milestone.
+collecting and labeling operational games toward the 200-game prospective holdout. Then persist one
+immutable fitted research model and begin prospective probability capture. Do not expose an
+operational MLB probability until both retrospective out-of-sample and prospective discrimination
+and calibration are reported. MLB trading remains disabled. Phase 12 research/evidence work remains
+the next broader roadmap milestone.

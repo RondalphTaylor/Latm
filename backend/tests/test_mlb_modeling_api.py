@@ -23,6 +23,7 @@ from app.services.mlb_modeling.repository import (
     MlbCanonicalDatasetSelection,
     MlbDatasetInventory,
 )
+from app.services.mlb_modeling.service import MlbModelFittingBlockedError
 
 EVENT_ID = UUID("10000000-0000-0000-0000-000000000001")
 
@@ -76,6 +77,9 @@ class InventoryService:
             )
         )
 
+    async def fit_research_preview(self) -> None:
+        raise MlbModelFittingBlockedError(await self.approved_dataset_readiness())
+
 
 def test_model_design_exposes_frozen_research_only_boundary() -> None:
     with TestClient(create_app()) as client:
@@ -89,6 +93,23 @@ def test_model_design_exposes_frozen_research_only_boundary() -> None:
     assert body["random_shuffle"] is False
     assert body["fitted_model_available"] is False
     assert body["probability_generation_enabled"] is False
+    assert body["automatic_trading_enabled"] is False
+
+
+def test_logistic_fitting_design_is_versioned_and_non_operational() -> None:
+    with TestClient(create_app()) as client:
+        response = client.get("/mlb-logistic-fitting-design")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["algorithm"] == "l2_regularized_logistic_newton"
+    assert body["regularization_candidates"] == ["0.01", "0.1", "1", "10"]
+    assert body["selection_metric"] == "validation_mean_brier"
+    assert body["final_refit"] == "train_plus_validation"
+    assert body["random_shuffle"] is False
+    assert body["fitting_engine_available"] is True
+    assert body["persisted_fitted_model_available"] is False
+    assert body["operational_probability_enabled"] is False
     assert body["automatic_trading_enabled"] is False
 
 
@@ -190,3 +211,24 @@ def test_approved_dataset_readiness_exposes_thresholds_and_shortfalls() -> None:
     assert body["model_fitting_enabled"] is False
     assert body["probability_generation_enabled"] is False
     assert body["automatic_trading_enabled"] is False
+
+
+def test_model_fit_preview_fails_closed_with_exact_shortfalls() -> None:
+    app = create_app()
+    app.dependency_overrides[get_mlb_game_feature_service] = InventoryService
+    with TestClient(app) as client:
+        response = client.post("/mlb-research-model-fit/preview")
+        operation = client.get("/openapi.json").json()["paths"]["/mlb-research-model-fit/preview"][
+            "post"
+        ]
+
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["shortfall_by_split"] == {
+        "train": 380,
+        "validation": 150,
+        "test": 150,
+        "prospective_holdout": 188,
+    }
+    assert "requestBody" not in operation
+    assert "parameters" not in operation

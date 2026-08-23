@@ -23,14 +23,19 @@ from app.schemas.mlb_modeling import (
     MlbGameFeatureBuildResponse,
     MlbGameFeatureVectorResponse,
     MlbLabeledFeatureExampleResponse,
+    MlbLogisticFittingDesignResponse,
     MlbModelDesignResponse,
+    MlbResearchModelFitPreviewResponse,
 )
 from app.services.mlb_modeling.engine import DeterministicMlbGameFeatureEngine
 from app.services.mlb_modeling.repository import (
     MlbGameFeatureConflictError,
     MlbGameFeatureRepository,
 )
-from app.services.mlb_modeling.service import MlbGameFeatureService
+from app.services.mlb_modeling.service import (
+    MlbGameFeatureService,
+    MlbModelFittingBlockedError,
+)
 
 router = APIRouter(tags=["mlb-modeling"])
 
@@ -123,6 +128,41 @@ async def get_mlb_game_feature_vector(
 async def get_mlb_model_design() -> MlbModelDesignResponse:
     """Expose the frozen candidate contract and explicit disabled capabilities."""
     return MlbModelDesignResponse.current()
+
+
+@router.get("/mlb-logistic-fitting-design", response_model=MlbLogisticFittingDesignResponse)
+async def get_mlb_logistic_fitting_design() -> MlbLogisticFittingDesignResponse:
+    """Expose the frozen research fitter without fitting or publishing a model."""
+    return MlbLogisticFittingDesignResponse.current()
+
+
+@router.post(
+    "/mlb-research-model-fit/preview",
+    response_model=MlbResearchModelFitPreviewResponse,
+)
+async def preview_mlb_research_model_fit(
+    service: Annotated[MlbGameFeatureService, Depends(get_mlb_game_feature_service)],
+) -> MlbResearchModelFitPreviewResponse:
+    """Fit nothing until approved exploratory sample gates pass; never persist or publish."""
+    try:
+        model = await service.fit_research_preview()
+    except MlbModelFittingBlockedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": str(exc),
+                "shortfall_by_split": {
+                    split.value: count for split, count in exc.assessment.shortfall_by_split.items()
+                },
+                "blockers": exc.assessment.blockers,
+            },
+        ) from exc
+    return MlbResearchModelFitPreviewResponse(
+        persisted=False,
+        model=model,
+        operational_probability_enabled=False,
+        automatic_trading_enabled=False,
+    )
 
 
 @router.post("/mlb-dataset-examples/run", response_model=MlbDatasetLabelResponse)

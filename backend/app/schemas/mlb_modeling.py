@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Any, Literal
 from uuid import UUID
 
@@ -10,8 +11,10 @@ from app.domain.mlb_modeling import (
     SELECTED_MLB_FEATURES,
     MlbDatasetReadinessAssessment,
     MlbDatasetSplit,
+    MlbFittedResearchModel,
     MlbMatchupFeatureCoverage,
     MlbMatchupSourceMetrics,
+    MlbRegularizedLogisticPolicy,
     MlbSelectedFeatureName,
     MlbSelectedFeatureValues,
     approved_mlb_dataset_readiness_policy,
@@ -127,6 +130,47 @@ class MlbModelDesignResponse(BaseModel):
             probability_generation_enabled=False,
             automatic_trading_enabled=False,
         )
+
+
+class MlbLogisticFittingDesignResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    model_name: str
+    policy_version: str
+    algorithm: str
+    selected_features: tuple[MlbSelectedFeatureName, ...]
+    regularization_candidates: tuple[Decimal, ...]
+    maximum_iterations: int
+    convergence_tolerance: Decimal
+    probability_clip: Decimal
+    standardization: str
+    selection_metric: str
+    final_refit: str
+    random_shuffle: Literal[False]
+    fitting_engine_available: Literal[True]
+    persisted_fitted_model_available: Literal[False]
+    operational_probability_enabled: Literal[False]
+    automatic_trading_enabled: Literal[False]
+
+    @classmethod
+    def current(cls) -> MlbLogisticFittingDesignResponse:
+        policy = MlbRegularizedLogisticPolicy()
+        return cls(
+            **policy.model_dump(),
+            fitting_engine_available=True,
+            persisted_fitted_model_available=False,
+            operational_probability_enabled=False,
+            automatic_trading_enabled=False,
+        )
+
+
+class MlbResearchModelFitPreviewResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    persisted: Literal[False]
+    model: MlbFittedResearchModel
+    operational_probability_enabled: Literal[False]
+    automatic_trading_enabled: Literal[False]
 
 
 class MlbLabeledFeatureExampleResponse(BaseModel):

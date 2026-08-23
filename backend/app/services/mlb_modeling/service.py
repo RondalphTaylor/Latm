@@ -11,7 +11,9 @@ from app.domain.mlb_modeling import (
     MlbDatasetReadinessInput,
     MlbDatasetSplit,
     MlbFeatureSelectionPolicy,
+    MlbFittedResearchModel,
     MlbGameFeatureVector,
+    MlbLogisticTrainingExample,
     MlbMatchupFeatureCoverage,
     MlbMatchupSourceMetrics,
     MlbModelFeatureInput,
@@ -28,6 +30,7 @@ from app.services.mlb_modeling.engine import (
     DeterministicMlbGameFeatureEngine,
     mlb_chronological_split_policy_fingerprint,
 )
+from app.services.mlb_modeling.fitting import DeterministicMlbRegularizedLogisticEngine
 from app.services.mlb_modeling.repository import (
     MlbCanonicalDatasetSelection,
     MlbDatasetInventory,
@@ -47,6 +50,14 @@ class MlbDatasetLabelResult:
     example: MlbLabeledFeatureExampleRecord
 
 
+class MlbModelFittingBlockedError(RuntimeError):
+    """Approved sample gates are not ready for research fitting."""
+
+    def __init__(self, assessment: MlbDatasetReadinessAssessment) -> None:
+        super().__init__("MLB exploratory fitting data thresholds are not met")
+        self.assessment = assessment
+
+
 class MlbGameFeatureService:
     """Derive one vector from an exact persisted Statcast source, with no I/O provider."""
 
@@ -56,11 +67,13 @@ class MlbGameFeatureService:
         repository: MlbGameFeatureRepository,
         engine: DeterministicMlbGameFeatureEngine,
         policy: MlbFeatureSelectionPolicy,
+        fitting_engine: DeterministicMlbRegularizedLogisticEngine | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self._repository = repository
         self._engine = engine
         self._policy = policy
+        self._fitting_engine = fitting_engine or DeterministicMlbRegularizedLogisticEngine()
         self._clock = clock
 
     async def build(self, statcast_snapshot_id: UUID) -> MlbGameFeatureBuildResult:
@@ -225,3 +238,32 @@ class MlbGameFeatureService:
                 policy=policy,
             )
         )
+
+    async def fit_research_preview(self) -> MlbFittedResearchModel:
+        """Fit an unpersisted research artifact only after all exploratory data gates pass."""
+        assessment = await self.approved_dataset_readiness()
+        if not assessment.exploratory_fit_data_ready:
+            raise MlbModelFittingBlockedError(assessment)
+        selection = await self._repository.canonical_dataset(
+            split_policy_fingerprint=assessment.split_policy_fingerprint,
+            include_retrospective_research=True,
+            limit=10_000,
+            offset=0,
+        )
+        examples = tuple(
+            MlbLogisticTrainingExample(
+                example_id=record.id,
+                sports_event_id=record.sports_event_id,
+                scheduled_start_time=record.scheduled_start_time,
+                split=MlbDatasetSplit(record.split),
+                availability_basis=MlbStatcastObservationBasis(record.availability_basis),
+                feature_values=MlbSelectedFeatureValues.model_validate(
+                    record.feature_vector.feature_values
+                ),
+                home_won=record.home_won,
+                example_fingerprint=record.example_fingerprint,
+            )
+            for record in selection.examples
+            if record.split != MlbDatasetSplit.PROSPECTIVE_HOLDOUT.value
+        )
+        return self._fitting_engine.fit(examples)
