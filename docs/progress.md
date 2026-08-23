@@ -318,6 +318,28 @@ The live official-source smoke for game 823509 retained 6,536 pitch rows, popula
 
 Final validation passed all 464 backend tests against PostgreSQL, Ruff formatting and linting, strict mypy, migration `0015_mlb_statcast_features` upgrade/downgrade, Alembic head/drift checks, all 7 frontend tests, frontend lint/type checking and production build, Compose rendering, and a zero-vulnerability production dependency audit.
 
+## Offseason MLB leakage-safe model feature contract
+
+**Status:** Complete
+**Completed:** 2026-08-22
+
+The fifth MLB pilot slice deterministically reduces one exact Statcast snapshot to eight auditable
+matchup differences. Four lineup metrics use their stored samples as weights; four starting-pitcher
+allowed metrics use the opposite orientation so every positive value favors the home team. The
+record retains both teams' source metrics, all coverage denominators, ordered selected values,
+explicit missing features, source lineage, policy identity, and stable semantic replay.
+
+Operational eligibility requires all eight values plus source retrieval and vector creation strictly
+before first pitch. There is no imputation. The pure dataset contract uses explicit chronological
+train, validation, test, and prospective-holdout boundaries with random shuffle disabled and labels
+only exact official final MLB results. The local official-source smoke produced a complete eight-
+feature retrospective vector for game 823509 and correctly kept both probability generation and
+automatic trading false; replay returned the same record.
+
+Final validation passed all 479 backend tests with PostgreSQL integrations enabled, Ruff formatting
+and linting, strict mypy, migration `0016_mlb_game_features` downgrade/upgrade and Alembic drift
+checks, all 7 frontend tests, frontend lint/type checking, and the production build.
+
 ## Previous-phase schema repair
 
 **Status:** Complete
@@ -331,4 +353,7 @@ Final repair validation passed all 415 backend tests against PostgreSQL, Ruff, s
 
 ## Next phase
 
-Continue the bounded MLB pilot with leakage-safe feature selection and MLB base-model design, including an explicit train/evaluation split before any probability is exposed. MLB trading remains disabled. Phase 12 research/evidence work remains the next broader roadmap milestone.
+Collect a sufficiently broad set of operational pregame snapshots and official completed outcomes,
+then freeze concrete chronological split dates and fit/evaluate the regularized logistic baseline.
+Do not expose an MLB probability until out-of-sample discrimination and calibration are reported.
+MLB trading remains disabled. Phase 12 research/evidence work remains the next broader roadmap milestone.

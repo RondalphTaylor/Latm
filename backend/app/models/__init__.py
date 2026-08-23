@@ -9,7 +9,11 @@ from app.models.markets import (
     Provider,
 )
 from app.models.matching import MarketEventMatchRecord
-from app.models.mlb import MlbLineupSnapshotRecord, MlbStatcastFeatureSnapshotRecord
+from app.models.mlb import (
+    MlbGameFeatureVectorRecord,
+    MlbLineupSnapshotRecord,
+    MlbStatcastFeatureSnapshotRecord,
+)
 from app.models.opportunities import OpportunityRecord
 from app.models.portfolio import (
     PortfolioRecord,
@@ -32,6 +36,7 @@ __all__ = [
     "MarketResolutionRecord",
     "MlbLineupSnapshotRecord",
     "MlbStatcastFeatureSnapshotRecord",
+    "MlbGameFeatureVectorRecord",
     "ModelVersionRecord",
     "OpportunityRecord",
     "PortfolioRecord",

@@ -1,6 +1,6 @@
 # LATM Prediction Market Platform
 
-An auditable prediction-market research platform focused initially on NBA markets. The current MVP ingests read-only Kalshi market data and authenticated BALLDONTLIE NBA data, deterministically links supported single-game contracts to normalized events, generates versioned event-level Elo base forecasts from local game history, records research-only YES/NO raw-edge opportunities, produces versioned advisory capital allocations against an isolated paper bankroll, records deterministic paper-only risk decisions, simulates provider-free paper positions, evaluates forecast and trading performance, and exposes the full state through a responsive read-only dashboard. A bounded offseason pilot also ingests official MLB teams, schedules, results, probable pitchers, posted batting orders, and Baseball Savant / Statcast quantitative snapshots, then classifies exact Kalshi MLB game-winner contracts and matches them to official games for research. MLB forecasting and trading remain disabled.
+An auditable prediction-market research platform focused initially on NBA markets. The current MVP ingests read-only Kalshi market data and authenticated BALLDONTLIE NBA data, deterministically links supported single-game contracts to normalized events, generates versioned event-level Elo base forecasts from local game history, records research-only YES/NO raw-edge opportunities, produces versioned advisory capital allocations against an isolated paper bankroll, records deterministic paper-only risk decisions, simulates provider-free paper positions, evaluates forecast and trading performance, and exposes the full state through a responsive read-only dashboard. A bounded offseason pilot also ingests official MLB teams, schedules, results, probable pitchers, posted batting orders, and Baseball Savant / Statcast quantitative snapshots, derives leakage-safe research feature vectors, then classifies exact Kalshi MLB game-winner contracts and matches them to official games. MLB probability generation and trading remain disabled.
 
 > **Trading safety:** the only supported execution mode is `paper`. The Kalshi adapter accesses public production market data without credentials, the BALLDONTLIE key authorizes NBA sports-data reads only, and the MLB adapter uses public official sports data without credentials. None of these adapters contains order placement, financial-account access, or live-trading implementation.
 
@@ -117,6 +117,16 @@ Statcast V1 makes two paced, read-only official CSV requests: one for the two pr
 
 Only retrieval strictly before first pitch is `operational_pregame` and eligible for a future model; later collection is retained as `retrospective`. The list/detail API omits the potentially large pitch-row payload while exposing its count and source manifest. The source adapter follows the official [Statcast Search CSV field contract](https://baseballsavant.mlb.com/csv-docs); the hard-hit threshold follows MLB's [95 mph definition](https://www.mlb.com/glossary/statcast/hard-hit-rate). This slice computes features only—it does not produce a win probability or activate any MLB opportunity, sizing, risk, execution, or settlement path.
 
+Derive the fixed model-candidate vector from one exact Statcast snapshot and inspect its contract:
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8000/mlb-game-features/run?statcast_snapshot_id=<statcast-snapshot-uuid>"
+Invoke-RestMethod "http://localhost:8000/events/<internal-event-uuid>/mlb-game-features"
+Invoke-RestMethod "http://localhost:8000/mlb-model-design"
+```
+
+V1 selects eight Decimal differences: four sample-weighted lineup measures (observed wOBA, expected wOBA on contact, hard-hit rate, and barrel rate) in home-minus-away orientation, and the same four starting-pitcher allowed measures in away-minus-home orientation. Positive values therefore consistently favor the home team. Every feature requires complete nine-batter coverage or a non-null starter measure; missing inputs remain null and block operational eligibility. The append-only record preserves side metrics, denominators, missingness, exact lineup/Statcast lineage, and policy/source/input fingerprints. The separate dataset contract assigns train, validation, test, and prospective holdout roles strictly by scheduled first pitch with no random shuffle, and accepts labels only from an exact official final result. No coefficients have been fitted and the API explicitly reports `fitted_model_available=false`, `probability_generation_enabled=false`, and `automatic_trading_enabled=false`.
+
 Ingest only the exact official Kalshi MLB game-winner series and inspect its typed classifications:
 
 ```powershell
@@ -133,7 +143,7 @@ Invoke-RestMethod -Method Post "http://localhost:8000/matches/run?league=mlb&sta
 Invoke-RestMethod "http://localhost:8000/matches?league=mlb&latest_only=true"
 ```
 
-MLB uses its own aliases and exact first-pitch proximity. A confident MLB decision can be `matched`, but both domain and database invariants require `automatic_trading_eligible=false`. Official lineup and Statcast quantitative snapshots are now available for research, but no forecast model consumes them yet. An MLB forecast model, calibration, opportunities, sizing, risk, and execution have not been implemented for MLB.
+MLB uses its own aliases and exact first-pitch proximity. A confident MLB decision can be `matched`, but both domain and database invariants require `automatic_trading_eligible=false`. Official lineup, Statcast, and derived feature vectors are now available for research, but there is no fitted MLB forecast model. Calibration, opportunities, sizing, risk, and execution have not been implemented for MLB.
 
 ## Market-to-event matching
 

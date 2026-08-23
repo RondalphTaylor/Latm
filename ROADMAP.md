@@ -1332,7 +1332,9 @@ market-to-game matching. The third slice adds append-only typed official probabl
 batting-order observations with explicit pregame/live/postgame provenance. The fourth slice adds an
 append-only, exact-lineup-linked 30-day Baseball Savant / Statcast quantitative snapshot with
 typed source rows and explicit operational-versus-retrospective eligibility. Every MLB match remains
-research-only and trading-ineligible. Forecasting, evidence, opportunities, evaluation, and trading
+research-only and trading-ineligible. The fifth slice adds an append-only eight-feature matchup
+vector and a pure chronological train/validation/test/prospective-holdout contract. It deliberately
+fits no coefficients and emits no probability. Evidence, opportunities, evaluation, and trading
 are not implemented for MLB.
 
 ## Goal

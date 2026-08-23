@@ -1497,6 +1497,20 @@ AI-Adjusted Model
 
 The AI system should earn its place through measurable results.
 
+## Implemented MLB model-candidate contract
+
+The MLB pilot now freezes eight matchup inputs before model fitting: sample-weighted lineup observed
+wOBA, expected wOBA on contact, hard-hit rate, and barrel rate, plus the same allowed-contact
+measures for the probable starters. Lineup features use home minus away; starter allowed features
+use away minus home, so positive always favors the home team. Exact source coverage is retained and
+missing values are not imputed.
+
+The candidate is regularized logistic regression for the official final home-win target. Examples
+must be ordered by scheduled first pitch and assigned to explicit chronological train, validation,
+test, and untouched prospective-holdout intervals. Random shuffling is forbidden. This is a design
+and dataset contract only: no fitted coefficients, probability output, or MLB trading eligibility
+exists yet.
+
 ---
 
 # 53. Recommended Development Principle

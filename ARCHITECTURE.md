@@ -523,12 +523,22 @@ strictly before first pitch is labeled `operational_pregame`; later observations
 counts rather than the potentially large internal pitch-row payload. This contract generates no
 probability and has no dependency on prediction-market prices or any execution provider.
 
+Derived MLB candidate inputs live in append-only `mlb_game_feature_vectors`, with a composite
+foreign key to the exact event/lineup/Statcast source. V1 pools batter metrics by their explicit
+sample denominators, requires all nine batters per lineup metric, retains starter metrics directly,
+and orients all eight differences so positive favors the home team. Missing values are never
+imputed. A vector can be operational only when the quantitative source and vector both predate
+first pitch; retrospective vectors remain useful for research but cannot become operational model
+inputs. The versioned dataset contract partitions by scheduled start time, never random shuffling,
+and labels only exact official final results. This layer contains no fitted parameters, probability,
+market price, opportunity, or execution dependency.
+
 This shared storage does not make the downstream pipeline sport-agnostic by implication. The
 matcher now supports separately versioned NBA and MLB alias policies, while the Elo model, forecast
 evaluation, opportunity, risk, and trading services retain their explicit NBA gates. A persisted MLB
 match is always research-only and database-constrained to `automatic_trading_eligible=false`.
-The lineup and Statcast snapshot slices do not relax any of these downstream gates and no MLB model
-currently reads either table.
+The lineup, Statcast, and derived-vector slices do not relax any downstream gate. There is still no
+fitted MLB model and no MLB probability enters the opportunity or trading pipeline.
 
 ---
 
