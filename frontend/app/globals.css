@@ -713,6 +713,101 @@ td small {
   gap: 0.85rem;
 }
 
+.mlb-research-stack {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.mlb-readiness-grid,
+.mlb-workflow-grid {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.mlb-readiness-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.mlb-workflow-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.mlb-readiness-card {
+  min-width: 0;
+  padding: 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: linear-gradient(150deg, rgb(103 232 188 / 5%), transparent 52%), var(--panel);
+}
+
+.mlb-readiness-card .performance-title-row {
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.mlb-readiness-card .performance-title-row h3 {
+  margin-top: 0.35rem;
+  font-size: 1.25rem;
+  text-transform: capitalize;
+}
+
+.mlb-readiness-card .performance-title-row p {
+  font-size: 0.58rem;
+}
+
+.mlb-readiness-count {
+  display: block;
+  margin-bottom: 0.7rem;
+  font-family: Georgia, serif;
+  font-size: 2rem;
+  font-weight: 500;
+  letter-spacing: -0.035em;
+}
+
+.mlb-readiness-count span,
+.mlb-readiness-card small,
+.workflow-copy,
+.mlb-safety-note {
+  color: var(--muted);
+}
+
+.mlb-readiness-count span {
+  font-size: 1rem;
+}
+
+.mlb-readiness-card meter {
+  display: block;
+}
+
+.mlb-readiness-card small {
+  display: block;
+  margin-top: 0.6rem;
+  font-size: 0.68rem;
+}
+
+.workflow-copy {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.mlb-result-list {
+  margin-top: 0.8rem;
+}
+
+.mlb-safety-note {
+  margin: 0;
+  padding: 0.8rem 1rem;
+  border: 1px solid rgb(103 232 188 / 17%);
+  border-radius: 0.75rem;
+  background: rgb(103 232 188 / 4%);
+  font-size: 0.7rem;
+  font-weight: 750;
+  letter-spacing: 0.035em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
 .performance-panel {
   padding: 1.4rem;
 }
@@ -924,7 +1019,8 @@ footer p {
   }
 
   .metric-grid,
-  .card-grid {
+  .card-grid,
+  .mlb-readiness-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -962,9 +1058,11 @@ footer p {
   }
 
   .metric-grid,
-  .card-grid,
-  .calibration-layout,
-  .loading-grid {
+    .card-grid,
+    .calibration-layout,
+    .mlb-readiness-grid,
+    .mlb-workflow-grid,
+    .loading-grid {
     grid-template-columns: 1fr;
   }
 

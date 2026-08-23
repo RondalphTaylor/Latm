@@ -2,6 +2,9 @@ import type {
   ForecastCalibrationBin,
   ForecastModelPerformance,
   MarketResponse,
+  MlbBackfillBatchResponse,
+  MlbBackfillCheckpointResponse,
+  MlbDatasetSplit,
   PaperPositionResponse,
   PortfolioResponse,
   TradingPerformanceResponse,
@@ -71,6 +74,15 @@ export interface ActivityRow {
   readonly occurredAt: string;
 }
 
+export interface MlbReadinessRow {
+  readonly split: MlbDatasetSplit;
+  readonly label: string;
+  readonly eligible: number;
+  readonly minimum: number;
+  readonly shortfall: number;
+  readonly provenance: "retrospective permitted" | "operational pregame only";
+}
+
 export interface DashboardViewModel {
   readonly primaryPortfolio: PortfolioResponse | null;
   readonly performance: TradingPerformanceResponse | null;
@@ -82,6 +94,9 @@ export interface DashboardViewModel {
   readonly activityRows: readonly ActivityRow[];
   readonly modelPerformance: readonly ForecastModelPerformance[];
   readonly calibrationBins: readonly ForecastCalibrationBin[];
+  readonly mlbReadinessRows: readonly MlbReadinessRow[];
+  readonly mlbCheckpoint: MlbBackfillCheckpointResponse | null;
+  readonly mlbLatestBatch: MlbBackfillBatchResponse | null;
 }
 
 function markFailure<T>(state: LoadState<T>, label: string, failures: string[]): void {
@@ -143,6 +158,9 @@ export function buildDashboardViewModel(data: DashboardData): DashboardViewModel
   markFailure(data.positionEvents, "position activity", failures);
   markFailure(data.forecastPerformance, "forecast performance", failures);
   markFailure(data.tradingPerformance, "portfolio performance", failures);
+  markFailure(data.mlbReadiness, "MLB dataset readiness", failures);
+  markFailure(data.mlbBackfillCheckpoint, "MLB backfill checkpoint", failures);
+  markFailure(data.mlbBackfillBatches, "MLB backfill history", failures);
 
   const markets = new Map(
     data.markets.data.map((market: MarketResponse): readonly [string, MarketResponse] => [
@@ -233,6 +251,28 @@ export function buildDashboardViewModel(data: DashboardData): DashboardViewModel
   );
 
   const modelPerformance = data.forecastPerformance.data?.models ?? [];
+  const readiness = data.mlbReadiness.data;
+  const splitOrder: readonly MlbDatasetSplit[] = [
+    "train",
+    "validation",
+    "test",
+    "prospective_holdout",
+  ];
+  const mlbReadinessRows = readiness === null
+    ? []
+    : splitOrder.map(
+        (split): MlbReadinessRow => ({
+          split,
+          label: split === "prospective_holdout" ? "Prospective holdout" : split,
+          eligible: readiness.eligible_split_counts[split],
+          minimum: readiness.minimum_split_counts[split],
+          shortfall: readiness.shortfall_by_split[split],
+          provenance:
+            split === "prospective_holdout"
+              ? "operational pregame only"
+              : "retrospective permitted",
+        }),
+      );
 
   return {
     primaryPortfolio: primaryPortfolio(data.portfolios.data),
@@ -245,5 +285,8 @@ export function buildDashboardViewModel(data: DashboardData): DashboardViewModel
     activityRows: activityRows.slice(0, 8),
     modelPerformance,
     calibrationBins: modelPerformance[0]?.calibration.bins ?? [],
+    mlbReadinessRows,
+    mlbCheckpoint: data.mlbBackfillCheckpoint.data,
+    mlbLatestBatch: data.mlbBackfillBatches.data[0] ?? null,
   };
 }

@@ -228,3 +228,83 @@ export interface TradingPerformanceResponse {
   readonly maximum_drawdown: SnapshotDrawdown;
   readonly warnings: readonly string[];
 }
+
+export type MlbDatasetSplit = "train" | "validation" | "test" | "prospective_holdout";
+
+export interface MlbApprovedDatasetReadinessResponse {
+  readonly policy_name: string;
+  readonly policy_version: string;
+  readonly policy_fingerprint: string;
+  readonly split_policy_fingerprint: string;
+  readonly validation_start: string;
+  readonly test_start: string;
+  readonly prospective_holdout_start: string;
+  readonly minimum_split_counts: Readonly<Record<MlbDatasetSplit, number>>;
+  readonly eligible_split_counts: Readonly<Record<MlbDatasetSplit, number>>;
+  readonly shortfall_by_split: Readonly<Record<MlbDatasetSplit, number>>;
+  readonly exploratory_fit_data_ready: boolean;
+  readonly prospective_evaluation_data_ready: boolean;
+  readonly retrospective_allowed_for_exploratory_splits: true;
+  readonly prospective_holdout_requires_operational_pregame: true;
+  readonly model_fitting_enabled: false;
+  readonly probability_generation_enabled: false;
+  readonly automatic_trading_enabled: false;
+  readonly blockers: readonly string[];
+}
+
+export interface MlbBackfillCheckpointResponse {
+  readonly id: string;
+  readonly policy_name: string;
+  readonly policy_version: string;
+  readonly policy_fingerprint: string;
+  readonly split_policy_fingerprint: string;
+  readonly status: "active" | "complete" | "exhausted";
+  readonly regular_season_start: string;
+  readonly validation_start_date: string;
+  readonly test_start_date: string;
+  readonly prospective_holdout_start_date: string;
+  readonly train_cursor_date: string;
+  readonly train_cursor_offset: number;
+  readonly validation_cursor_date: string;
+  readonly validation_cursor_offset: number;
+  readonly test_cursor_date: string;
+  readonly test_cursor_offset: number;
+  readonly batch_limit: number;
+  readonly version: number;
+  readonly batches_completed: number;
+  readonly events_examined: number;
+  readonly examples_created: number;
+  readonly last_run_at: string | null;
+  readonly finished_at: string | null;
+  readonly state_fingerprint: string;
+  readonly research_only: true;
+  readonly probability_generated: false;
+  readonly automatic_trading_eligible: false;
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+
+export interface MlbBackfillBatchResponse {
+  readonly id: string;
+  readonly checkpoint_id: string;
+  readonly sequence: number;
+  readonly split: Exclude<MlbDatasetSplit, "prospective_holdout">;
+  readonly window_date: string;
+  readonly offset: number;
+  readonly batch_limit: number;
+  readonly cursor_date_after: string;
+  readonly cursor_offset_after: number;
+  readonly run_at: string;
+  readonly events_refreshed: number;
+  readonly examined: number;
+  readonly retrospective_vectors_built: number;
+  readonly examples_labeled: number;
+  readonly examples_created: number;
+  readonly result_counts: Readonly<Record<string, number>>;
+  readonly input_fingerprint: string;
+  readonly result_fingerprint: string;
+  readonly research_only: true;
+  readonly probability_generated: false;
+  readonly automatic_trading_eligible: false;
+  readonly created_at: string;
+}

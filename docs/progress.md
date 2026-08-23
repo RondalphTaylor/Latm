@@ -268,6 +268,13 @@ Final Phase 11 validation passed all 399 PostgreSQL-backed backend tests and 7 f
 
 Implemented limitations: refresh is manual, list responses are bounded without global totals, and the first active portfolio is shown without an interactive selector. The local database currently has market records but no portfolio or operational forecast sample, so runtime validation exercised real markets plus the intended empty states for portfolio, positions, opportunities, performance, and calibration.
 
+On 2026-08-23 the same read-only surface added MLB research observability. Three bounded server-only
+reads expose approved train/validation/test/prospective-holdout counts, the optional durable
+historical checkpoint, and its latest immutable batch. A not-yet-created checkpoint is an explicit
+empty state rather than an error. Cursor dates/offsets, batch reasons, and disabled
+model/probability/trading flags remain visible, but the dashboard has no collection or backfill
+mutation control. Independent failures still degrade only their own section.
+
 ## Offseason MLB ingestion foundation
 
 **Status:** Complete

@@ -396,7 +396,7 @@ Forecast performance exposes Brier score, decisive-prediction accuracy, all cali
 
 ## Read-only dashboard
 
-Open [http://localhost:3000](http://localhost:3000) after starting the Compose stack. The single responsive dashboard presents the primary paper portfolio, stored position marks, entry and monitoring history, operational forecasts, current opportunities, NBA market quotes, trading results, and calibration. It uses bounded server-side `GET` requests with no browser-to-backend CORS dependency. A failed section is labeled unavailable without replacing missing metrics with zero or hiding healthy sections.
+Open [http://localhost:3000](http://localhost:3000) after starting the Compose stack. The single responsive dashboard presents the primary paper portfolio, stored position marks, entry and monitoring history, operational forecasts, current opportunities, NBA market quotes, trading results, calibration, and MLB research-dataset readiness. The MLB section displays all four approved split thresholds, the durable historical cursor, and the latest immutable batch reasons without exposing a workflow-run button. It uses bounded server-side `GET` requests with no browser-to-backend CORS dependency. A failed section is labeled unavailable without replacing missing metrics with zero or hiding healthy sections.
 
 The page is deliberately observational. Its persistent `PAPER / SIMULATED` boundary is sourced from the only accepted runtime mode, and it exposes no paper-execution, monitoring-run, provider-ingestion, approval, or live-order control. Refreshing the page requests a new read-only server snapshot; Phase 11 does not add automatic polling or WebSockets.
 
@@ -470,4 +470,4 @@ infra/compose.yaml    Backend, frontend, and PostgreSQL development stack
 docs/                 Product, architecture, safety, and progress documentation
 ```
 
-See `AGENTS.md`, `ARCHITECTURE.md`, and `ROADMAP.md` for project constraints and phased scope. Paper entry, monitoring, settlement, evaluation, and the read-only dashboard are implemented without any live provider path or human-approval action. Phase 12 remains the next evidence milestone; the next bounded MLB slice is leakage-safe feature selection and model design, without enabling MLB trading prematurely.
+See `AGENTS.md`, `ARCHITECTURE.md`, and `ROADMAP.md` for project constraints and phased scope. Paper entry, monitoring, settlement, evaluation, and the read-only dashboard are implemented without any live provider path or human-approval action. Phase 12 remains the next evidence milestone. MLB work is currently collecting the approved retrospective and prospective datasets before any immutable fitted artifact or operational probability can be published; MLB trading remains disabled.

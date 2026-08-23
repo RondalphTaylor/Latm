@@ -124,7 +124,7 @@ function PerformanceMetrics({ performance }: { readonly performance: TradingPerf
 }
 
 export function Dashboard({ data, mode, viewModel }: DashboardProps) {
-  const { primaryPortfolio, performance } = viewModel;
+  const { primaryPortfolio, performance, mlbCheckpoint, mlbLatestBatch } = viewModel;
   const snapshot = primaryPortfolio?.latest_snapshot;
   const isReady = data.health.ok && data.health.data?.status === "ready";
   const primaryModel = viewModel.modelPerformance[0];
@@ -147,6 +147,7 @@ export function Dashboard({ data, mode, viewModel }: DashboardProps) {
           <a href="#forecasts">Forecasts</a>
           <a href="#opportunities">Edges</a>
           <a href="#markets">Markets</a>
+          <a href="#mlb-research">MLB research</a>
           <a href="#performance">Performance</a>
         </nav>
 
@@ -405,6 +406,108 @@ export function Dashboard({ data, mode, viewModel }: DashboardProps) {
                 </tbody>
               </table>
             </TableRegion>
+          )}
+        </Section>
+
+        <Section
+          id="mlb-research"
+          eyebrow="Offseason research"
+          title="MLB dataset readiness"
+          description="Checkpointed historical collection and prospective pregame evidence, kept outside every probability and trading path."
+          note="Read-only automation observability"
+        >
+          {!data.mlbReadiness.ok || data.mlbReadiness.data === null ? (
+            <EmptyState title="MLB readiness is unavailable">
+              {data.mlbReadiness.error ?? "The approved dataset policy could not be loaded."}
+            </EmptyState>
+          ) : (
+            <div className="mlb-research-stack">
+              <div className="mlb-readiness-grid" aria-label="MLB dataset split readiness">
+                {viewModel.mlbReadinessRows.map((row) => (
+                  <article className="mlb-readiness-card" key={row.split}>
+                    <div className="performance-title-row">
+                      <div>
+                        <p>{row.provenance}</p>
+                        <h3>{humanize(row.label)}</h3>
+                      </div>
+                      <StatusPill value={row.shortfall === 0 ? "ready" : "collecting"} />
+                    </div>
+                    <strong className="mlb-readiness-count">
+                      {row.eligible}<span> / {row.minimum}</span>
+                    </strong>
+                    <meter
+                      min={0}
+                      max={row.minimum}
+                      value={Math.min(row.eligible, row.minimum)}
+                      aria-label={`${row.label} readiness: ${row.eligible} of ${row.minimum}`}
+                    />
+                    <small>{row.shortfall === 0 ? "Threshold met" : `${row.shortfall} games short`}</small>
+                  </article>
+                ))}
+              </div>
+
+              <div className="mlb-workflow-grid">
+                <article className="performance-panel">
+                  <div className="performance-title-row">
+                    <div>
+                      <p>Historical workflow</p>
+                      <h3>{mlbCheckpoint === null ? "Not started" : humanize(mlbCheckpoint.status)}</h3>
+                    </div>
+                    <span className="status-pill pill-accent">Research only</span>
+                  </div>
+                  {mlbCheckpoint === null ? (
+                    <p className="workflow-copy">
+                      The first scheduled run will create the durable cursor. No historical batch has been consumed.
+                    </p>
+                  ) : (
+                    <dl className="scorecard-grid">
+                      <div><dt>Batches</dt><dd>{mlbCheckpoint.batches_completed}</dd></div>
+                      <div><dt>Examples created</dt><dd>{mlbCheckpoint.examples_created}</dd></div>
+                      <div><dt>Test cursor</dt><dd>{mlbCheckpoint.test_cursor_date} · {mlbCheckpoint.test_cursor_offset}</dd></div>
+                      <div><dt>Validation cursor</dt><dd>{mlbCheckpoint.validation_cursor_date} · {mlbCheckpoint.validation_cursor_offset}</dd></div>
+                      <div><dt>Train cursor</dt><dd>{mlbCheckpoint.train_cursor_date} · {mlbCheckpoint.train_cursor_offset}</dd></div>
+                      <div><dt>Last run</dt><dd>{formatTimestamp(mlbCheckpoint.last_run_at)}</dd></div>
+                    </dl>
+                  )}
+                </article>
+
+                <article className="performance-panel">
+                  <div className="performance-title-row">
+                    <div>
+                      <p>Latest immutable batch</p>
+                      <h3>{mlbLatestBatch === null ? "Awaiting first batch" : `Batch ${mlbLatestBatch.sequence}`}</h3>
+                    </div>
+                    {mlbLatestBatch === null ? null : <StatusPill value={mlbLatestBatch.split} />}
+                  </div>
+                  {mlbLatestBatch === null ? (
+                    <p className="workflow-copy">
+                      Batch provenance and terminal reasons will appear after the checkpoint advances.
+                    </p>
+                  ) : (
+                    <>
+                      <dl className="scorecard-grid">
+                        <div><dt>Window</dt><dd>{mlbLatestBatch.window_date}</dd></div>
+                        <div><dt>Examined</dt><dd>{mlbLatestBatch.examined}</dd></div>
+                        <div><dt>Vectors</dt><dd>{mlbLatestBatch.retrospective_vectors_built}</dd></div>
+                        <div><dt>Examples</dt><dd>{mlbLatestBatch.examples_created}</dd></div>
+                      </dl>
+                      <ul className="warning-list mlb-result-list">
+                        {Object.entries(mlbLatestBatch.result_counts)
+                          .filter(([, count]) => count > 0)
+                          .sort(([left], [right]) => left.localeCompare(right))
+                          .map(([reason, count]) => (
+                            <li key={reason}>{humanize(reason)}: {count}</li>
+                          ))}
+                      </ul>
+                    </>
+                  )}
+                </article>
+              </div>
+
+              <p className="mlb-safety-note">
+                Model fitting: disabled · Probability generation: disabled · Automatic trading: disabled
+              </p>
+            </div>
           )}
         </Section>
 

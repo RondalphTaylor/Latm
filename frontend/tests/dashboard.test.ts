@@ -51,7 +51,12 @@ test("dashboard adapter uses only bounded GET reads and skips portfolio routes w
   const fetcher = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
     calls.push({ url, init });
-    const payload = url.endsWith("/health/ready") ? { status: "ready" } : [];
+    if (url.endsWith("/mlb-research-backfill-workflow")) {
+      return new Response(JSON.stringify({ detail: "not started" }), { status: 404 });
+    }
+    const payload = url.endsWith("/health/ready") || url.endsWith("/mlb-approved-dataset-readiness")
+      ? { status: "ready" }
+      : [];
     return new Response(JSON.stringify(payload), {
       status: 200,
       headers: { "content-type": "application/json" },
@@ -66,7 +71,9 @@ test("dashboard adapter uses only bounded GET reads and skips portfolio routes w
   assert.equal(result.health.data?.status, "ready");
   assert.equal(result.portfolios.ok, true);
   assert.deepEqual(result.positions.data, []);
-  assert.equal(calls.length, 7);
+  assert.equal(result.mlbBackfillCheckpoint.ok, true);
+  assert.equal(result.mlbBackfillCheckpoint.data, null);
+  assert.equal(calls.length, 10);
   assert.ok(calls.every((call) => call.init?.method === undefined));
   assert.ok(calls.every((call) => call.init?.cache === "no-store"));
   assert.ok(calls.every((call) => !call.url.includes("paper-execution")));
@@ -78,6 +85,10 @@ test("one malformed resource degrades only that dashboard section", async () => 
     const url = String(input);
     let payload: unknown = [];
     if (url.endsWith("/health/ready")) payload = { status: "ready" };
+    if (url.endsWith("/mlb-approved-dataset-readiness")) payload = { status: "ready" };
+    if (url.endsWith("/mlb-research-backfill-workflow")) {
+      return new Response(JSON.stringify({ detail: "not started" }), { status: 404 });
+    }
     if (url.includes("/markets?")) payload = { not: "a list" };
     return new Response(JSON.stringify(payload), { status: 200 });
   }) as typeof fetch;

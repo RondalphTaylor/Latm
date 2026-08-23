@@ -831,7 +831,7 @@ Implemented limitations: sports events preserve only their latest normalized res
 
 # Phase 11: Basic Dashboard
 
-**Implementation status:** Complete on 2026-08-20. The shipped dashboard is a single responsive, server-rendered monitoring surface over the existing bounded read APIs. It isolates partial failures, preserves Decimal strings until display, labels stored position marks, and keeps paper/simulated mode permanently visible without adding any execution authority.
+**Implementation status:** Complete on 2026-08-20 and extended on 2026-08-23. The shipped dashboard is a single responsive, server-rendered monitoring surface over the existing bounded read APIs. It isolates partial failures, preserves Decimal strings until display, labels stored position marks, shows the MLB research dataset/checkpoint state, and keeps paper/simulated mode permanently visible without adding any execution authority.
 
 ## Goal
 

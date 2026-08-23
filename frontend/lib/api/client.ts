@@ -4,6 +4,9 @@ import type {
   ForecastPerformanceResponse,
   HealthResponse,
   MarketResponse,
+  MlbApprovedDatasetReadinessResponse,
+  MlbBackfillBatchResponse,
+  MlbBackfillCheckpointResponse,
   OpportunityResponse,
   PaperPositionResponse,
   PaperTradeResponse,
@@ -32,6 +35,9 @@ export interface DashboardData {
   readonly positionEvents: LoadState<readonly PositionEventResponse[]>;
   readonly forecastPerformance: LoadState<ForecastPerformanceResponse | null>;
   readonly tradingPerformance: LoadState<TradingPerformanceResponse | null>;
+  readonly mlbReadiness: LoadState<MlbApprovedDatasetReadinessResponse | null>;
+  readonly mlbBackfillCheckpoint: LoadState<MlbBackfillCheckpointResponse | null>;
+  readonly mlbBackfillBatches: LoadState<readonly MlbBackfillBatchResponse[]>;
 }
 
 type Validator<T> = (value: unknown) => value is T;
@@ -48,6 +54,7 @@ async function load<T>(
   fallback: T,
   validator: Validator<T>,
   fetcher: Fetcher,
+  notFoundIsEmpty = false,
 ): Promise<LoadState<T>> {
   try {
     const response = await fetcher(`${baseUrl}${path}`, {
@@ -56,6 +63,9 @@ async function load<T>(
       signal: AbortSignal.timeout(5000),
     });
 
+    if (response.status === 404 && notFoundIsEmpty) {
+      return { data: fallback, ok: true, error: null };
+    }
     if (!response.ok) {
       return {
         data: fallback,
@@ -82,7 +92,18 @@ export async function fetchDashboardData(
   config: Readonly<AppConfig>,
   fetcher: Fetcher = fetch,
 ): Promise<DashboardData> {
-  const [health, markets, events, forecasts, opportunities, portfolios, forecastPerformance] =
+  const [
+    health,
+    markets,
+    events,
+    forecasts,
+    opportunities,
+    portfolios,
+    forecastPerformance,
+    mlbReadiness,
+    mlbBackfillCheckpoint,
+    mlbBackfillBatches,
+  ] =
     await Promise.all([
       load<HealthResponse | null>(
         config.backendApiUrl,
@@ -131,6 +152,28 @@ export async function fetchDashboardData(
         "/forecast-performance?purpose=operational",
         null,
         (value: unknown): value is ForecastPerformanceResponse => isObject(value),
+        fetcher,
+      ),
+      load<MlbApprovedDatasetReadinessResponse | null>(
+        config.backendApiUrl,
+        "/mlb-approved-dataset-readiness",
+        null,
+        (value: unknown): value is MlbApprovedDatasetReadinessResponse => isObject(value),
+        fetcher,
+      ),
+      load<MlbBackfillCheckpointResponse | null>(
+        config.backendApiUrl,
+        "/mlb-research-backfill-workflow",
+        null,
+        (value: unknown): value is MlbBackfillCheckpointResponse => isObject(value),
+        fetcher,
+        true,
+      ),
+      load<MlbBackfillBatchResponse[]>(
+        config.backendApiUrl,
+        "/mlb-research-backfill-workflow/batches?limit=1&offset=0",
+        [],
+        isArray<MlbBackfillBatchResponse>,
         fetcher,
       ),
     ]);
@@ -191,5 +234,8 @@ export async function fetchDashboardData(
     positionEvents,
     forecastPerformance,
     tradingPerformance,
+    mlbReadiness,
+    mlbBackfillCheckpoint,
+    mlbBackfillBatches,
   };
 }

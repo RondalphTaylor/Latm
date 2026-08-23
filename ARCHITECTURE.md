@@ -185,7 +185,7 @@ A native mobile application is not required for the MVP.
 
 The implemented Phase 11 dashboard is a single Next.js Server Component route with anchored sections. A typed server-only adapter reads bounded FastAPI endpoints through `BACKEND_API_URL` with `cache: no-store`; the browser never calls FastAPI directly, so the MVP does not require CORS. Independent read failures remain isolated by section. Decimal accounting values stay as strings through the adapter and the UI renders authoritative portfolio, position, and evaluation fields without recomputing them.
 
-The dashboard is observational only. It contains no execution, monitoring-run, ingestion, approval, credential, provider-account, or live-order controls, and it displays the paper/simulated boundary persistently at desktop and mobile widths.
+The dashboard is observational only. It contains no execution, monitoring-run, ingestion, approval, credential, provider-account, or live-order controls, and it displays the paper/simulated boundary persistently at desktop and mobile widths. MLB research observability uses three additional bounded server-side reads for approved split readiness, the optional historical checkpoint, and its latest immutable batch. A checkpoint `404` is represented as an expected not-started state; other failures degrade only the MLB section. The UI never advances the cursor or invokes a provider.
 
 ---
 
