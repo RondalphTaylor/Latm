@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
@@ -27,6 +27,7 @@ pytestmark = pytest.mark.skipif(
 EVENT_ID = UUID("5574051a-d9a9-40f3-b13f-9f8c1c06ed51")
 OTHER_EVENT_ID = UUID("9b7e802a-f3a2-49d6-8c6d-d66100c14421")
 LINEUP_ID = UUID("b1793bf5-9c83-4ed5-a3bc-d39575d3eaea")
+RETROSPECTIVE_LINEUP_ID = UUID("b1793bf5-9c83-4ed5-a3bc-d39575d3eaeb")
 HOME_ID = UUID("68aa4703-01dd-4a87-829e-9cf210b1254e")
 AWAY_ID = UUID("0d207c65-05ea-4526-83b2-b2510169fd28")
 START = datetime(2030, 8, 22, 17, 35, tzinfo=UTC)
@@ -94,8 +95,9 @@ def _lineup_entries(prefix: int) -> list[dict[str, object]]:
 class EmptySavantProvider:
     """Deterministic read-only provider fixture for service/repository integration."""
 
-    def __init__(self) -> None:
+    def __init__(self, retrieved_at: datetime = OBSERVED) -> None:
         self.calls: list[tuple[MlbStatcastPlayerRole, tuple[str, ...], date, date]] = []
+        self.retrieved_at = retrieved_at
 
     async def get_player_rows(
         self,
@@ -112,7 +114,7 @@ class EmptySavantProvider:
             window_start_date=window_start_date,
             window_end_date=window_end_date,
             rows=(),
-            retrieved_at=OBSERVED,
+            retrieved_at=self.retrieved_at,
             response_sha256=("b" if role is MlbStatcastPlayerRole.PITCHER else "c") * 64,
         )
 
@@ -210,6 +212,39 @@ async def _run_integration() -> None:
                         source_snapshot={"provider": "mlb", "gamePk": "statcast-event"},
                     )
                 )
+                session.add(
+                    MlbLineupSnapshotRecord(
+                        id=RETROSPECTIVE_LINEUP_ID,
+                        sports_event_id=EVENT_ID,
+                        provider_name="mlb",
+                        provider_event_id="statcast-event",
+                        home_team_id=HOME_ID,
+                        away_team_id=AWAY_ID,
+                        scheduled_start_time=START,
+                        source_updated_at=START + timedelta(hours=3),
+                        retrieved_at=START + timedelta(hours=4),
+                        source_abstract_state="Final",
+                        source_detailed_state="Final",
+                        observation_phase="postgame",
+                        home_probable_pitcher={
+                            "provider_player_id": "10",
+                            "full_name": "Home Pitcher",
+                            "pitch_hand": "L",
+                        },
+                        away_probable_pitcher={
+                            "provider_player_id": "20",
+                            "full_name": "Away Pitcher",
+                            "pitch_hand": "R",
+                        },
+                        home_lineup_state="posted",
+                        away_lineup_state="posted",
+                        home_lineup=_lineup_entries(1000),
+                        away_lineup=_lineup_entries(2000),
+                        complete_for_pregame_model=False,
+                        input_fingerprint="f" * 64,
+                        source_snapshot={"provider": "mlb", "gamePk": "statcast-event"},
+                    )
+                )
                 await session.commit()
 
                 repository = MlbStatcastRepository(session)
@@ -245,6 +280,19 @@ async def _run_integration() -> None:
                 assert records[0].source_rows == []
                 assert records[0].observation_basis == "operational_pregame"
                 assert records[0].home_starting_pitcher["pitch_count"] == 0
+
+                retrospective_service = MlbStatcastService(
+                    provider=EmptySavantProvider(START + timedelta(hours=4)),
+                    repository=repository,
+                    engine=DeterministicMlbStatcastFeatureEngine(),
+                    policy=MlbStatcastFeaturePolicy(),
+                )
+                retrospective = await retrospective_service.ingest(
+                    event_id=EVENT_ID,
+                    lineup_snapshot_id=RETROSPECTIVE_LINEUP_ID,
+                )
+                assert retrospective.snapshot.observation_basis == "retrospective"
+                assert retrospective.snapshot.operational_pregame_eligible is False
 
                 with pytest.raises(IntegrityError):
                     async with session.begin_nested():

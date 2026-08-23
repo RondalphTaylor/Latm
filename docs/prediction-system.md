@@ -1518,6 +1518,12 @@ selection returns at most one labeled vector per event, always preferring operat
 evidence; retrospective fallback is explicit and research-only. These additions still fit no
 coefficients and cannot generate a probability.
 
+Dataset-readiness V1 uses fixed June 1, July 1, and August 23, 2026 boundaries and minimum split
+sizes of 500/150/150/200. Retrospective examples are permitted only for exploratory train,
+validation, and test intervals; the prospective holdout is operational-pregame-only. Historical
+backfill can use complete official postgame lineups, but every derived source and example retains
+retrospective provenance and cannot satisfy the holdout or any trading gate.
+
 ---
 
 # 53. Recommended Development Principle

@@ -8,7 +8,17 @@ from app.api.mlb_modeling import (
     get_mlb_game_feature_repository,
     get_mlb_game_feature_service,
 )
+from app.domain.mlb_modeling import (
+    MlbDatasetReadinessAssessment,
+    MlbDatasetReadinessInput,
+    MlbDatasetSplit,
+    approved_mlb_dataset_readiness_policy,
+)
 from app.main import create_app
+from app.services.mlb_modeling.engine import (
+    DeterministicMlbDatasetReadinessEngine,
+    mlb_chronological_split_policy_fingerprint,
+)
 from app.services.mlb_modeling.repository import (
     MlbCanonicalDatasetSelection,
     MlbDatasetInventory,
@@ -49,7 +59,21 @@ class InventoryService:
             operational_example_count=0,
             retrospective_example_count=0,
             split_counts={},
+            operational_split_counts={},
+            retrospective_split_counts={},
             examples=(),
+        )
+
+    async def approved_dataset_readiness(self) -> MlbDatasetReadinessAssessment:
+        policy = approved_mlb_dataset_readiness_policy()
+        split_fingerprint = mlb_chronological_split_policy_fingerprint(policy.split_policy)
+        return DeterministicMlbDatasetReadinessEngine().evaluate(
+            MlbDatasetReadinessInput(
+                split_policy_fingerprint=split_fingerprint,
+                operational_split_counts={MlbDatasetSplit.PROSPECTIVE_HOLDOUT: 12},
+                retrospective_split_counts={MlbDatasetSplit.TRAIN: 120},
+                policy=policy,
+            )
         )
 
 
@@ -136,6 +160,33 @@ def test_canonical_dataset_contract_remains_non_fitting_and_non_trading() -> Non
     assert body["selected_example_count"] == 0
     assert body["include_retrospective_research"] is False
     assert body["canonical_selection_policy"].startswith("one_per_event")
-    assert body["minimum_sample_threshold_approved"] is False
+    assert body["minimum_sample_threshold_approved"] is True
     assert body["model_fitting_enabled"] is False
+    assert body["automatic_trading_enabled"] is False
+
+
+def test_approved_dataset_readiness_exposes_thresholds_and_shortfalls() -> None:
+    app = create_app()
+    app.dependency_overrides[get_mlb_game_feature_service] = InventoryService
+    with TestClient(app) as client:
+        response = client.get("/mlb-approved-dataset-readiness")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["validation_start"] == "2026-06-01T00:00:00Z"
+    assert body["test_start"] == "2026-07-01T00:00:00Z"
+    assert body["prospective_holdout_start"] == "2026-08-23T00:00:00Z"
+    assert body["minimum_split_counts"] == {
+        "train": 500,
+        "validation": 150,
+        "test": 150,
+        "prospective_holdout": 200,
+    }
+    assert body["eligible_split_counts"]["train"] == 120
+    assert body["eligible_split_counts"]["prospective_holdout"] == 12
+    assert body["shortfall_by_split"]["train"] == 380
+    assert body["shortfall_by_split"]["prospective_holdout"] == 188
+    assert body["exploratory_fit_data_ready"] is False
+    assert body["model_fitting_enabled"] is False
+    assert body["probability_generation_enabled"] is False
     assert body["automatic_trading_enabled"] is False

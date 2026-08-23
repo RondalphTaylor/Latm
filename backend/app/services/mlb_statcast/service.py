@@ -66,8 +66,8 @@ class MlbStatcastService:
             raise LookupError("MLB lineup snapshot not found")
         if lineup.sports_event_id != event_id:
             raise ValueError("MLB lineup snapshot does not belong to the requested event")
-        if not lineup.complete_for_pregame_model:
-            raise ValueError("Statcast ingestion requires a complete pregame lineup snapshot")
+        if not lineup.complete_for_research_features:
+            raise ValueError("Statcast ingestion requires two complete lineups and starters")
         event = lineup.sports_event
         if event.provider_name != "mlb" or event.league != "mlb":
             raise ValueError("Statcast ingestion requires an official MLB event")

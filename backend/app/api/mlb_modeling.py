@@ -16,6 +16,7 @@ from app.domain.mlb_modeling import (
 )
 from app.domain.mlb_statcast import MlbStatcastObservationBasis
 from app.schemas.mlb_modeling import (
+    MlbApprovedDatasetReadinessResponse,
     MlbCanonicalDatasetResponse,
     MlbDatasetInventoryResponse,
     MlbDatasetLabelResponse,
@@ -206,6 +207,17 @@ async def get_mlb_canonical_dataset(
         offset=offset,
     )
     return MlbCanonicalDatasetResponse.from_selection(selection)
+
+
+@router.get(
+    "/mlb-approved-dataset-readiness",
+    response_model=MlbApprovedDatasetReadinessResponse,
+)
+async def get_mlb_approved_dataset_readiness(
+    service: Annotated[MlbGameFeatureService, Depends(get_mlb_game_feature_service)],
+) -> MlbApprovedDatasetReadinessResponse:
+    assessment = await service.approved_dataset_readiness()
+    return MlbApprovedDatasetReadinessResponse.from_assessment(assessment)
 
 
 @router.get(

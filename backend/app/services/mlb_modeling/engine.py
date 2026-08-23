@@ -9,6 +9,9 @@ from decimal import Decimal
 from app.domain.mlb_modeling import (
     SELECTED_MLB_FEATURES,
     MlbChronologicalDatasetPolicy,
+    MlbDatasetReadinessAssessment,
+    MlbDatasetReadinessInput,
+    MlbDatasetReadinessPolicy,
     MlbDatasetSplit,
     MlbFeatureSelectionPolicy,
     MlbGameFeatureVector,
@@ -52,6 +55,68 @@ def mlb_chronological_split_policy_fingerprint(
     policy: MlbChronologicalDatasetPolicy,
 ) -> str:
     return _hash(policy.model_dump(mode="json"))
+
+
+def mlb_dataset_readiness_policy_fingerprint(policy: MlbDatasetReadinessPolicy) -> str:
+    return _hash(policy.model_dump(mode="json"))
+
+
+class DeterministicMlbDatasetReadinessEngine:
+    """Evaluate approved minimums without fitting a model or emitting probabilities."""
+
+    def evaluate(self, source: MlbDatasetReadinessInput) -> MlbDatasetReadinessAssessment:
+        expected_split_fingerprint = mlb_chronological_split_policy_fingerprint(
+            source.policy.split_policy
+        )
+        if source.split_policy_fingerprint != expected_split_fingerprint:
+            raise ValueError("MLB readiness counts use a different chronological split policy")
+
+        minimums = {
+            MlbDatasetSplit.TRAIN: source.policy.minimum_train_examples,
+            MlbDatasetSplit.VALIDATION: source.policy.minimum_validation_examples,
+            MlbDatasetSplit.TEST: source.policy.minimum_test_examples,
+            MlbDatasetSplit.PROSPECTIVE_HOLDOUT: (
+                source.policy.minimum_prospective_holdout_examples
+            ),
+        }
+        eligible: dict[MlbDatasetSplit, int] = {}
+        for split in MlbDatasetSplit:
+            operational = source.operational_split_counts.get(split, 0)
+            retrospective = source.retrospective_split_counts.get(split, 0)
+            eligible[split] = (
+                operational
+                if split is MlbDatasetSplit.PROSPECTIVE_HOLDOUT
+                else operational + retrospective
+            )
+        shortfalls = {split: max(minimums[split] - eligible[split], 0) for split in MlbDatasetSplit}
+        exploratory_ready = all(
+            shortfalls[split] == 0
+            for split in (
+                MlbDatasetSplit.TRAIN,
+                MlbDatasetSplit.VALIDATION,
+                MlbDatasetSplit.TEST,
+            )
+        )
+        prospective_ready = exploratory_ready and all(
+            shortfall == 0 for shortfall in shortfalls.values()
+        )
+        blockers = tuple(
+            f"{split.value}_shortfall:{shortfalls[split]}"
+            for split in MlbDatasetSplit
+            if shortfalls[split] > 0
+        )
+        return MlbDatasetReadinessAssessment(
+            policy_name=source.policy.policy_name,
+            policy_version=source.policy.policy_version,
+            policy_fingerprint=mlb_dataset_readiness_policy_fingerprint(source.policy),
+            split_policy_fingerprint=expected_split_fingerprint,
+            minimum_split_counts=minimums,
+            eligible_split_counts=eligible,
+            shortfall_by_split=shortfalls,
+            exploratory_fit_data_ready=exploratory_ready,
+            prospective_evaluation_data_ready=prospective_ready,
+            blockers=blockers,
+        )
 
 
 def _weighted(

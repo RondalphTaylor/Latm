@@ -389,6 +389,29 @@ operational labeled dataset therefore remains empty. Minimum sample thresholds, 
 split dates, model fitting, and probability output are still blocked pending sufficient prospective
 data and explicit approval.
 
+## Offseason MLB approved readiness and retrospective backfill
+
+**Status:** Complete
+**Completed:** 2026-08-22
+
+The eighth MLB pilot slice codifies the user-approved V1 data policy: chronological boundaries at
+June 1, July 1, and August 23, 2026; minimum counts of 500 train, 150 validation, 150 test, and 200
+prospective-holdout games; retrospective research permitted in the first three intervals; and an
+operational-pregame-only holdout. A deterministic fingerprinted evaluator exposes eligible counts,
+per-split shortfalls, exploratory-fit readiness, and prospective-evaluation readiness while keeping
+model fitting, probability generation, and trading disabled.
+
+Bounded historical backfill now admits an official completed game's two posted lineups and starters
+as a complete research payload without mislabeling it pregame. Statcast retrieval after first pitch
+is still forced to `retrospective`, the vector remains operationally ineligible, and only an exact
+official final result can produce a label. Calls are limited to seven calendar days and ten returned
+events, preserving independently replayable append-only progress.
+
+The first live official backfill for August 21, 2026 built and labeled one complete test example.
+Its 7,245 retained pitch observations occupy about 259 KiB in PostgreSQL's compressed JSONB storage.
+Readiness changed from a test shortfall of 150 to 149; train, validation, and operational holdout
+shortfalls remain 500, 150, and 200. No probability or trading capability was enabled.
+
 ## Previous-phase schema repair
 
 **Status:** Complete
@@ -402,9 +425,9 @@ Final repair validation passed all 415 backend tests against PostgreSQL, Ruff, s
 
 ## Next phase
 
-Continue invoking bounded prospective collection near official lineup publication and label those
-vectors after final results. Once the canonical operational sample is non-empty, approve minimum
-sample thresholds plus concrete split dates, then fit and evaluate the regularized logistic
-baseline. Do not expose an MLB probability until out-of-sample discrimination and calibration are
+Continue bounded retrospective backfill until the 500/150/150 exploratory thresholds are met while
+collecting and labeling operational games toward the 200-game prospective holdout. Then fit and
+evaluate the regularized logistic baseline as a research artifact. Do not expose an operational MLB
+probability until both retrospective out-of-sample and prospective discrimination/calibration are
 reported. MLB trading remains disabled. Phase 12 research/evidence work remains the next broader
 roadmap milestone.

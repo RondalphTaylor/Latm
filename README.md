@@ -135,6 +135,7 @@ Invoke-RestMethod -Method Post "http://localhost:8000/mlb-dataset-examples/run?g
 Invoke-RestMethod "http://localhost:8000/mlb-dataset-examples?split_policy_fingerprint=<fingerprint>"
 Invoke-RestMethod "http://localhost:8000/mlb-dataset-readiness?split_policy_fingerprint=<fingerprint>"
 Invoke-RestMethod "http://localhost:8000/mlb-canonical-dataset?split_policy_fingerprint=<fingerprint>"
+Invoke-RestMethod "http://localhost:8000/mlb-approved-dataset-readiness"
 ```
 
 The append-only example freezes the final scores, team/event semantics, source observation time and
@@ -143,7 +144,8 @@ live, postponed, scoreless, tied, mismatched, or incomplete-vector inputs fail c
 reports operational and retrospective examples separately. The canonical read selects at most one
 example per event, preferring operational pregame provenance and otherwise choosing the newest
 feature/outcome evidence deterministically. Retrospective fallback must be opted into and remains
-research-only. Minimum sample thresholds, fitting, and probability output remain disabled.
+research-only. The approved thresholds are exposed separately; fitting and probability output remain
+disabled until their data gates pass and a fitted-artifact slice is implemented.
 
 Run bounded prospective collection for an explicit schedule window:
 
@@ -158,6 +160,22 @@ terminal reason, partial progress is retained, and failures do not cause the col
 inputs or cross first pitch. There is intentionally no in-process scheduler: invoke this endpoint
 from an external timer near expected lineup publication. It is read-only with respect to providers,
 research-only, emits no probability, and has no account or trading controls.
+
+The approved V1 research policy uses chronological boundaries of June 1, July 1, and August 23,
+2026. Exploratory fitting requires 500 train, 150 validation, and 150 test games; those intervals
+may use explicitly labeled retrospective examples. The prospective holdout requires 200 operational
+pregame examples and never counts retrospective data. Backfill at most ten completed games per
+request (default five):
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8000/mlb-research-backfill/run?start_date=2026-08-21&end_date=2026-08-21&limit=5&offset=0"
+```
+
+Historical backfill accepts two complete posted batting orders and two starters even when observed
+postgame, but the resulting Statcast snapshot, vector, and label are permanently retrospective and
+research-only. Operational eligibility still requires the original observation and retrieval times
+strictly before first pitch. The readiness endpoint reports exact eligible counts and shortfalls;
+it does not enable fitting, probability output, or trading.
 
 Ingest only the exact official Kalshi MLB game-winner series and inspect its typed classifications:
 

@@ -551,8 +551,20 @@ invoke collection near lineup publication.
 Canonical dataset reads rank immutable labeled examples within each event. Operational pregame
 evidence always outranks retrospective evidence, followed by newest feature build, official outcome
 observation, label time, and stable ID. Retrospective fallback is explicit and research-only. The
-selection is deterministic and paginated, but it still declares no approved sample minimum, fits no
-coefficients, and emits no probability.
+selection is deterministic and paginated, but it fits no coefficients and emits no probability.
+
+The approved MLB dataset-readiness V1 policy freezes chronological boundaries at June 1, July 1,
+and August 23, 2026, with minimum counts of 500 train, 150 validation, 150 test, and 200 prospective
+holdout games. Retrospective examples may satisfy only the first three exploratory intervals. The
+prospective holdout counts only operational pregame examples. A pure evaluator fingerprints this
+policy and reports every split shortfall without granting model, probability, or trading authority.
+
+Bounded retrospective backfill may use a complete official postgame lineup payload for research.
+This does not redefine `complete_for_pregame_model`: only two posted nine-player orders and two
+starters are admitted, Statcast retrieval after first pitch remains structurally `retrospective`,
+and the resulting vector and label stay ineligible for operational use. Each call handles at most
+seven dates and ten returned events, using the same append-only lineage and official final-result
+checks as explicit single-record ingestion.
 
 This shared storage does not make the downstream pipeline sport-agnostic by implication. The
 matcher now supports separately versioned NBA and MLB alias policies, while the Elo model, forecast

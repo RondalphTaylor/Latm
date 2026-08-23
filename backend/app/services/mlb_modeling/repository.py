@@ -65,6 +65,8 @@ class MlbCanonicalDatasetSelection:
     operational_example_count: int
     retrospective_example_count: int
     split_counts: dict[str, int]
+    operational_split_counts: dict[str, int]
+    retrospective_split_counts: dict[str, int]
     examples: tuple[MlbLabeledFeatureExampleRecord, ...]
 
 
@@ -103,8 +105,12 @@ class MlbGameFeatureRepository:
             raise MlbGameFeatureConflictError("lineup lineage changed")
         if vector.statcast_snapshot_id != statcast.id:
             raise MlbGameFeatureConflictError("Statcast lineage changed")
-        if not lineup.complete_for_pregame_model:
-            raise MlbGameFeatureConflictError("source lineup is not complete")
+        if not lineup.complete_for_research_features:
+            raise MlbGameFeatureConflictError("source lineup payload is not complete")
+        if vector.operational_model_input_eligible and not lineup.complete_for_pregame_model:
+            raise MlbGameFeatureConflictError(
+                "operational feature vectors require a complete pregame lineup observation"
+            )
         if (
             event.provider_event_id != vector.provider_event_id
             or event.event_date != vector.target_event_date
@@ -495,6 +501,8 @@ class MlbGameFeatureRepository:
             .all()
         )
         split_counts: dict[str, int] = {}
+        operational_counts: dict[str, int] = {}
+        retrospective_counts: dict[str, int] = {}
         operational = 0
         retrospective = 0
         for basis, split, count in count_rows:
@@ -503,8 +511,10 @@ class MlbGameFeatureRepository:
             split_counts[split_name] = split_counts.get(split_name, 0) + amount
             if basis == "operational_pregame":
                 operational += amount
+                operational_counts[split_name] = amount
             else:
                 retrospective += amount
+                retrospective_counts[split_name] = amount
         return MlbCanonicalDatasetSelection(
             split_policy_fingerprint=split_policy_fingerprint,
             include_retrospective_research=include_retrospective_research,
@@ -512,5 +522,7 @@ class MlbGameFeatureRepository:
             operational_example_count=operational,
             retrospective_example_count=retrospective,
             split_counts=split_counts,
+            operational_split_counts=operational_counts,
+            retrospective_split_counts=retrospective_counts,
             examples=tuple(records),
         )

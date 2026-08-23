@@ -1337,8 +1337,10 @@ vector and a pure chronological train/validation/test/prospective-holdout contra
 fits no coefficients and emits no probability. The sixth slice freezes official final outcomes
 against exact vectors and reports operational versus retrospective dataset inventory without
 claiming training readiness. The seventh slice adds bounded prospective collection and deterministic
-one-vector-per-event canonical selection. The local dataset still has no operational labeled sample,
-so minimum-sample approval, fitting, and out-of-sample evaluation remain blocked. Evidence,
+one-vector-per-event canonical selection. The eighth slice freezes the user-approved 500/150/150/200
+chronological readiness policy and adds bounded, explicitly retrospective completed-game backfill.
+The operational prospective holdout still has no labeled sample, so fitting and out-of-sample
+evaluation remain disabled. Evidence,
 opportunities, evaluation, and trading are not implemented for MLB.
 
 ## Goal

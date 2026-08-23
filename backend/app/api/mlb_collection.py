@@ -12,8 +12,11 @@ from app.api.mlb_statcast import get_mlb_statcast_service
 from app.api.sports import get_sports_repository
 from app.providers.sports.base import SportsDataProviderError
 from app.providers.sports.mlb import MlbStatsSportsDataProvider
-from app.schemas.mlb_collection import MlbCollectionRunResponse
-from app.services.mlb_collection import MlbProspectiveCollectionService
+from app.schemas.mlb_collection import MlbBackfillRunResponse, MlbCollectionRunResponse
+from app.services.mlb_collection import (
+    MlbProspectiveCollectionService,
+    MlbRetrospectiveBackfillService,
+)
 from app.services.mlb_lineups.service import MlbLineupService
 from app.services.mlb_modeling.service import MlbGameFeatureService
 from app.services.mlb_statcast.service import MlbStatcastService
@@ -32,6 +35,25 @@ def get_mlb_collection_service(
     feature_service: Annotated[MlbGameFeatureService, Depends(get_mlb_game_feature_service)],
 ) -> MlbProspectiveCollectionService:
     return MlbProspectiveCollectionService(
+        sports_ingestion=SportsIngestionService(
+            provider=provider,
+            repository=sports_repository,
+        ),
+        sports_repository=sports_repository,
+        lineup_service=lineup_service,
+        statcast_service=statcast_service,
+        feature_service=feature_service,
+    )
+
+
+def get_mlb_backfill_service(
+    provider: Annotated[MlbStatsSportsDataProvider, Depends(get_mlb_lineup_provider)],
+    sports_repository: Annotated[SportsRepository, Depends(get_sports_repository)],
+    lineup_service: Annotated[MlbLineupService, Depends(get_mlb_lineup_service)],
+    statcast_service: Annotated[MlbStatcastService, Depends(get_mlb_statcast_service)],
+    feature_service: Annotated[MlbGameFeatureService, Depends(get_mlb_game_feature_service)],
+) -> MlbRetrospectiveBackfillService:
+    return MlbRetrospectiveBackfillService(
         sports_ingestion=SportsIngestionService(
             provider=provider,
             repository=sports_repository,
@@ -70,3 +92,32 @@ async def run_mlb_research_collection(
             detail="official MLB schedule source unavailable",
         ) from exc
     return MlbCollectionRunResponse.from_result(result)
+
+
+@router.post("/mlb-research-backfill/run", response_model=MlbBackfillRunResponse)
+async def run_mlb_research_backfill(
+    start_date: Annotated[date, Query()],
+    end_date: Annotated[date, Query()],
+    service: Annotated[MlbRetrospectiveBackfillService, Depends(get_mlb_backfill_service)],
+    limit: Annotated[int, Query(ge=1, le=10)] = 5,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> MlbBackfillRunResponse:
+    """Build labeled research examples from a bounded official completed-game window."""
+    try:
+        result = await service.run(
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
+    except SportsDataProviderError as exc:
+        logger.warning("MLB retrospective schedule refresh failed safely: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="official MLB schedule source unavailable",
+        ) from exc
+    return MlbBackfillRunResponse.from_result(result)

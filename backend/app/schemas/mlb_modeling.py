@@ -8,11 +8,13 @@ from pydantic import BaseModel, ConfigDict
 
 from app.domain.mlb_modeling import (
     SELECTED_MLB_FEATURES,
+    MlbDatasetReadinessAssessment,
     MlbDatasetSplit,
     MlbMatchupFeatureCoverage,
     MlbMatchupSourceMetrics,
     MlbSelectedFeatureName,
     MlbSelectedFeatureValues,
+    approved_mlb_dataset_readiness_policy,
 )
 from app.models.mlb import MlbGameFeatureVectorRecord, MlbLabeledFeatureExampleRecord
 from app.services.mlb_modeling.repository import (
@@ -254,11 +256,13 @@ class MlbCanonicalDatasetResponse(BaseModel):
     operational_example_count: int
     retrospective_example_count: int
     split_counts: dict[str, int]
+    operational_split_counts: dict[str, int]
+    retrospective_split_counts: dict[str, int]
     examples: tuple[MlbLabeledFeatureExampleResponse, ...]
     canonical_selection_policy: Literal[
         "one_per_event_prefer_operational_then_latest_vector_and_outcome"
     ]
-    minimum_sample_threshold_approved: Literal[False]
+    minimum_sample_threshold_approved: Literal[True]
     model_fitting_enabled: Literal[False]
     probability_generation_enabled: Literal[False]
     automatic_trading_enabled: Literal[False]
@@ -267,7 +271,7 @@ class MlbCanonicalDatasetResponse(BaseModel):
     @classmethod
     def from_selection(cls, selection: MlbCanonicalDatasetSelection) -> MlbCanonicalDatasetResponse:
         warnings = [
-            "selection is deterministic, but minimum sample thresholds and split dates require approval",
+            "approved V1 thresholds are evaluated by /mlb-approved-dataset-readiness",
             "no fitted MLB model or probability output exists",
         ]
         if selection.include_retrospective_research:
@@ -282,6 +286,8 @@ class MlbCanonicalDatasetResponse(BaseModel):
             operational_example_count=selection.operational_example_count,
             retrospective_example_count=selection.retrospective_example_count,
             split_counts=selection.split_counts,
+            operational_split_counts=selection.operational_split_counts,
+            retrospective_split_counts=selection.retrospective_split_counts,
             examples=tuple(
                 MlbLabeledFeatureExampleResponse.from_record(record)
                 for record in selection.examples
@@ -289,9 +295,58 @@ class MlbCanonicalDatasetResponse(BaseModel):
             canonical_selection_policy=(
                 "one_per_event_prefer_operational_then_latest_vector_and_outcome"
             ),
-            minimum_sample_threshold_approved=False,
+            minimum_sample_threshold_approved=True,
             model_fitting_enabled=False,
             probability_generation_enabled=False,
             automatic_trading_enabled=False,
             warnings=tuple(warnings),
+        )
+
+
+class MlbApprovedDatasetReadinessResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    policy_name: str
+    policy_version: str
+    policy_fingerprint: str
+    split_policy_fingerprint: str
+    validation_start: datetime
+    test_start: datetime
+    prospective_holdout_start: datetime
+    minimum_split_counts: dict[MlbDatasetSplit, int]
+    eligible_split_counts: dict[MlbDatasetSplit, int]
+    shortfall_by_split: dict[MlbDatasetSplit, int]
+    exploratory_fit_data_ready: bool
+    prospective_evaluation_data_ready: bool
+    retrospective_allowed_for_exploratory_splits: Literal[True]
+    prospective_holdout_requires_operational_pregame: Literal[True]
+    model_fitting_enabled: Literal[False]
+    probability_generation_enabled: Literal[False]
+    automatic_trading_enabled: Literal[False]
+    blockers: tuple[str, ...]
+
+    @classmethod
+    def from_assessment(
+        cls, assessment: MlbDatasetReadinessAssessment
+    ) -> MlbApprovedDatasetReadinessResponse:
+        policy = approved_mlb_dataset_readiness_policy()
+        return cls(
+            policy_name=assessment.policy_name,
+            policy_version=assessment.policy_version,
+            policy_fingerprint=assessment.policy_fingerprint,
+            split_policy_fingerprint=assessment.split_policy_fingerprint,
+            validation_start=policy.split_policy.validation_start,
+            test_start=policy.split_policy.test_start,
+            prospective_holdout_start=policy.split_policy.prospective_holdout_start,
+            minimum_split_counts=assessment.minimum_split_counts,
+            eligible_split_counts=assessment.eligible_split_counts,
+            shortfall_by_split=assessment.shortfall_by_split,
+            exploratory_fit_data_ready=assessment.exploratory_fit_data_ready,
+            prospective_evaluation_data_ready=assessment.prospective_evaluation_data_ready,
+            retrospective_allowed_for_exploratory_splits=True,
+            prospective_holdout_requires_operational_pregame=True,
+            model_fitting_enabled=False,
+            probability_generation_enabled=False,
+            automatic_trading_enabled=False,
+            blockers=assessment.blockers,
         )

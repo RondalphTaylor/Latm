@@ -117,6 +117,19 @@ class MlbLineupSnapshotRecord(Base):
 
     sports_event: Mapped[SportsEventRecord] = relationship(lazy="joined")
 
+    @property
+    def complete_for_research_features(self) -> bool:
+        """Whether exact pitcher and nine-player lineups exist, regardless of observation time."""
+
+        return (
+            self.home_lineup_state == "posted"
+            and self.away_lineup_state == "posted"
+            and self.home_probable_pitcher is not None
+            and self.away_probable_pitcher is not None
+            and len(self.home_lineup) == 9
+            and len(self.away_lineup) == 9
+        )
+
 
 class MlbStatcastFeatureSnapshotRecord(Base):
     """Append-only official Statcast quantitative features for one posted lineup."""

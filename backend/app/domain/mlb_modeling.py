@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Literal, Self
@@ -355,3 +355,72 @@ class MlbLabeledFeatureExample(BaseModel):
     split_policy_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
     outcome_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
     example_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class MlbDatasetReadinessPolicy(BaseModel):
+    """User-approved V1 thresholds and chronological boundaries for MLB research."""
+
+    model_config = ConfigDict(frozen=True)
+
+    policy_name: str = "mlb_dataset_readiness"
+    policy_version: str = "v1"
+    split_policy: MlbChronologicalDatasetPolicy = MlbChronologicalDatasetPolicy(
+        validation_start=datetime(2026, 6, 1, tzinfo=UTC),
+        test_start=datetime(2026, 7, 1, tzinfo=UTC),
+        prospective_holdout_start=datetime(2026, 8, 23, tzinfo=UTC),
+    )
+    minimum_train_examples: int = Field(default=500, ge=1)
+    minimum_validation_examples: int = Field(default=150, ge=1)
+    minimum_test_examples: int = Field(default=150, ge=1)
+    minimum_prospective_holdout_examples: int = Field(default=200, ge=1)
+    exploratory_split_provenance: Literal["operational_or_retrospective_research"] = (
+        "operational_or_retrospective_research"
+    )
+    prospective_holdout_provenance: Literal["operational_pregame_only"] = "operational_pregame_only"
+    random_shuffle: Literal[False] = False
+
+
+class MlbDatasetReadinessInput(BaseModel):
+    """Canonical counts supplied to the pure readiness evaluator."""
+
+    model_config = ConfigDict(frozen=True)
+
+    split_policy_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operational_split_counts: dict[MlbDatasetSplit, int]
+    retrospective_split_counts: dict[MlbDatasetSplit, int]
+    policy: MlbDatasetReadinessPolicy
+
+    @field_validator("operational_split_counts", "retrospective_split_counts")
+    @classmethod
+    def counts_are_nonnegative(
+        cls, value: dict[MlbDatasetSplit, int]
+    ) -> dict[MlbDatasetSplit, int]:
+        if any(count < 0 for count in value.values()):
+            raise ValueError("MLB dataset counts cannot be negative")
+        return value
+
+
+class MlbDatasetReadinessAssessment(BaseModel):
+    """Fail-closed assessment; readiness never implies probability or trading authority."""
+
+    model_config = ConfigDict(frozen=True)
+
+    policy_name: str
+    policy_version: str
+    policy_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    split_policy_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    minimum_split_counts: dict[MlbDatasetSplit, int]
+    eligible_split_counts: dict[MlbDatasetSplit, int]
+    shortfall_by_split: dict[MlbDatasetSplit, int]
+    exploratory_fit_data_ready: bool
+    prospective_evaluation_data_ready: bool
+    blockers: tuple[str, ...]
+    research_only: Literal[True] = True
+    probability_generation_enabled: Literal[False] = False
+    automatic_trading_enabled: Literal[False] = False
+
+
+def approved_mlb_dataset_readiness_policy() -> MlbDatasetReadinessPolicy:
+    """Return the immutable policy approved on 2026-08-22."""
+
+    return MlbDatasetReadinessPolicy()

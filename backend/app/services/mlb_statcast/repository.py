@@ -59,9 +59,13 @@ class MlbStatcastRepository:
             )
         if snapshot.lineup_snapshot_id != lineup.id:
             raise MlbStatcastSourceConflictError("Statcast snapshot points to the wrong lineup")
-        if not lineup.complete_for_pregame_model:
+        if not lineup.complete_for_research_features:
             raise MlbStatcastSourceConflictError(
-                "Statcast snapshots require a complete pregame lineup observation"
+                "Statcast snapshots require two complete lineups and starters"
+            )
+        if snapshot.operational_pregame_eligible and not lineup.complete_for_pregame_model:
+            raise MlbStatcastSourceConflictError(
+                "operational Statcast snapshots require a complete pregame lineup observation"
             )
         if event.provider_event_id != snapshot.provider_event_id:
             raise MlbStatcastSourceConflictError("official MLB event identity changed")

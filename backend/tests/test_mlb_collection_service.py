@@ -11,12 +11,20 @@ import pytest
 
 from app.models.mlb import (
     MlbGameFeatureVectorRecord,
+    MlbLabeledFeatureExampleRecord,
     MlbLineupSnapshotRecord,
     MlbStatcastFeatureSnapshotRecord,
 )
-from app.services.mlb_collection import MlbProspectiveCollectionService
+from app.services.mlb_collection import (
+    MlbProspectiveCollectionService,
+    MlbRetrospectiveBackfillService,
+)
 from app.services.mlb_lineups.service import MlbLineupIngestionResult, MlbLineupService
-from app.services.mlb_modeling.service import MlbGameFeatureBuildResult, MlbGameFeatureService
+from app.services.mlb_modeling.service import (
+    MlbDatasetLabelResult,
+    MlbGameFeatureBuildResult,
+    MlbGameFeatureService,
+)
 from app.services.mlb_statcast.service import MlbStatcastIngestionResult, MlbStatcastService
 from app.services.sports.ingestion import EventIngestionResult, SportsIngestionService
 from app.services.sports.repository import SportsRepository
@@ -173,3 +181,68 @@ async def _reject_range() -> None:
 
 def test_collection_rejects_range_over_seven_days_before_provider_call() -> None:
     asyncio.run(_reject_range())
+
+
+class FakeFinalSportsRepository:
+    async def list_events(self, **_: object) -> list[FakeEvent]:
+        return [FakeEvent(FINAL_ID, "final", NOW - timedelta(days=1), status="final")]
+
+
+class FakeHistoricalLineupService:
+    async def ingest(self, event_id: UUID) -> MlbLineupIngestionResult:
+        return MlbLineupIngestionResult(
+            created=True,
+            snapshot=cast(
+                MlbLineupSnapshotRecord,
+                SimpleNamespace(
+                    id=UUID(int=event_id.int + 100),
+                    complete_for_research_features=True,
+                ),
+            ),
+        )
+
+
+class FakeHistoricalFeatureService(FakeFeatureService):
+    async def build(self, statcast_snapshot_id: UUID) -> MlbGameFeatureBuildResult:
+        result = await super().build(statcast_snapshot_id)
+        result.vector.feature_availability_basis = "retrospective"
+        result.vector.complete_feature_vector = True
+        return result
+
+    async def label(self, **_: object) -> MlbDatasetLabelResult:
+        return MlbDatasetLabelResult(
+            created=True,
+            example=cast(
+                MlbLabeledFeatureExampleRecord,
+                SimpleNamespace(
+                    id=UUID("81000000-0000-0000-0000-000000000999"),
+                    split="test",
+                ),
+            ),
+        )
+
+
+async def _run_backfill() -> None:
+    service = MlbRetrospectiveBackfillService(
+        sports_ingestion=cast(SportsIngestionService, FakeSportsIngestion()),
+        sports_repository=cast(SportsRepository, FakeFinalSportsRepository()),
+        lineup_service=cast(MlbLineupService, FakeHistoricalLineupService()),
+        statcast_service=cast(MlbStatcastService, FakeStatcastService()),
+        feature_service=cast(MlbGameFeatureService, FakeHistoricalFeatureService()),
+        clock=lambda: NOW,
+    )
+
+    result = await service.run(start_date=NOW.date(), end_date=NOW.date(), limit=5, offset=0)
+
+    assert result.examined == 1
+    assert result.retrospective_vectors_built == 1
+    assert result.examples_labeled == 1
+    assert result.result_counts == {"retrospective_example_ready": 1}
+    assert result.events[0].split == "test"
+    assert result.events[0].dataset_example_created is True
+    assert result.probability_generated is False
+    assert result.automatic_trading_eligible is False
+
+
+def test_backfill_labels_only_explicitly_retrospective_complete_examples() -> None:
+    asyncio.run(_run_backfill())

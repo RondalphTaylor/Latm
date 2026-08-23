@@ -7,6 +7,9 @@ from uuid import UUID
 
 from app.domain.mlb_modeling import (
     MlbChronologicalDatasetPolicy,
+    MlbDatasetReadinessAssessment,
+    MlbDatasetReadinessInput,
+    MlbDatasetSplit,
     MlbFeatureSelectionPolicy,
     MlbGameFeatureVector,
     MlbMatchupFeatureCoverage,
@@ -15,12 +18,15 @@ from app.domain.mlb_modeling import (
     MlbOfficialOutcomeInput,
     MlbSelectedFeatureName,
     MlbSelectedFeatureValues,
+    approved_mlb_dataset_readiness_policy,
 )
 from app.domain.mlb_statcast import MlbStatcastObservationBasis, MlbStatcastPlayerFeatures
 from app.models.mlb import MlbGameFeatureVectorRecord, MlbLabeledFeatureExampleRecord
 from app.services.mlb_modeling.engine import (
     DeterministicMlbDatasetContract,
+    DeterministicMlbDatasetReadinessEngine,
     DeterministicMlbGameFeatureEngine,
+    mlb_chronological_split_policy_fingerprint,
 )
 from app.services.mlb_modeling.repository import (
     MlbCanonicalDatasetSelection,
@@ -194,4 +200,28 @@ class MlbGameFeatureService:
             include_retrospective_research=include_retrospective_research,
             limit=limit,
             offset=offset,
+        )
+
+    async def approved_dataset_readiness(self) -> MlbDatasetReadinessAssessment:
+        policy = approved_mlb_dataset_readiness_policy()
+        split_fingerprint = mlb_chronological_split_policy_fingerprint(policy.split_policy)
+        selection = await self._repository.canonical_dataset(
+            split_policy_fingerprint=split_fingerprint,
+            include_retrospective_research=True,
+            limit=1,
+            offset=0,
+        )
+        return DeterministicMlbDatasetReadinessEngine().evaluate(
+            MlbDatasetReadinessInput(
+                split_policy_fingerprint=split_fingerprint,
+                operational_split_counts={
+                    MlbDatasetSplit(split): count
+                    for split, count in selection.operational_split_counts.items()
+                },
+                retrospective_split_counts={
+                    MlbDatasetSplit(split): count
+                    for split, count in selection.retrospective_split_counts.items()
+                },
+                policy=policy,
+            )
         )
