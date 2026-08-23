@@ -566,6 +566,15 @@ and the resulting vector and label stay ineligible for operational use. Each cal
 seven dates and ten returned events, using the same append-only lineage and official final-result
 checks as explicit single-record ingestion.
 
+Historical orchestration is split between one mutable, fingerprinted
+`mlb_backfill_checkpoints` cursor projection and append-only `mlb_backfill_batches` audit facts.
+Each invocation selects one deficient exploratory split in fixed test/validation/train order, scans
+one 2026 regular-season date page newest to oldest, and delegates to the bounded backfill service.
+Only official `gameType=R` events may advance. The checkpoint row is locked before batch insertion;
+cursor/count changes and the batch fact commit atomically. A semantic retry returns the existing
+batch, while official-source failure rolls back and retains the same cursor for a later invocation.
+The workflow has no fitting, forecast, market, opportunity, account, or execution dependency.
+
 The research-only MLB fitter is a dependency-free deterministic L2 logistic implementation over the
 fixed eight-feature order. It learns population means and scales only from each fitting prefix,
 fits ascending regularization candidates with Newton updates, selects by validation mean Brier

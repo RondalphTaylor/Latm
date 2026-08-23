@@ -178,6 +178,23 @@ research-only. Operational eligibility still requires the original observation a
 strictly before first pitch. The readiness endpoint reports exact eligible counts and shortfalls;
 it does not enable fitting, probability output, or trading.
 
+For resumable historical collection, advance the approved workflow one bounded batch at a time and
+inspect its durable cursor and append-only batch history:
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8000/mlb-research-backfill-workflow/run"
+Invoke-RestMethod "http://localhost:8000/mlb-research-backfill-workflow"
+Invoke-RestMethod "http://localhost:8000/mlb-research-backfill-workflow/batches?limit=25&offset=0"
+```
+
+The workflow selects the largest current shortfall in fixed `test`, `validation`, then `train`
+priority, walks 2026 regular-season dates newest to oldest, and processes at most ten games per
+invocation. It excludes non-`R` MLB game types, persists cursor movement and the batch audit in one
+transaction, replays the same semantic batch idempotently, and leaves its cursor unchanged when an
+official source is unavailable. `complete` means the 500/150/150 exploratory gates were reached;
+`exhausted` means the approved regular-season date range ran out first. Neither state grants model,
+probability, opportunity, or trading authority.
+
 The dependency-free research fitter uses population standardization learned from fitting rows,
 Newton optimization with L2 candidates `0.01`, `0.1`, `1`, and `10`, validation mean Brier score for
 selection, and a final train-plus-validation refit evaluated once on the untouched test interval.

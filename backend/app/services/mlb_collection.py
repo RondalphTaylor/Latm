@@ -325,6 +325,18 @@ class MlbRetrospectiveBackfillService:
                     )
                 )
                 continue
+            game_type = event.raw_data.get("gameType")
+            if game_type != "R":
+                results.append(
+                    MlbBackfillEventResult(
+                        event_id=event.id,
+                        provider_event_id=event.provider_event_id,
+                        scheduled_start_time=event.scheduled_start_time,
+                        stage="skipped",
+                        reason_code="unsupported_game_type",
+                    )
+                )
+                continue
             if event.status != "final":
                 results.append(
                     MlbBackfillEventResult(

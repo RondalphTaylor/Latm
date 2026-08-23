@@ -380,6 +380,40 @@ class MlbDatasetReadinessPolicy(BaseModel):
     random_shuffle: Literal[False] = False
 
 
+class MlbHistoricalBackfillPolicy(BaseModel):
+    """Approved bounded cursor policy for the 2026 regular-season research backfill."""
+
+    model_config = ConfigDict(frozen=True)
+
+    policy_name: Literal["mlb_historical_backfill"] = "mlb_historical_backfill"
+    policy_version: Literal["v1"] = "v1"
+    season: Literal[2026] = 2026
+    regular_season_game_type: Literal["R"] = "R"
+    regular_season_start: date = date(2026, 3, 25)
+    batch_limit: int = Field(default=10, ge=1, le=10)
+    split_priority: tuple[
+        Literal[MlbDatasetSplit.TEST],
+        Literal[MlbDatasetSplit.VALIDATION],
+        Literal[MlbDatasetSplit.TRAIN],
+    ] = (
+        MlbDatasetSplit.TEST,
+        MlbDatasetSplit.VALIDATION,
+        MlbDatasetSplit.TRAIN,
+    )
+    cursor_direction: Literal["newest_to_oldest"] = "newest_to_oldest"
+    retry_provider_failures_without_advancing: Literal[True] = True
+    research_only: Literal[True] = True
+    probability_generation_enabled: Literal[False] = False
+    automatic_trading_enabled: Literal[False] = False
+
+    @model_validator(mode="after")
+    def validate_against_approved_splits(self) -> Self:
+        readiness = approved_mlb_dataset_readiness_policy()
+        if self.regular_season_start >= readiness.split_policy.validation_start.date():
+            raise ValueError("MLB backfill regular-season start must precede validation")
+        return self
+
+
 class MlbDatasetReadinessInput(BaseModel):
     """Canonical counts supplied to the pure readiness evaluator."""
 
@@ -424,6 +458,12 @@ def approved_mlb_dataset_readiness_policy() -> MlbDatasetReadinessPolicy:
     """Return the immutable policy approved on 2026-08-22."""
 
     return MlbDatasetReadinessPolicy()
+
+
+def approved_mlb_historical_backfill_policy() -> MlbHistoricalBackfillPolicy:
+    """Return the immutable regular-season cursor policy approved for research backfill."""
+
+    return MlbHistoricalBackfillPolicy()
 
 
 class MlbRegularizedLogisticPolicy(BaseModel):

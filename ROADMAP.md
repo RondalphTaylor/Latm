@@ -1342,7 +1342,9 @@ chronological readiness policy and adds bounded, explicitly retrospective comple
 The ninth slice implements the dependency-free, deterministic regularized-logistic fitting and
 untouched-test evaluation engine, but the live readiness gate prevents it from fitting the
 undersized dataset. The operational prospective holdout still has no labeled sample, so model
-persistence and probability publication remain disabled. Evidence,
+persistence and probability publication remain disabled. The tenth slice adds a resumable,
+checkpointed historical workflow that processes one regular-season batch per invocation, records
+append-only batch audits, and retains its cursor on source failure. Evidence,
 opportunities, evaluation, and trading are not implemented for MLB.
 
 ## Goal
@@ -1544,6 +1546,10 @@ MLB market classification and research-only matching
 MLB probable-pitcher and posted-lineup snapshots
 
 MLB Baseball Savant / Statcast quantitative snapshots
+
+MLB leakage-safe vectors, official labels, dataset readiness, and canonical reads
+
+MLB deterministic research fitter and resumable historical backfill workflow
 ```
 
 The project should not begin with AI agents or real trading.

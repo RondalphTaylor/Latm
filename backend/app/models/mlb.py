@@ -14,6 +14,7 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -472,3 +473,169 @@ class MlbLabeledFeatureExampleRecord(Base):
         lazy="joined", overlaps="sports_event"
     )
     sports_event: Mapped[SportsEventRecord] = relationship(lazy="joined")
+
+
+class MlbBackfillCheckpointRecord(Base):
+    """Mutable cursor projection for the approved historical MLB research workflow."""
+
+    __tablename__ = "mlb_backfill_checkpoints"
+    __table_args__ = (
+        UniqueConstraint("policy_fingerprint", name="uq_mlb_backfill_checkpoints_policy"),
+        CheckConstraint(
+            "status IN ('active', 'complete', 'exhausted')",
+            name="ck_mlb_backfill_checkpoints_status",
+        ),
+        CheckConstraint(
+            "regular_season_start < validation_start_date "
+            "AND validation_start_date < test_start_date "
+            "AND test_start_date < prospective_holdout_start_date",
+            name="ck_mlb_backfill_checkpoints_boundaries",
+        ),
+        CheckConstraint(
+            "train_cursor_date BETWEEN regular_season_start - 1 "
+            "AND validation_start_date - 1 "
+            "AND validation_cursor_date BETWEEN regular_season_start - 1 "
+            "AND test_start_date - 1 "
+            "AND test_cursor_date BETWEEN regular_season_start - 1 "
+            "AND prospective_holdout_start_date - 1",
+            name="ck_mlb_backfill_checkpoints_cursors",
+        ),
+        CheckConstraint(
+            "train_cursor_offset >= 0 AND validation_cursor_offset >= 0 "
+            "AND test_cursor_offset >= 0 AND batch_limit BETWEEN 1 AND 10",
+            name="ck_mlb_backfill_checkpoints_offsets",
+        ),
+        CheckConstraint(
+            "version >= 0 AND batches_completed >= 0 AND events_examined >= 0 "
+            "AND examples_created >= 0",
+            name="ck_mlb_backfill_checkpoints_counts",
+        ),
+        CheckConstraint(
+            "(status = 'active' AND finished_at IS NULL) "
+            "OR (status IN ('complete', 'exhausted') AND finished_at IS NOT NULL)",
+            name="ck_mlb_backfill_checkpoints_terminal",
+        ),
+        CheckConstraint(
+            "research_only = true AND probability_generated = false "
+            "AND automatic_trading_eligible = false",
+            name="ck_mlb_backfill_checkpoints_safety",
+        ),
+        CheckConstraint(
+            "policy_fingerprint ~ '^[0-9a-f]{64}$' "
+            "AND split_policy_fingerprint ~ '^[0-9a-f]{64}$' "
+            "AND state_fingerprint ~ '^[0-9a-f]{64}$'",
+            name="ck_mlb_backfill_checkpoints_fingerprints",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    policy_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    policy_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    policy_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    split_policy_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    regular_season_start: Mapped[date] = mapped_column(Date, nullable=False)
+    validation_start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    test_start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    prospective_holdout_start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    train_cursor_date: Mapped[date] = mapped_column(Date, nullable=False)
+    train_cursor_offset: Mapped[int] = mapped_column(Integer, nullable=False)
+    validation_cursor_date: Mapped[date] = mapped_column(Date, nullable=False)
+    validation_cursor_offset: Mapped[int] = mapped_column(Integer, nullable=False)
+    test_cursor_date: Mapped[date] = mapped_column(Date, nullable=False)
+    test_cursor_offset: Mapped[int] = mapped_column(Integer, nullable=False)
+    batch_limit: Mapped[int] = mapped_column(Integer, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    batches_completed: Mapped[int] = mapped_column(Integer, nullable=False)
+    events_examined: Mapped[int] = mapped_column(Integer, nullable=False)
+    examples_created: Mapped[int] = mapped_column(Integer, nullable=False)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    state_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    research_only: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    probability_generated: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    automatic_trading_eligible: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class MlbBackfillBatchRecord(Base):
+    """Append-only audit fact for one successfully checkpointed historical batch."""
+
+    __tablename__ = "mlb_backfill_batches"
+    __table_args__ = (
+        UniqueConstraint(
+            "checkpoint_id", "sequence", name="uq_mlb_backfill_batches_sequence"
+        ),
+        UniqueConstraint(
+            "checkpoint_id", "input_fingerprint", name="uq_mlb_backfill_batches_input"
+        ),
+        CheckConstraint(
+            "split IN ('train', 'validation', 'test')",
+            name="ck_mlb_backfill_batches_split",
+        ),
+        CheckConstraint(
+            "sequence >= 1 AND batch_offset >= 0 AND batch_limit BETWEEN 1 AND 10",
+            name="ck_mlb_backfill_batches_cursor",
+        ),
+        CheckConstraint(
+            "events_refreshed >= 0 AND examined >= 0 "
+            "AND retrospective_vectors_built >= 0 AND examples_labeled >= 0 "
+            "AND examples_created >= 0 AND examples_created <= examples_labeled",
+            name="ck_mlb_backfill_batches_counts",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(result_counts) = 'object' "
+            "AND jsonb_typeof(event_results) = 'array' "
+            "AND jsonb_typeof(readiness_before) = 'object' "
+            "AND jsonb_typeof(readiness_after) = 'object'",
+            name="ck_mlb_backfill_batches_json",
+        ),
+        CheckConstraint(
+            "research_only = true AND probability_generated = false "
+            "AND automatic_trading_eligible = false",
+            name="ck_mlb_backfill_batches_safety",
+        ),
+        CheckConstraint(
+            "input_fingerprint ~ '^[0-9a-f]{64}$' "
+            "AND result_fingerprint ~ '^[0-9a-f]{64}$'",
+            name="ck_mlb_backfill_batches_fingerprints",
+        ),
+        Index("ix_mlb_backfill_batches_checkpoint_run", "checkpoint_id", "run_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    checkpoint_id: Mapped[UUID] = mapped_column(
+        ForeignKey("mlb_backfill_checkpoints.id", ondelete="RESTRICT"), nullable=False
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    split: Mapped[str] = mapped_column(String(30), nullable=False)
+    window_date: Mapped[date] = mapped_column(Date, nullable=False)
+    offset: Mapped[int] = mapped_column("batch_offset", Integer, nullable=False)
+    batch_limit: Mapped[int] = mapped_column(Integer, nullable=False)
+    cursor_date_after: Mapped[date] = mapped_column(Date, nullable=False)
+    cursor_offset_after: Mapped[int] = mapped_column(Integer, nullable=False)
+    run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    events_refreshed: Mapped[int] = mapped_column(Integer, nullable=False)
+    examined: Mapped[int] = mapped_column(Integer, nullable=False)
+    retrospective_vectors_built: Mapped[int] = mapped_column(Integer, nullable=False)
+    examples_labeled: Mapped[int] = mapped_column(Integer, nullable=False)
+    examples_created: Mapped[int] = mapped_column(Integer, nullable=False)
+    result_counts: Mapped[dict[str, int]] = mapped_column(JSONB, nullable=False)
+    event_results: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False)
+    readiness_before: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    readiness_after: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    input_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    result_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    research_only: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    probability_generated: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    automatic_trading_eligible: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    checkpoint: Mapped[MlbBackfillCheckpointRecord] = relationship(lazy="joined")

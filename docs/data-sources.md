@@ -1286,6 +1286,12 @@ score, venue, game type, and series data. It does not authenticate, access an ac
 execution operation. Provider payloads are schema validated and retained in normalized raw source
 snapshots. Temporary failures use bounded retry and all malformed source data fails closed.
 
+The approved 2026 historical modeling workflow consumes only official regular-season
+`gameType=R` schedule rows. Spring Training, exhibitions, the All-Star Game, postseason, and unknown
+game types are retained by general ingestion when applicable but cannot enter this backfill dataset.
+The resumable workflow pages one date and at most ten games per invocation, persists exact source
+outcomes and readiness movement, and does not advance its checkpoint when an official source fails.
+
 The source progression for an MLB forecast pilot is:
 
 ```text

@@ -430,6 +430,29 @@ effective model version. It is explicitly unpersisted and research-only. The liv
 examples collected, current shortfalls are 500 train, 150 validation, and 136 test. Operational
 probability output and all MLB trading paths remain disabled.
 
+## Offseason MLB resumable historical backfill workflow
+
+**Status:** Complete
+**Completed:** 2026-08-23
+
+The tenth MLB pilot slice turns the approved retrospective policy into a durable one-batch workflow.
+A fingerprinted checkpoint stores separate train, validation, and test date/page cursors; immutable
+batch facts retain the exact split, schedule window, input/result fingerprints, readiness before and
+after, per-event outcomes, and safety flags. Selection prioritizes test, validation, then train
+shortfalls and walks the 2026 regular season newest to oldest with a hard ten-game batch cap.
+
+Spring Training and every other non-regular MLB game type now fail closed as
+`unsupported_game_type`. Cursor movement and a successful batch fact commit atomically under a row
+lock. Exact retries replay, concurrent or unexpected state changes fail closed, and official-source
+failure returns a retryable error without consuming the cursor. The workflow can terminate as
+`complete` when 500/150/150 are reached or `exhausted` when its approved date bounds are consumed;
+neither outcome fits a model or enables probability generation or trading.
+
+Validation passed all 495 backend tests (12 database suites skipped by default), the dedicated live
+PostgreSQL repository integration test, Ruff, strict mypy, Alembic upgrade/downgrade/upgrade, and an
+Alembic drift check. The recurring desktop task invokes exactly one batch per run and reports the
+updated checkpoint/readiness; it never calls the arbitrary-window endpoint directly.
+
 ## Previous-phase schema repair
 
 **Status:** Complete
@@ -443,7 +466,7 @@ Final repair validation passed all 415 backend tests against PostgreSQL, Ruff, s
 
 ## Next phase
 
-Continue bounded retrospective backfill until the 500/150/150 exploratory thresholds are met while
+Run the checkpointed retrospective workflow until the 500/150/150 exploratory thresholds are met while
 collecting and labeling operational games toward the 200-game prospective holdout. Then persist one
 immutable fitted research model and begin prospective probability capture. Do not expose an
 operational MLB probability until both retrospective out-of-sample and prospective discrimination

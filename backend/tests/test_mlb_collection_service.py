@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 from typing import cast
@@ -43,6 +43,7 @@ class FakeEvent:
     scheduled_start_time: datetime
     status: str = "scheduled"
     postponed: bool = False
+    raw_data: dict[str, object] = field(default_factory=lambda: {"gameType": "R"})
 
 
 class FakeSportsIngestion:
@@ -246,3 +247,38 @@ async def _run_backfill() -> None:
 
 def test_backfill_labels_only_explicitly_retrospective_complete_examples() -> None:
     asyncio.run(_run_backfill())
+
+
+class FakeExhibitionSportsRepository:
+    async def list_events(self, **_: object) -> list[FakeEvent]:
+        return [
+            FakeEvent(
+                FINAL_ID,
+                "exhibition",
+                NOW - timedelta(days=1),
+                status="final",
+                raw_data={"gameType": "S"},
+            )
+        ]
+
+
+async def _skip_non_regular_game() -> None:
+    lineup = FakeLineupService()
+    service = MlbRetrospectiveBackfillService(
+        sports_ingestion=cast(SportsIngestionService, FakeSportsIngestion()),
+        sports_repository=cast(SportsRepository, FakeExhibitionSportsRepository()),
+        lineup_service=cast(MlbLineupService, lineup),
+        statcast_service=cast(MlbStatcastService, FakeStatcastService()),
+        feature_service=cast(MlbGameFeatureService, FakeHistoricalFeatureService()),
+        clock=lambda: NOW,
+    )
+
+    result = await service.run(start_date=NOW.date(), end_date=NOW.date(), limit=5, offset=0)
+
+    assert result.result_counts == {"unsupported_game_type": 1}
+    assert lineup.calls == []
+    assert result.examples_labeled == 0
+
+
+def test_backfill_skips_non_regular_season_games_before_lineup_retrieval() -> None:
+    asyncio.run(_skip_non_regular_game())
