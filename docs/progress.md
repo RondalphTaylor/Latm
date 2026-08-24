@@ -493,11 +493,34 @@ The repair is safe on clean databases because it recreates the same constraints 
 
 Final repair validation passed all 415 backend tests against PostgreSQL, Ruff, strict mypy, all 7 frontend tests, frontend lint/type checking, and the production build. Both the reproduced legacy database and a temporary database migrated from an empty schema reached `0012` with no Alembic drift; the temporary audit database was removed after verification.
 
+## Offseason MLB immutable fitted research artifacts
+
+**Status:** Complete
+**Completed:** 2026-08-24
+
+The eleventh MLB pilot slice adds a readiness-gated materialization path for the deterministic
+logistic artifact. One append-only model row freezes the standardization, coefficients,
+regularization candidates and selection, validation/test metrics, approved readiness snapshot,
+complete source manifest, and policy/data/model/input fingerprints. Ordered lineage rows retain a
+foreign key to every canonical labeled example. Exact semantic retries replay the artifact, while a
+conflicting effective version fails closed.
+
+Both the preview and persisted path reject data below the approved 500/150/150 exploratory gates.
+The current live dataset therefore returns an exact readiness conflict and creates no model. The
+artifact remains research-only with operational probability generation and automatic trading
+disabled in both application and database constraints.
+
+Validation passed all 515 backend tests against PostgreSQL, Ruff lint and formatting, strict mypy,
+the `0019` downgrade/upgrade round-trip, and a zero-drift Alembic check. All 8 frontend tests, lint,
+type checking, and the production build also passed. A live paper-mode smoke returned the expected
+`409` with train 500, validation 59, test 0, and prospective-holdout 200 shortfalls and confirmed
+that no fitted model was persisted.
+
 ## Next phase
 
-Run the checkpointed retrospective workflow until the 500/150/150 exploratory thresholds are met while
-collecting and labeling operational games toward the 200-game prospective holdout. Then persist one
-immutable fitted research model and begin prospective probability capture. Do not expose an
-operational MLB probability until both retrospective out-of-sample and prospective discrimination
-and calibration are reported. MLB trading remains disabled. Phase 12 research/evidence work remains
-the next broader roadmap milestone.
+Run the checkpointed retrospective workflow until the 500/150/150 exploratory thresholds are met
+while collecting and labeling operational games toward the 200-game prospective holdout. Then
+materialize the first immutable fitted research model and implement prospective prediction capture.
+Do not expose an operational MLB probability until both retrospective out-of-sample and prospective
+discrimination and calibration are reported. MLB trading remains disabled. Phase 12
+research/evidence work remains the next broader roadmap milestone.

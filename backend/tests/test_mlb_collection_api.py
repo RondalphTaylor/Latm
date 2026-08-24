@@ -199,9 +199,7 @@ def _workflow_readiness() -> MlbDatasetReadinessAssessment:
         shortfall_by_split=shortfalls,
         exploratory_fit_data_ready=False,
         prospective_evaluation_data_ready=False,
-        blockers=tuple(
-            f"{split.value}_shortfall:{count}" for split, count in shortfalls.items()
-        ),
+        blockers=tuple(f"{split.value}_shortfall:{count}" for split, count in shortfalls.items()),
     )
 
 

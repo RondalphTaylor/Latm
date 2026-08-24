@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import (
@@ -12,6 +13,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Integer,
+    Numeric,
     String,
     UniqueConstraint,
     func,
@@ -475,6 +477,163 @@ class MlbLabeledFeatureExampleRecord(Base):
     sports_event: Mapped[SportsEventRecord] = relationship(lazy="joined")
 
 
+class MlbFittedResearchModelRecord(Base):
+    """Immutable, readiness-gated MLB research model artifact without trading authority."""
+
+    __tablename__ = "mlb_fitted_research_models"
+    __table_args__ = (
+        UniqueConstraint(
+            "effective_model_version",
+            name="uq_mlb_fitted_research_models_version",
+        ),
+        UniqueConstraint(
+            "model_fingerprint",
+            name="uq_mlb_fitted_research_models_fingerprint",
+        ),
+        UniqueConstraint(
+            "input_fingerprint",
+            name="uq_mlb_fitted_research_models_input",
+        ),
+        CheckConstraint(
+            "train_example_count >= 500 AND validation_example_count >= 150 "
+            "AND test_example_count >= 150",
+            name="ck_mlb_fitted_research_models_readiness",
+        ),
+        CheckConstraint(
+            "selected_regularization_strength > 0",
+            name="ck_mlb_fitted_research_models_regularization",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(selected_features) = 'array' "
+            "AND jsonb_array_length(selected_features) = 8 "
+            "AND jsonb_typeof(standardized_coefficients) = 'object' "
+            "AND jsonb_typeof(feature_means) = 'object' "
+            "AND jsonb_typeof(feature_scales) = 'object' "
+            "AND jsonb_typeof(validation_metrics) = 'object' "
+            "AND jsonb_typeof(test_metrics) = 'object' "
+            "AND jsonb_typeof(candidate_results) = 'array' "
+            "AND jsonb_array_length(candidate_results) > 0 "
+            "AND jsonb_typeof(readiness_snapshot) = 'object' "
+            "AND jsonb_typeof(source_manifest) = 'array'",
+            name="ck_mlb_fitted_research_models_json",
+        ),
+        CheckConstraint(
+            "jsonb_array_length(source_manifest) = "
+            "train_example_count + validation_example_count + test_example_count",
+            name="ck_mlb_fitted_research_models_manifest_count",
+        ),
+        CheckConstraint(
+            "research_only = true AND operational_probability_enabled = false "
+            "AND automatic_trading_enabled = false",
+            name="ck_mlb_fitted_research_models_safety",
+        ),
+        CheckConstraint(
+            "fitting_policy_fingerprint ~ '^[0-9a-f]{64}$' "
+            "AND readiness_policy_fingerprint ~ '^[0-9a-f]{64}$' "
+            "AND split_policy_fingerprint ~ '^[0-9a-f]{64}$' "
+            "AND training_data_fingerprint ~ '^[0-9a-f]{64}$' "
+            "AND model_fingerprint ~ '^[0-9a-f]{64}$' "
+            "AND input_fingerprint ~ '^[0-9a-f]{64}$'",
+            name="ck_mlb_fitted_research_models_fingerprints",
+        ),
+        Index(
+            "ix_mlb_fitted_research_models_name_fitted",
+            "model_name",
+            "fitted_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    model_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    effective_model_version: Mapped[str] = mapped_column(String(150), nullable=False)
+    algorithm: Mapped[str] = mapped_column(String(100), nullable=False)
+    fitting_policy_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    readiness_policy_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    split_policy_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    training_data_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    model_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    input_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    selected_features: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    selected_regularization_strength: Mapped[Decimal] = mapped_column(
+        Numeric(12, 6), nullable=False
+    )
+    standardized_intercept: Mapped[Decimal] = mapped_column(Numeric(24, 12), nullable=False)
+    standardized_coefficients: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    feature_means: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    feature_scales: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    train_example_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    validation_example_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    test_example_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    validation_metrics: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    test_metrics: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    candidate_results: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False)
+    readiness_snapshot: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    source_manifest: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False)
+    fitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    research_only: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    operational_probability_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    automatic_trading_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+    examples: Mapped[list[MlbFittedResearchModelExampleRecord]] = relationship(
+        back_populates="model",
+        lazy="selectin",
+        order_by="MlbFittedResearchModelExampleRecord.ordinal",
+    )
+
+
+class MlbFittedResearchModelExampleRecord(Base):
+    """Foreign-key-protected ordered lineage for one fitted research artifact."""
+
+    __tablename__ = "mlb_fitted_research_model_examples"
+    __table_args__ = (
+        UniqueConstraint(
+            "model_id",
+            "example_id",
+            name="uq_mlb_fitted_model_examples_example",
+        ),
+        UniqueConstraint(
+            "model_id",
+            "ordinal",
+            name="uq_mlb_fitted_model_examples_ordinal",
+        ),
+        CheckConstraint("ordinal >= 0", name="ck_mlb_fitted_model_examples_ordinal"),
+        CheckConstraint(
+            "split IN ('train', 'validation', 'test')",
+            name="ck_mlb_fitted_model_examples_split",
+        ),
+        CheckConstraint(
+            "availability_basis IN ('operational_pregame', 'retrospective')",
+            name="ck_mlb_fitted_model_examples_basis",
+        ),
+        CheckConstraint(
+            "example_fingerprint ~ '^[0-9a-f]{64}$' AND research_only = true",
+            name="ck_mlb_fitted_model_examples_safety",
+        ),
+        Index(
+            "ix_mlb_fitted_model_examples_model_split_ordinal",
+            "model_id",
+            "split",
+            "ordinal",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    model_id: Mapped[UUID] = mapped_column(
+        ForeignKey("mlb_fitted_research_models.id", ondelete="RESTRICT"), nullable=False
+    )
+    example_id: Mapped[UUID] = mapped_column(
+        ForeignKey("mlb_labeled_feature_examples.id", ondelete="RESTRICT"), nullable=False
+    )
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    split: Mapped[str] = mapped_column(String(30), nullable=False)
+    availability_basis: Mapped[str] = mapped_column(String(30), nullable=False)
+    example_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    research_only: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+    model: Mapped[MlbFittedResearchModelRecord] = relationship(back_populates="examples")
+    example: Mapped[MlbLabeledFeatureExampleRecord] = relationship(lazy="joined")
+
+
 class MlbBackfillCheckpointRecord(Base):
     """Mutable cursor projection for the approved historical MLB research workflow."""
 
@@ -568,9 +727,7 @@ class MlbBackfillBatchRecord(Base):
 
     __tablename__ = "mlb_backfill_batches"
     __table_args__ = (
-        UniqueConstraint(
-            "checkpoint_id", "sequence", name="uq_mlb_backfill_batches_sequence"
-        ),
+        UniqueConstraint("checkpoint_id", "sequence", name="uq_mlb_backfill_batches_sequence"),
         UniqueConstraint(
             "checkpoint_id", "input_fingerprint", name="uq_mlb_backfill_batches_input"
         ),
@@ -601,8 +758,7 @@ class MlbBackfillBatchRecord(Base):
             name="ck_mlb_backfill_batches_safety",
         ),
         CheckConstraint(
-            "input_fingerprint ~ '^[0-9a-f]{64}$' "
-            "AND result_fingerprint ~ '^[0-9a-f]{64}$'",
+            "input_fingerprint ~ '^[0-9a-f]{64}$' AND result_fingerprint ~ '^[0-9a-f]{64}$'",
             name="ck_mlb_backfill_batches_fingerprints",
         ),
         Index("ix_mlb_backfill_batches_checkpoint_run", "checkpoint_id", "run_at"),

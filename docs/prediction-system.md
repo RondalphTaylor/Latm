@@ -1508,15 +1508,17 @@ missing values are not imputed.
 The candidate is regularized logistic regression for the official final home-win target. Examples
 must be ordered by scheduled first pitch and assigned to explicit chronological train, validation,
 test, and untouched prospective-holdout intervals. Random shuffling is forbidden. This is a design
-and dataset contract only: no fitted coefficients, probability output, or MLB trading eligibility
-exists yet.
+and dataset contract with a deterministic fitter. Once the approved 500/150/150 exploratory gates
+pass, one immutable research artifact can freeze fitted coefficients, standardization, out-of-sample
+metrics, and exact ordered example lineage. The current live dataset remains below that gate, and no
+operational probability output or MLB trading eligibility exists.
 
 Prospective research collection composes the official schedule, lineup, Statcast, and feature
 services for no more than seven calendar days and 25 returned events per invocation. It advances
 only scheduled games strictly before first pitch and stops at incomplete lineups. Canonical dataset
 selection returns at most one labeled vector per event, always preferring operational pregame
 evidence; retrospective fallback is explicit and research-only. These additions still fit no
-coefficients and cannot generate a probability.
+live artifact below the readiness gate and cannot generate an operational probability.
 
 Dataset-readiness V1 uses fixed June 1, July 1, and August 23, 2026 boundaries and minimum split
 sizes of 500/150/150/200. Retrospective examples are permitted only for exploratory train,

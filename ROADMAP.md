@@ -1344,7 +1344,10 @@ untouched-test evaluation engine, but the live readiness gate prevents it from f
 undersized dataset. The operational prospective holdout still has no labeled sample, so model
 persistence and probability publication remain disabled. The tenth slice adds a resumable,
 checkpointed historical workflow that processes one regular-season batch per invocation, records
-append-only batch audits, and retains its cursor on source failure. Evidence,
+append-only batch audits, and retains its cursor on source failure. The eleventh slice adds a
+readiness-gated immutable fitted-research-model record with exact ordered example lineage and
+idempotent audit reads. Live data still blocks materialization until 500/150/150 is reached, and the
+slice publishes no probability. Evidence,
 opportunities, evaluation, and trading are not implemented for MLB.
 
 The live first-batch audit defect discovered on 2026-08-23 is repaired in `0.11.13`: UUID-bearing
@@ -1358,6 +1361,11 @@ before retrieving lineups. Retrospective evidence can therefore never enter that
 Release `0.11.15` normalizes truncated-response and other HTTP transport failures from Baseball
 Savant into the existing retryable provider-error contract. Checkpointed collection consequently
 retains its cursor on incomplete CSV bodies instead of returning an unclassified internal error.
+
+Release `0.11.16` adds the immutable MLB fitted-research-artifact boundary. The database requires
+500/150/150 source counts, exact ordered foreign-key lineage, append-only semantic identity, and
+research-only safety flags. The live materialization route remains blocked by current shortfalls and
+cannot generate a probability or grant trading authority.
 
 ## Goal
 

@@ -35,6 +35,12 @@ class EmptyRepository:
     async def get_vector(self, _: UUID) -> None:
         return None
 
+    async def list_fitted_research_models(self, **_: object) -> list[object]:
+        return []
+
+    async def get_fitted_research_model(self, _: UUID) -> None:
+        return None
+
 
 class InventoryService:
     async def label(self, **_: object) -> None:
@@ -80,6 +86,9 @@ class InventoryService:
     async def fit_research_preview(self) -> None:
         raise MlbModelFittingBlockedError(await self.approved_dataset_readiness())
 
+    async def fit_and_persist_research_model(self) -> None:
+        raise MlbModelFittingBlockedError(await self.approved_dataset_readiness())
+
 
 def test_model_design_exposes_frozen_research_only_boundary() -> None:
     with TestClient(create_app()) as client:
@@ -91,7 +100,7 @@ def test_model_design_exposes_frozen_research_only_boundary() -> None:
     assert len(body["selected_features"]) == 8
     assert body["validation_strategy"].startswith("chronological")
     assert body["random_shuffle"] is False
-    assert body["fitted_model_available"] is False
+    assert body["fitted_model_persistence_enabled"] is True
     assert body["probability_generation_enabled"] is False
     assert body["automatic_trading_enabled"] is False
 
@@ -108,7 +117,7 @@ def test_logistic_fitting_design_is_versioned_and_non_operational() -> None:
     assert body["final_refit"] == "train_plus_validation"
     assert body["random_shuffle"] is False
     assert body["fitting_engine_available"] is True
-    assert body["persisted_fitted_model_available"] is False
+    assert body["fitted_model_persistence_enabled"] is True
     assert body["operational_probability_enabled"] is False
     assert body["automatic_trading_enabled"] is False
 
@@ -232,3 +241,37 @@ def test_model_fit_preview_fails_closed_with_exact_shortfalls() -> None:
     }
     assert "requestBody" not in operation
     assert "parameters" not in operation
+
+
+def test_model_fit_persistence_fails_closed_and_has_no_runtime_controls() -> None:
+    app = create_app()
+    app.dependency_overrides[get_mlb_game_feature_service] = InventoryService
+    with TestClient(app) as client:
+        response = client.post("/mlb-research-model-fit/run")
+        operation = client.get("/openapi.json").json()["paths"]["/mlb-research-model-fit/run"][
+            "post"
+        ]
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["shortfall_by_split"] == {
+        "train": 380,
+        "validation": 150,
+        "test": 150,
+        "prospective_holdout": 188,
+    }
+    assert "requestBody" not in operation
+    assert "parameters" not in operation
+
+
+def test_fitted_model_reads_are_bounded_and_missing_detail_is_404() -> None:
+    app = create_app()
+    app.dependency_overrides[get_mlb_game_feature_repository] = EmptyRepository
+    with TestClient(app) as client:
+        listed = client.get("/mlb-research-models?limit=10&offset=0")
+        invalid = client.get("/mlb-research-models?limit=101")
+        missing = client.get(f"/mlb-research-models/{EVENT_ID}")
+
+    assert listed.status_code == 200
+    assert listed.json() == []
+    assert invalid.status_code == 422
+    assert missing.status_code == 404

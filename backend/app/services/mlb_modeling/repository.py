@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from typing import cast
@@ -8,14 +10,21 @@ from uuid import UUID, uuid5
 from sqlalchemy import case, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.selectable import Subquery
 
 from app.domain.mlb_modeling import (
+    SELECTED_MLB_FEATURES,
     MlbChronologicalDatasetPolicy,
+    MlbDatasetReadinessAssessment,
+    MlbFittedResearchModel,
     MlbGameFeatureVector,
     MlbLabeledFeatureExample,
+    MlbLogisticTrainingExample,
 )
 from app.models.mlb import (
+    MlbFittedResearchModelExampleRecord,
+    MlbFittedResearchModelRecord,
     MlbGameFeatureVectorRecord,
     MlbLabeledFeatureExampleRecord,
     MlbLineupSnapshotRecord,
@@ -25,6 +34,7 @@ from app.models.sports import SportsEventRecord
 
 _NAMESPACE = UUID("8e69a4a8-abd8-4680-a5f0-17f176a40813")
 _EXAMPLE_NAMESPACE = UUID("e8bdad87-f3a4-439a-a93e-7e14e171077d")
+_FITTED_MODEL_NAMESPACE = UUID("5d1b40d6-958e-4c68-b5d4-51046de45f20")
 
 
 class MlbGameFeatureConflictError(RuntimeError):
@@ -37,6 +47,19 @@ def mlb_game_feature_vector_record_id(statcast_snapshot_id: UUID, input_fingerpr
 
 def mlb_labeled_feature_example_record_id(example_fingerprint: str) -> UUID:
     return uuid5(_EXAMPLE_NAMESPACE, f"example:{example_fingerprint}")
+
+
+def _canonical_hash(value: object) -> str:
+    payload = json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def mlb_fitted_research_model_record_id(input_fingerprint: str) -> UUID:
+    return uuid5(_FITTED_MODEL_NAMESPACE, f"fitted-model:{input_fingerprint}")
+
+
+def mlb_fitted_research_model_example_record_id(model_id: UUID, example_id: UUID) -> UUID:
+    return uuid5(_FITTED_MODEL_NAMESPACE, f"lineage:{model_id}:{example_id}")
 
 
 @dataclass(frozen=True)
@@ -526,3 +549,177 @@ class MlbGameFeatureRepository:
             retrospective_split_counts=retrospective_counts,
             examples=tuple(records),
         )
+
+    @staticmethod
+    def _fitted_model_manifest(
+        examples: tuple[MlbLogisticTrainingExample, ...],
+    ) -> list[dict[str, object]]:
+        ordered = sorted(
+            examples,
+            key=lambda item: (item.scheduled_start_time, item.sports_event_id),
+        )
+        return [
+            {
+                "ordinal": ordinal,
+                "example_id": str(example.example_id),
+                "sports_event_id": str(example.sports_event_id),
+                "scheduled_start_time": example.scheduled_start_time.isoformat(),
+                "split": example.split.value,
+                "availability_basis": example.availability_basis.value,
+                "example_fingerprint": example.example_fingerprint,
+            }
+            for ordinal, example in enumerate(ordered)
+        ]
+
+    async def persist_fitted_research_model(
+        self,
+        *,
+        model: MlbFittedResearchModel,
+        readiness: MlbDatasetReadinessAssessment,
+        examples: tuple[MlbLogisticTrainingExample, ...],
+        fitted_at: datetime,
+    ) -> tuple[MlbFittedResearchModelRecord, bool]:
+        """Atomically append one model and its exact canonical-example lineage."""
+        if not readiness.exploratory_fit_data_ready:
+            raise ValueError("MLB fitted research models require approved data readiness")
+        expected_count = (
+            model.train_example_count + model.validation_example_count + model.test_example_count
+        )
+        if len(examples) != expected_count:
+            raise ValueError("MLB fitted model example lineage count is inconsistent")
+        if any(example.split.value == "prospective_holdout" for example in examples):
+            raise ValueError("prospective holdout examples cannot enter persisted MLB models")
+
+        manifest = self._fitted_model_manifest(examples)
+        input_fingerprint = _canonical_hash(
+            {
+                "model_fingerprint": model.model_fingerprint,
+                "readiness_policy_fingerprint": readiness.policy_fingerprint,
+                "split_policy_fingerprint": readiness.split_policy_fingerprint,
+                "source_manifest": manifest,
+            }
+        )
+        model_id = mlb_fitted_research_model_record_id(input_fingerprint)
+        values = {
+            "id": model_id,
+            "model_name": model.model_name,
+            "effective_model_version": model.effective_model_version,
+            "algorithm": model.algorithm,
+            "fitting_policy_fingerprint": model.fitting_policy_fingerprint,
+            "readiness_policy_fingerprint": readiness.policy_fingerprint,
+            "split_policy_fingerprint": readiness.split_policy_fingerprint,
+            "training_data_fingerprint": model.training_data_fingerprint,
+            "model_fingerprint": model.model_fingerprint,
+            "input_fingerprint": input_fingerprint,
+            "selected_features": [feature.value for feature in SELECTED_MLB_FEATURES],
+            "selected_regularization_strength": model.selected_regularization_strength,
+            "standardized_intercept": model.standardized_intercept,
+            "standardized_coefficients": {
+                feature.value: str(value)
+                for feature, value in model.standardized_coefficients.items()
+            },
+            "feature_means": {
+                feature.value: str(value) for feature, value in model.feature_means.items()
+            },
+            "feature_scales": {
+                feature.value: str(value) for feature, value in model.feature_scales.items()
+            },
+            "train_example_count": model.train_example_count,
+            "validation_example_count": model.validation_example_count,
+            "test_example_count": model.test_example_count,
+            "validation_metrics": model.validation_metrics.model_dump(mode="json"),
+            "test_metrics": model.test_metrics.model_dump(mode="json"),
+            "candidate_results": [
+                result.model_dump(mode="json") for result in model.candidate_results
+            ],
+            "readiness_snapshot": readiness.model_dump(mode="json"),
+            "source_manifest": manifest,
+            "fitted_at": fitted_at,
+            "research_only": True,
+            "operational_probability_enabled": False,
+            "automatic_trading_enabled": False,
+        }
+        try:
+            created_id = await self._session.scalar(
+                insert(MlbFittedResearchModelRecord)
+                .values(values)
+                .on_conflict_do_nothing()
+                .returning(MlbFittedResearchModelRecord.id)
+            )
+            created = created_id is not None
+            record = await self._session.scalar(
+                select(MlbFittedResearchModelRecord)
+                .where(
+                    MlbFittedResearchModelRecord.effective_model_version
+                    == model.effective_model_version
+                )
+                .options(selectinload(MlbFittedResearchModelRecord.examples))
+            )
+            if record is None or (
+                record.id != model_id
+                or record.input_fingerprint != input_fingerprint
+                or record.model_fingerprint != model.model_fingerprint
+            ):
+                raise ValueError("MLB fitted model identity conflicts with persisted artifact")
+            if created:
+                ordered = sorted(
+                    examples,
+                    key=lambda item: (item.scheduled_start_time, item.sports_event_id),
+                )
+                await self._session.execute(
+                    insert(MlbFittedResearchModelExampleRecord).values(
+                        [
+                            {
+                                "id": mlb_fitted_research_model_example_record_id(
+                                    model_id, example.example_id
+                                ),
+                                "model_id": model_id,
+                                "example_id": example.example_id,
+                                "ordinal": ordinal,
+                                "split": example.split.value,
+                                "availability_basis": example.availability_basis.value,
+                                "example_fingerprint": example.example_fingerprint,
+                                "research_only": True,
+                            }
+                            for ordinal, example in enumerate(ordered)
+                        ]
+                    )
+                )
+            await self._session.commit()
+        except Exception:
+            await self._session.rollback()
+            raise
+        persisted = await self.get_fitted_research_model(model_id)
+        if persisted is None:
+            raise RuntimeError("persisted MLB fitted research model could not be reloaded")
+        if len(persisted.examples) != expected_count:
+            raise RuntimeError("persisted MLB fitted model lineage is incomplete")
+        return persisted, created
+
+    async def list_fitted_research_models(
+        self,
+        *,
+        limit: int,
+        offset: int,
+    ) -> list[MlbFittedResearchModelRecord]:
+        result = await self._session.scalars(
+            select(MlbFittedResearchModelRecord)
+            .options(selectinload(MlbFittedResearchModelRecord.examples))
+            .order_by(
+                MlbFittedResearchModelRecord.fitted_at.desc(),
+                MlbFittedResearchModelRecord.id.desc(),
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+        return list(result.unique().all())
+
+    async def get_fitted_research_model(
+        self, model_id: UUID
+    ) -> MlbFittedResearchModelRecord | None:
+        result = await self._session.scalars(
+            select(MlbFittedResearchModelRecord)
+            .where(MlbFittedResearchModelRecord.id == model_id)
+            .options(selectinload(MlbFittedResearchModelRecord.examples))
+        )
+        return result.unique().one_or_none()

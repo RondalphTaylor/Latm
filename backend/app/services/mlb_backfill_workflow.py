@@ -217,9 +217,7 @@ class MlbBackfillWorkflowRepository:
             raise RuntimeError("MLB backfill checkpoint could not be loaded")
         return checkpoint
 
-    async def get_checkpoint(
-        self, checkpoint_id: UUID
-    ) -> MlbBackfillCheckpointRecord | None:
+    async def get_checkpoint(self, checkpoint_id: UUID) -> MlbBackfillCheckpointRecord | None:
         result = await self._session.scalars(
             select(MlbBackfillCheckpointRecord).where(
                 MlbBackfillCheckpointRecord.id == checkpoint_id
@@ -227,9 +225,7 @@ class MlbBackfillWorkflowRepository:
         )
         return result.unique().one_or_none()
 
-    async def get_for_policy(
-        self, policy_fingerprint: str
-    ) -> MlbBackfillCheckpointRecord | None:
+    async def get_for_policy(self, policy_fingerprint: str) -> MlbBackfillCheckpointRecord | None:
         result = await self._session.scalars(
             select(MlbBackfillCheckpointRecord).where(
                 MlbBackfillCheckpointRecord.policy_fingerprint == policy_fingerprint
@@ -475,9 +471,7 @@ class MlbHistoricalBackfillWorkflowService:
         )
 
     @staticmethod
-    def _lower_bound(
-        checkpoint: MlbBackfillCheckpointRecord, split: MlbDatasetSplit
-    ) -> date:
+    def _lower_bound(checkpoint: MlbBackfillCheckpointRecord, split: MlbDatasetSplit) -> date:
         if split is MlbDatasetSplit.TEST:
             return checkpoint.test_start_date
         if split is MlbDatasetSplit.VALIDATION:

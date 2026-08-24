@@ -19,6 +19,8 @@ from app.models import (  # noqa: F401
     MarketResolutionRecord,
     MlbBackfillBatchRecord,
     MlbBackfillCheckpointRecord,
+    MlbFittedResearchModelExampleRecord,
+    MlbFittedResearchModelRecord,
     MlbGameFeatureVectorRecord,
     MlbLabeledFeatureExampleRecord,
     MlbLineupSnapshotRecord,

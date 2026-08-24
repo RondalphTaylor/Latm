@@ -20,12 +20,14 @@ from app.schemas.mlb_modeling import (
     MlbCanonicalDatasetResponse,
     MlbDatasetInventoryResponse,
     MlbDatasetLabelResponse,
+    MlbFittedResearchModelResponse,
     MlbGameFeatureBuildResponse,
     MlbGameFeatureVectorResponse,
     MlbLabeledFeatureExampleResponse,
     MlbLogisticFittingDesignResponse,
     MlbModelDesignResponse,
     MlbResearchModelFitPreviewResponse,
+    MlbResearchModelFitResponse,
 )
 from app.services.mlb_modeling.engine import DeterministicMlbGameFeatureEngine
 from app.services.mlb_modeling.repository import (
@@ -163,6 +165,64 @@ async def preview_mlb_research_model_fit(
         operational_probability_enabled=False,
         automatic_trading_enabled=False,
     )
+
+
+@router.post(
+    "/mlb-research-model-fit/run",
+    response_model=MlbResearchModelFitResponse,
+)
+async def persist_mlb_research_model_fit(
+    service: Annotated[MlbGameFeatureService, Depends(get_mlb_game_feature_service)],
+) -> MlbResearchModelFitResponse:
+    """Materialize one immutable research artifact only after approved data gates pass."""
+    try:
+        result = await service.fit_and_persist_research_model()
+    except MlbModelFittingBlockedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": str(exc),
+                "shortfall_by_split": {
+                    split.value: count for split, count in exc.assessment.shortfall_by_split.items()
+                },
+                "blockers": exc.assessment.blockers,
+            },
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return MlbResearchModelFitResponse(
+        created=result.created,
+        artifact=MlbFittedResearchModelResponse.from_record(result.model),
+    )
+
+
+@router.get(
+    "/mlb-research-models",
+    response_model=list[MlbFittedResearchModelResponse],
+)
+async def list_mlb_fitted_research_models(
+    repository: Annotated[MlbGameFeatureRepository, Depends(get_mlb_game_feature_repository)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[MlbFittedResearchModelResponse]:
+    records = await repository.list_fitted_research_models(limit=limit, offset=offset)
+    return [MlbFittedResearchModelResponse.from_record(record) for record in records]
+
+
+@router.get(
+    "/mlb-research-models/{model_id}",
+    response_model=MlbFittedResearchModelResponse,
+)
+async def get_mlb_fitted_research_model(
+    model_id: UUID,
+    repository: Annotated[MlbGameFeatureRepository, Depends(get_mlb_game_feature_repository)],
+) -> MlbFittedResearchModelResponse:
+    record = await repository.get_fitted_research_model(model_id)
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="research model not found"
+        )
+    return MlbFittedResearchModelResponse.from_record(record)
 
 
 @router.post("/mlb-dataset-examples/run", response_model=MlbDatasetLabelResponse)

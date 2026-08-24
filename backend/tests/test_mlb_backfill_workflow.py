@@ -94,9 +94,7 @@ def _readiness(
         exploratory_fit_data_ready=exploratory_ready,
         prospective_evaluation_data_ready=False,
         blockers=tuple(
-            f"{split.value}_shortfall:{count}"
-            for split, count in shortfalls.items()
-            if count > 0
+            f"{split.value}_shortfall:{count}" for split, count in shortfalls.items() if count > 0
         ),
     )
 
@@ -136,9 +134,9 @@ class FakeRepository:
     async def get_or_create_checkpoint(self, _: object) -> MlbBackfillCheckpointRecord:
         return self.checkpoint
 
-    async def persist_batch(self, **kwargs: object) -> tuple[
-        MlbBackfillCheckpointRecord, MlbBackfillBatchRecord, bool
-    ]:
+    async def persist_batch(
+        self, **kwargs: object
+    ) -> tuple[MlbBackfillCheckpointRecord, MlbBackfillBatchRecord, bool]:
         self.persisted_plan = cast(MlbBackfillPlan, kwargs["plan"])
         return (
             self.checkpoint,

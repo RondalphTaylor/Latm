@@ -23,7 +23,11 @@ from app.domain.mlb_modeling import (
     approved_mlb_dataset_readiness_policy,
 )
 from app.domain.mlb_statcast import MlbStatcastObservationBasis, MlbStatcastPlayerFeatures
-from app.models.mlb import MlbGameFeatureVectorRecord, MlbLabeledFeatureExampleRecord
+from app.models.mlb import (
+    MlbFittedResearchModelRecord,
+    MlbGameFeatureVectorRecord,
+    MlbLabeledFeatureExampleRecord,
+)
 from app.services.mlb_modeling.engine import (
     DeterministicMlbDatasetContract,
     DeterministicMlbDatasetReadinessEngine,
@@ -48,6 +52,12 @@ class MlbGameFeatureBuildResult:
 class MlbDatasetLabelResult:
     created: bool
     example: MlbLabeledFeatureExampleRecord
+
+
+@dataclass(frozen=True)
+class MlbResearchModelFitResult:
+    created: bool
+    model: MlbFittedResearchModelRecord
 
 
 class MlbModelFittingBlockedError(RuntimeError):
@@ -241,6 +251,25 @@ class MlbGameFeatureService:
 
     async def fit_research_preview(self) -> MlbFittedResearchModel:
         """Fit an unpersisted research artifact only after all exploratory data gates pass."""
+        _, examples = await self._fitting_inputs()
+        return self._fitting_engine.fit(examples)
+
+    async def fit_and_persist_research_model(self) -> MlbResearchModelFitResult:
+        """Persist one immutable research artifact; probability publication remains disabled."""
+        assessment, examples = await self._fitting_inputs()
+        model = self._fitting_engine.fit(examples)
+        fitted_at = await self._repository.database_time()
+        record, created = await self._repository.persist_fitted_research_model(
+            model=model,
+            readiness=assessment,
+            examples=examples,
+            fitted_at=fitted_at,
+        )
+        return MlbResearchModelFitResult(created=created, model=record)
+
+    async def _fitting_inputs(
+        self,
+    ) -> tuple[MlbDatasetReadinessAssessment, tuple[MlbLogisticTrainingExample, ...]]:
         assessment = await self.approved_dataset_readiness()
         if not assessment.exploratory_fit_data_ready:
             raise MlbModelFittingBlockedError(assessment)
@@ -266,4 +295,10 @@ class MlbGameFeatureService:
             for record in selection.examples
             if record.split != MlbDatasetSplit.PROSPECTIVE_HOLDOUT.value
         )
-        return self._fitting_engine.fit(examples)
+        if len(examples) != (
+            selection.split_counts.get(MlbDatasetSplit.TRAIN.value, 0)
+            + selection.split_counts.get(MlbDatasetSplit.VALIDATION.value, 0)
+            + selection.split_counts.get(MlbDatasetSplit.TEST.value, 0)
+        ):
+            raise ValueError("canonical MLB fitting selection is incomplete")
+        return assessment, examples

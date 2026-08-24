@@ -19,7 +19,11 @@ from app.domain.mlb_modeling import (
     MlbSelectedFeatureValues,
     approved_mlb_dataset_readiness_policy,
 )
-from app.models.mlb import MlbGameFeatureVectorRecord, MlbLabeledFeatureExampleRecord
+from app.models.mlb import (
+    MlbFittedResearchModelRecord,
+    MlbGameFeatureVectorRecord,
+    MlbLabeledFeatureExampleRecord,
+)
 from app.services.mlb_modeling.repository import (
     MlbCanonicalDatasetSelection,
     MlbDatasetInventory,
@@ -111,7 +115,7 @@ class MlbModelDesignResponse(BaseModel):
     missing_value_policy: Literal["no_imputation"]
     validation_strategy: Literal["chronological_train_validation_test_prospective_holdout"]
     random_shuffle: Literal[False]
-    fitted_model_available: Literal[False]
+    fitted_model_persistence_enabled: Literal[True]
     probability_generation_enabled: Literal[False]
     automatic_trading_enabled: Literal[False]
 
@@ -126,7 +130,7 @@ class MlbModelDesignResponse(BaseModel):
             missing_value_policy="no_imputation",
             validation_strategy="chronological_train_validation_test_prospective_holdout",
             random_shuffle=False,
-            fitted_model_available=False,
+            fitted_model_persistence_enabled=True,
             probability_generation_enabled=False,
             automatic_trading_enabled=False,
         )
@@ -148,7 +152,7 @@ class MlbLogisticFittingDesignResponse(BaseModel):
     final_refit: str
     random_shuffle: Literal[False]
     fitting_engine_available: Literal[True]
-    persisted_fitted_model_available: Literal[False]
+    fitted_model_persistence_enabled: Literal[True]
     operational_probability_enabled: Literal[False]
     automatic_trading_enabled: Literal[False]
 
@@ -158,7 +162,7 @@ class MlbLogisticFittingDesignResponse(BaseModel):
         return cls(
             **policy.model_dump(),
             fitting_engine_available=True,
-            persisted_fitted_model_available=False,
+            fitted_model_persistence_enabled=True,
             operational_probability_enabled=False,
             automatic_trading_enabled=False,
         )
@@ -171,6 +175,90 @@ class MlbResearchModelFitPreviewResponse(BaseModel):
     model: MlbFittedResearchModel
     operational_probability_enabled: Literal[False]
     automatic_trading_enabled: Literal[False]
+
+
+class MlbFittedResearchModelResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: UUID
+    readiness_policy_fingerprint: str
+    split_policy_fingerprint: str
+    input_fingerprint: str
+    fitted_at: datetime
+    example_ids: tuple[UUID, ...]
+    model: MlbFittedResearchModel
+    research_only: Literal[True]
+    operational_probability_enabled: Literal[False]
+    automatic_trading_enabled: Literal[False]
+
+    @classmethod
+    def from_record(cls, record: MlbFittedResearchModelRecord) -> MlbFittedResearchModelResponse:
+        expected_count = (
+            record.train_example_count + record.validation_example_count + record.test_example_count
+        )
+        if record.selected_features != [feature.value for feature in SELECTED_MLB_FEATURES]:
+            raise ValueError("persisted MLB model selected-feature order is inconsistent")
+        if len(record.examples) != expected_count or [
+            item.ordinal for item in record.examples
+        ] != list(range(expected_count)):
+            raise ValueError("persisted MLB model example lineage is incomplete")
+        lineage_split_counts = {
+            split.value: sum(item.split == split.value for item in record.examples)
+            for split in (
+                MlbDatasetSplit.TRAIN,
+                MlbDatasetSplit.VALIDATION,
+                MlbDatasetSplit.TEST,
+            )
+        }
+        if lineage_split_counts != {
+            MlbDatasetSplit.TRAIN.value: record.train_example_count,
+            MlbDatasetSplit.VALIDATION.value: record.validation_example_count,
+            MlbDatasetSplit.TEST.value: record.test_example_count,
+        }:
+            raise ValueError("persisted MLB model split lineage is inconsistent")
+        model = MlbFittedResearchModel.model_validate(
+            {
+                "model_name": record.model_name,
+                "effective_model_version": record.effective_model_version,
+                "algorithm": record.algorithm,
+                "fitting_policy_fingerprint": record.fitting_policy_fingerprint,
+                "training_data_fingerprint": record.training_data_fingerprint,
+                "model_fingerprint": record.model_fingerprint,
+                "selected_regularization_strength": record.selected_regularization_strength,
+                "standardized_intercept": record.standardized_intercept,
+                "standardized_coefficients": record.standardized_coefficients,
+                "feature_means": record.feature_means,
+                "feature_scales": record.feature_scales,
+                "train_example_count": record.train_example_count,
+                "validation_example_count": record.validation_example_count,
+                "test_example_count": record.test_example_count,
+                "validation_metrics": record.validation_metrics,
+                "test_metrics": record.test_metrics,
+                "candidate_results": record.candidate_results,
+                "research_only": record.research_only,
+                "operational_probability_enabled": record.operational_probability_enabled,
+                "automatic_trading_enabled": record.automatic_trading_enabled,
+            }
+        )
+        return cls(
+            id=record.id,
+            readiness_policy_fingerprint=record.readiness_policy_fingerprint,
+            split_policy_fingerprint=record.split_policy_fingerprint,
+            input_fingerprint=record.input_fingerprint,
+            fitted_at=record.fitted_at,
+            example_ids=tuple(item.example_id for item in record.examples),
+            model=model,
+            research_only=record.research_only,
+            operational_probability_enabled=record.operational_probability_enabled,
+            automatic_trading_enabled=record.automatic_trading_enabled,
+        )
+
+
+class MlbResearchModelFitResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    created: bool
+    artifact: MlbFittedResearchModelResponse
 
 
 class MlbLabeledFeatureExampleResponse(BaseModel):

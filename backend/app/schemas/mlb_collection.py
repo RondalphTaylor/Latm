@@ -126,9 +126,7 @@ class MlbBackfillCheckpointResponse(BaseModel):
     updated_at: datetime
 
     @classmethod
-    def from_record(
-        cls, record: MlbBackfillCheckpointRecord
-    ) -> MlbBackfillCheckpointResponse:
+    def from_record(cls, record: MlbBackfillCheckpointRecord) -> MlbBackfillCheckpointResponse:
         return cls.model_validate(record)
 
 
@@ -179,9 +177,7 @@ class MlbBackfillWorkflowRunResponse(BaseModel):
     automatic_trading_eligible: Literal[False] = False
 
     @classmethod
-    def from_result(
-        cls, result: MlbBackfillWorkflowRunResult
-    ) -> MlbBackfillWorkflowRunResponse:
+    def from_result(cls, result: MlbBackfillWorkflowRunResult) -> MlbBackfillWorkflowRunResponse:
         return cls(
             action=result.action,
             created=result.created,

@@ -203,10 +203,14 @@ with exact split shortfalls and performs no fit until all 500/150/150 explorator
 
 ```powershell
 Invoke-RestMethod -Method Post "http://localhost:8000/mlb-research-model-fit/preview"
+Invoke-RestMethod -Method Post "http://localhost:8000/mlb-research-model-fit/run"
+Invoke-RestMethod "http://localhost:8000/mlb-research-models?limit=25&offset=0"
 ```
 
-A successful future preview will still be unpersisted and research-only; it cannot publish an
-operational probability or enter any opportunity or trading path.
+A successful preview remains unpersisted. The separate materialization route is guarded by the same
+approved thresholds and appends one immutable fitted artifact plus foreign-key-protected ordered
+example lineage. Exact semantic retries replay it. Persisted artifacts remain research-only: they
+cannot publish an operational probability or enter any opportunity or trading path.
 
 Ingest only the exact official Kalshi MLB game-winner series and inspect its typed classifications:
 
@@ -224,7 +228,7 @@ Invoke-RestMethod -Method Post "http://localhost:8000/matches/run?league=mlb&sta
 Invoke-RestMethod "http://localhost:8000/matches?league=mlb&latest_only=true"
 ```
 
-MLB uses its own aliases and exact first-pitch proximity. A confident MLB decision can be `matched`, but both domain and database invariants require `automatic_trading_eligible=false`. Official lineup, Statcast, and derived feature vectors are now available for research, but there is no fitted MLB forecast model. Calibration, opportunities, sizing, risk, and execution have not been implemented for MLB.
+MLB uses its own aliases and exact first-pitch proximity. A confident MLB decision can be `matched`, but both domain and database invariants require `automatic_trading_eligible=false`. Official lineup, Statcast, and derived feature vectors are now available for research, and a readiness-gated immutable fitted-artifact path exists, but there is no operational MLB forecast model. Calibration, opportunities, sizing, risk, and execution have not been implemented for MLB.
 
 ## Market-to-event matching
 
@@ -470,4 +474,4 @@ infra/compose.yaml    Backend, frontend, and PostgreSQL development stack
 docs/                 Product, architecture, safety, and progress documentation
 ```
 
-See `AGENTS.md`, `ARCHITECTURE.md`, and `ROADMAP.md` for project constraints and phased scope. Paper entry, monitoring, settlement, evaluation, and the read-only dashboard are implemented without any live provider path or human-approval action. Phase 12 remains the next evidence milestone. MLB work is currently collecting the approved retrospective and prospective datasets before any immutable fitted artifact or operational probability can be published; MLB trading remains disabled.
+See `AGENTS.md`, `ARCHITECTURE.md`, and `ROADMAP.md` for project constraints and phased scope. Paper entry, monitoring, settlement, evaluation, and the read-only dashboard are implemented without any live provider path or human-approval action. Phase 12 remains the next evidence milestone. MLB work is currently collecting the approved retrospective and prospective datasets; the immutable fitted-artifact contract is implemented but remains blocked by the live retrospective thresholds, and operational probability publication is still absent. MLB trading remains disabled.

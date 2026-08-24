@@ -307,13 +307,9 @@ async def _skip_retrospective_holdout_event() -> None:
         clock=lambda: NOW,
     )
 
-    result = await service.run(
-        start_date=NOW.date(), end_date=NOW.date(), limit=5, offset=0
-    )
+    result = await service.run(start_date=NOW.date(), end_date=NOW.date(), limit=5, offset=0)
 
-    assert result.result_counts == {
-        "prospective_holdout_requires_operational_pregame": 1
-    }
+    assert result.result_counts == {"prospective_holdout_requires_operational_pregame": 1}
     assert lineup.calls == []
     assert result.retrospective_vectors_built == 0
     assert result.examples_labeled == 0

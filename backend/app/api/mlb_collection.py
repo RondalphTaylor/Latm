@@ -196,9 +196,7 @@ async def get_mlb_research_backfill_workflow(
     ],
 ) -> MlbBackfillCheckpointResponse:
     policy = approved_mlb_historical_backfill_policy()
-    checkpoint = await repository.get_for_policy(
-        mlb_historical_backfill_policy_fingerprint(policy)
-    )
+    checkpoint = await repository.get_for_policy(mlb_historical_backfill_policy_fingerprint(policy))
     if checkpoint is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -220,9 +218,7 @@ async def list_mlb_research_backfill_batches(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[MlbBackfillBatchResponse]:
     policy = approved_mlb_historical_backfill_policy()
-    checkpoint = await repository.get_for_policy(
-        mlb_historical_backfill_policy_fingerprint(policy)
-    )
+    checkpoint = await repository.get_for_policy(mlb_historical_backfill_policy_fingerprint(policy))
     if checkpoint is None:
         return []
     records = await repository.list_batches(

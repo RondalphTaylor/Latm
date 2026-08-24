@@ -150,8 +150,7 @@ def upgrade() -> None:
             name="ck_mlb_backfill_batches_cursor",
         ),
         sa.CheckConstraint(
-            "input_fingerprint ~ '^[0-9a-f]{64}$' "
-            "AND result_fingerprint ~ '^[0-9a-f]{64}$'",
+            "input_fingerprint ~ '^[0-9a-f]{64}$' AND result_fingerprint ~ '^[0-9a-f]{64}$'",
             name="ck_mlb_backfill_batches_fingerprints",
         ),
         sa.CheckConstraint(
@@ -179,9 +178,7 @@ def upgrade() -> None:
         sa.UniqueConstraint(
             "checkpoint_id", "input_fingerprint", name="uq_mlb_backfill_batches_input"
         ),
-        sa.UniqueConstraint(
-            "checkpoint_id", "sequence", name="uq_mlb_backfill_batches_sequence"
-        ),
+        sa.UniqueConstraint("checkpoint_id", "sequence", name="uq_mlb_backfill_batches_sequence"),
     )
     op.create_index(
         "ix_mlb_backfill_batches_checkpoint_run",
@@ -191,8 +188,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "ix_mlb_backfill_batches_checkpoint_run", table_name="mlb_backfill_batches"
-    )
+    op.drop_index("ix_mlb_backfill_batches_checkpoint_run", table_name="mlb_backfill_batches")
     op.drop_table("mlb_backfill_batches")
     op.drop_table("mlb_backfill_checkpoints")

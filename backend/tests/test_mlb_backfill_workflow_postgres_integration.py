@@ -47,9 +47,7 @@ def _readiness(test_count: int) -> MlbDatasetReadinessAssessment:
         shortfall_by_split=shortfalls,
         exploratory_fit_data_ready=False,
         prospective_evaluation_data_ready=False,
-        blockers=tuple(
-            f"{split.value}_shortfall:{count}" for split, count in shortfalls.items()
-        ),
+        blockers=tuple(f"{split.value}_shortfall:{count}" for split, count in shortfalls.items()),
     )
 
 
@@ -94,23 +92,13 @@ async def _run_integration() -> None:
                         MlbBackfillEventResult(
                             event_id=UUID("92000000-0000-0000-0000-000000000010"),
                             provider_event_id="823421",
-                            scheduled_start_time=datetime(
-                                2026, 8, 22, 18, 10, tzinfo=UTC
-                            ),
+                            scheduled_start_time=datetime(2026, 8, 22, 18, 10, tzinfo=UTC),
                             stage="labeled",
                             reason_code="retrospective_example_ready",
-                            lineup_snapshot_id=UUID(
-                                "92000000-0000-0000-0000-000000000011"
-                            ),
-                            statcast_snapshot_id=UUID(
-                                "92000000-0000-0000-0000-000000000012"
-                            ),
-                            game_feature_vector_id=UUID(
-                                "92000000-0000-0000-0000-000000000013"
-                            ),
-                            dataset_example_id=UUID(
-                                "92000000-0000-0000-0000-000000000014"
-                            ),
+                            lineup_snapshot_id=UUID("92000000-0000-0000-0000-000000000011"),
+                            statcast_snapshot_id=UUID("92000000-0000-0000-0000-000000000012"),
+                            game_feature_vector_id=UUID("92000000-0000-0000-0000-000000000013"),
+                            dataset_example_id=UUID("92000000-0000-0000-0000-000000000014"),
                             split="test",
                             dataset_example_created=True,
                         ),
@@ -146,14 +134,15 @@ async def _run_integration() -> None:
                 assert batch.event_results[0]["event_id"] == (
                     "92000000-0000-0000-0000-000000000010"
                 )
-                assert batch.event_results[0]["scheduled_start_time"] == (
-                    "2026-08-22T18:10:00Z"
-                )
-                assert len(
-                    await repository.list_batches(
-                        checkpoint_id=checkpoint.id, limit=10, offset=0
+                assert batch.event_results[0]["scheduled_start_time"] == ("2026-08-22T18:10:00Z")
+                assert (
+                    len(
+                        await repository.list_batches(
+                            checkpoint_id=checkpoint.id, limit=10, offset=0
+                        )
                     )
-                ) == 1
+                    == 1
+                )
 
                 with pytest.raises(IntegrityError):
                     async with session.begin_nested():
