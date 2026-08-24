@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import csv
 import io
+from collections.abc import AsyncIterator
 from datetime import date
 
 import httpx
@@ -245,3 +246,30 @@ def test_rate_limit_retries_and_network_failure_is_safe() -> None:
                 window_end_date=date(2026, 8, 21),
             )
         )
+
+
+class TruncatedResponseStream(httpx.AsyncByteStream):
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        yield b"partial"
+        raise httpx.RemoteProtocolError("response body ended early")
+
+
+def test_truncated_response_body_retries_as_provider_unavailable() -> None:
+    attempts = 0
+
+    def truncated(_: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        return httpx.Response(200, stream=TruncatedResponseStream())
+
+    with pytest.raises(SportsProviderUnavailableError, match="bounded retries"):
+        asyncio.run(
+            provider_for(httpx.MockTransport(truncated), retries=1).get_player_rows(
+                role=MlbStatcastPlayerRole.BATTER,
+                player_ids=("1001",),
+                window_start_date=date(2026, 8, 1),
+                window_end_date=date(2026, 8, 21),
+            )
+        )
+
+    assert attempts == 2

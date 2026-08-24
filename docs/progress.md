@@ -475,6 +475,13 @@ Release `0.11.14` now checks each official first-pitch timestamp against the exa
 before lineup retrieval and records `prospective_holdout_requires_operational_pregame` instead.
 The existing append-only audit rows remain visible but cannot satisfy holdout readiness.
 
+Extended manual backfill completed the test threshold at 152 canonical examples and transitioned
+the checkpoint to validation. A later Baseball Savant response closed midway through a multi-megabyte
+CSV body and exposed an adapter gap: HTTPX protocol failures were not normalized with timeout and
+network failures. Release `0.11.15` treats every HTTPX transport failure as bounded-retry provider
+unavailability. The workflow API can therefore return its documented retryable response while
+retaining the exact split/date/offset cursor instead of leaking an internal 500.
+
 ## Previous-phase schema repair
 
 **Status:** Complete

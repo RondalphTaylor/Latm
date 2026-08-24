@@ -164,7 +164,7 @@ class BaseballSavantStatcastProvider:
                         "Baseball Savant response exceeded the configured byte limit"
                     )
                 return response.content
-            except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as exc:
+            except (httpx.TransportError, httpx.HTTPStatusError) as exc:
                 if attempt >= self._max_retries:
                     raise SportsProviderUnavailableError(
                         "Baseball Savant remained unavailable after bounded retries"

@@ -1355,6 +1355,10 @@ Release `0.11.14` also closes the local-date/UTC-boundary edge revealed by the s
 historical collection now rejects every game at or after the exact prospective-holdout timestamp
 before retrieving lineups. Retrospective evidence can therefore never enter that holdout path.
 
+Release `0.11.15` normalizes truncated-response and other HTTP transport failures from Baseball
+Savant into the existing retryable provider-error contract. Checkpointed collection consequently
+retains its cursor on incomplete CSV bodies instead of returning an unclassified internal error.
+
 ## Goal
 
 Expand the system beyond NBA markets.
