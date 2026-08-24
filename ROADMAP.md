@@ -1351,6 +1351,10 @@ The live first-batch audit defect discovered on 2026-08-23 is repaired in `0.11.
 per-event facts are JSON-normalized before JSONB persistence, and a manual run proved atomic batch
 creation plus checkpoint advancement. This repair does not expand MLB model or trading authority.
 
+Release `0.11.14` also closes the local-date/UTC-boundary edge revealed by the second live page:
+historical collection now rejects every game at or after the exact prospective-holdout timestamp
+before retrieving lineups. Retrospective evidence can therefore never enter that holdout path.
+
 ## Goal
 
 Expand the system beyond NBA markets.

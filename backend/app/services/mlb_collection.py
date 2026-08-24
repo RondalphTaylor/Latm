@@ -337,6 +337,17 @@ class MlbRetrospectiveBackfillService:
                     )
                 )
                 continue
+            if event.scheduled_start_time >= split_policy.prospective_holdout_start:
+                results.append(
+                    MlbBackfillEventResult(
+                        event_id=event.id,
+                        provider_event_id=event.provider_event_id,
+                        scheduled_start_time=event.scheduled_start_time,
+                        stage="skipped",
+                        reason_code="prospective_holdout_requires_operational_pregame",
+                    )
+                )
+                continue
             if event.status != "final":
                 results.append(
                     MlbBackfillEventResult(

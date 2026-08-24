@@ -468,6 +468,13 @@ failure. All 496 backend tests, Ruff, and strict mypy pass. A manual production-
 persisted batch sequence 1, advanced the test cursor from offset 0 to 10, and retained eight labeled
 outcomes plus two explicit incomplete-feature reasons without enabling any model or trading path.
 
+The next live page exposed an exact-time boundary case: three games on the August 22 local schedule
+started after the August 23 UTC prospective-holdout cutoff. Canonical readiness correctly excluded
+their retrospective rows, but the historical collector should not have created those rows at all.
+Release `0.11.14` now checks each official first-pitch timestamp against the exact approved cutoff
+before lineup retrieval and records `prospective_holdout_requires_operational_pregame` instead.
+The existing append-only audit rows remain visible but cannot satisfy holdout readiness.
+
 ## Previous-phase schema repair
 
 **Status:** Complete

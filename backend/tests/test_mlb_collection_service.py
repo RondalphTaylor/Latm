@@ -282,3 +282,42 @@ async def _skip_non_regular_game() -> None:
 
 def test_backfill_skips_non_regular_season_games_before_lineup_retrieval() -> None:
     asyncio.run(_skip_non_regular_game())
+
+
+class FakeHoldoutSportsRepository:
+    async def list_events(self, **_: object) -> list[FakeEvent]:
+        return [
+            FakeEvent(
+                FINAL_ID,
+                "holdout",
+                datetime(2026, 8, 23, 0, 10, tzinfo=UTC),
+                status="final",
+            )
+        ]
+
+
+async def _skip_retrospective_holdout_event() -> None:
+    lineup = FakeLineupService()
+    service = MlbRetrospectiveBackfillService(
+        sports_ingestion=cast(SportsIngestionService, FakeSportsIngestion()),
+        sports_repository=cast(SportsRepository, FakeHoldoutSportsRepository()),
+        lineup_service=cast(MlbLineupService, lineup),
+        statcast_service=cast(MlbStatcastService, FakeStatcastService()),
+        feature_service=cast(MlbGameFeatureService, FakeHistoricalFeatureService()),
+        clock=lambda: NOW,
+    )
+
+    result = await service.run(
+        start_date=NOW.date(), end_date=NOW.date(), limit=5, offset=0
+    )
+
+    assert result.result_counts == {
+        "prospective_holdout_requires_operational_pregame": 1
+    }
+    assert lineup.calls == []
+    assert result.retrospective_vectors_built == 0
+    assert result.examples_labeled == 0
+
+
+def test_backfill_skips_holdout_games_before_lineup_retrieval() -> None:
+    asyncio.run(_skip_retrospective_holdout_event())
