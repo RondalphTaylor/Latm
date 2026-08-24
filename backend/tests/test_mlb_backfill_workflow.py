@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 from typing import cast
@@ -19,6 +20,7 @@ from app.services.mlb_backfill_workflow import (
     MlbBackfillWorkflowRepository,
     MlbBackfillWorkflowRetryableError,
     MlbHistoricalBackfillWorkflowService,
+    _event_results_json,
 )
 from app.services.mlb_collection import (
     MlbBackfillEventResult,
@@ -29,6 +31,32 @@ from app.services.mlb_modeling.service import MlbGameFeatureService
 
 NOW = datetime(2026, 8, 23, 12, tzinfo=UTC)
 CHECKPOINT_ID = UUID("92000000-0000-0000-0000-000000000001")
+
+
+def test_backfill_event_audit_payload_is_json_safe() -> None:
+    event = MlbBackfillEventResult(
+        event_id=UUID("92000000-0000-0000-0000-000000000010"),
+        provider_event_id="823421",
+        scheduled_start_time=NOW,
+        stage="labeled",
+        reason_code="retrospective_example_ready",
+        lineup_snapshot_id=UUID("92000000-0000-0000-0000-000000000011"),
+        statcast_snapshot_id=UUID("92000000-0000-0000-0000-000000000012"),
+        game_feature_vector_id=UUID("92000000-0000-0000-0000-000000000013"),
+        dataset_example_id=UUID("92000000-0000-0000-0000-000000000014"),
+        split="test",
+        lineup_created=True,
+        statcast_created=True,
+        feature_vector_created=True,
+        dataset_example_created=True,
+    )
+
+    payload = _event_results_json((event,))
+
+    assert json.loads(json.dumps(payload)) == payload
+    assert payload[0]["event_id"] == str(event.event_id)
+    assert payload[0]["scheduled_start_time"] == "2026-08-23T12:00:00Z"
+    assert payload[0]["dataset_example_id"] == str(event.dataset_example_id)
 
 
 def _readiness(

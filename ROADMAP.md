@@ -1347,6 +1347,10 @@ checkpointed historical workflow that processes one regular-season batch per inv
 append-only batch audits, and retains its cursor on source failure. Evidence,
 opportunities, evaluation, and trading are not implemented for MLB.
 
+The live first-batch audit defect discovered on 2026-08-23 is repaired in `0.11.13`: UUID-bearing
+per-event facts are JSON-normalized before JSONB persistence, and a manual run proved atomic batch
+creation plus checkpoint advancement. This repair does not expand MLB model or trading authority.
+
 ## Goal
 
 Expand the system beyond NBA markets.

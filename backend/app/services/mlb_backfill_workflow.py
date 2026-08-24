@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Literal, cast
 from uuid import UUID, uuid5
 
+from pydantic import TypeAdapter
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +19,11 @@ from app.domain.mlb_modeling import (
     approved_mlb_dataset_readiness_policy,
 )
 from app.models.mlb import MlbBackfillBatchRecord, MlbBackfillCheckpointRecord
-from app.services.mlb_collection import MlbBackfillRunResult, MlbRetrospectiveBackfillService
+from app.services.mlb_collection import (
+    MlbBackfillEventResult,
+    MlbBackfillRunResult,
+    MlbRetrospectiveBackfillService,
+)
 from app.services.mlb_modeling.engine import (
     mlb_chronological_split_policy_fingerprint,
     mlb_dataset_readiness_policy_fingerprint,
@@ -26,6 +31,7 @@ from app.services.mlb_modeling.engine import (
 from app.services.mlb_modeling.service import MlbGameFeatureService
 
 _NAMESPACE = UUID("39e74d5a-145f-4bba-a909-82f540293927")
+_EVENT_RESULTS_ADAPTER = TypeAdapter(list[MlbBackfillEventResult])
 BackfillStatus = Literal["active", "complete", "exhausted"]
 WorkflowAction = Literal["ran_batch", "complete", "exhausted"]
 TerminalAction = Literal["complete", "exhausted"]
@@ -63,6 +69,16 @@ def _batch_id(checkpoint_id: UUID, input_fingerprint: str) -> UUID:
 
 def _checkpoint_state_fingerprint(values: dict[str, object]) -> str:
     return _hash(values)
+
+
+def _event_results_json(
+    events: tuple[MlbBackfillEventResult, ...],
+) -> list[dict[str, object]]:
+    """Return the immutable event audit facts in PostgreSQL JSONB-safe form."""
+    return cast(
+        list[dict[str, object]],
+        _EVENT_RESULTS_ADAPTER.dump_python(list(events), mode="json"),
+    )
 
 
 def _state_values(
@@ -302,7 +318,7 @@ class MlbBackfillWorkflowRepository:
         readiness_after: MlbDatasetReadinessAssessment,
         next_status: BackfillStatus,
     ) -> tuple[MlbBackfillCheckpointRecord, MlbBackfillBatchRecord, bool]:
-        event_results = [asdict(event) for event in result.events]
+        event_results = _event_results_json(result.events)
         readiness_before_json = readiness_before.model_dump(mode="json")
         readiness_after_json = readiness_after.model_dump(mode="json")
         examples_created = sum(event.dataset_example_created for event in result.events)

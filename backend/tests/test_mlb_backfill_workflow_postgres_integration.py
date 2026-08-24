@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 from datetime import UTC, date, datetime
+from uuid import UUID
 
 import pytest
 from sqlalchemy import delete, update
@@ -19,7 +20,7 @@ from app.services.mlb_backfill_workflow import (
     MlbBackfillPlan,
     MlbBackfillWorkflowRepository,
 )
-from app.services.mlb_collection import MlbBackfillRunResult
+from app.services.mlb_collection import MlbBackfillEventResult, MlbBackfillRunResult
 
 
 def _readiness(test_count: int) -> MlbDatasetReadinessAssessment:
@@ -85,11 +86,35 @@ async def _run_integration() -> None:
                     end_date=plan.window_date,
                     run_at=datetime(2026, 8, 23, 12, tzinfo=UTC),
                     events_refreshed=15,
-                    examined=0,
-                    retrospective_vectors_built=0,
-                    examples_labeled=0,
-                    result_counts={},
-                    events=(),
+                    examined=1,
+                    retrospective_vectors_built=1,
+                    examples_labeled=1,
+                    result_counts={"retrospective_example_ready": 1},
+                    events=(
+                        MlbBackfillEventResult(
+                            event_id=UUID("92000000-0000-0000-0000-000000000010"),
+                            provider_event_id="823421",
+                            scheduled_start_time=datetime(
+                                2026, 8, 22, 18, 10, tzinfo=UTC
+                            ),
+                            stage="labeled",
+                            reason_code="retrospective_example_ready",
+                            lineup_snapshot_id=UUID(
+                                "92000000-0000-0000-0000-000000000011"
+                            ),
+                            statcast_snapshot_id=UUID(
+                                "92000000-0000-0000-0000-000000000012"
+                            ),
+                            game_feature_vector_id=UUID(
+                                "92000000-0000-0000-0000-000000000013"
+                            ),
+                            dataset_example_id=UUID(
+                                "92000000-0000-0000-0000-000000000014"
+                            ),
+                            split="test",
+                            dataset_example_created=True,
+                        ),
+                    ),
                 )
                 after, batch, created = await repository.persist_batch(
                     checkpoint=checkpoint,
@@ -118,6 +143,12 @@ async def _run_integration() -> None:
                 assert after.version == 1
                 assert replay_after.version == 1
                 assert after.test_cursor_date == date(2026, 8, 21)
+                assert batch.event_results[0]["event_id"] == (
+                    "92000000-0000-0000-0000-000000000010"
+                )
+                assert batch.event_results[0]["scheduled_start_time"] == (
+                    "2026-08-22T18:10:00Z"
+                )
                 assert len(
                     await repository.list_batches(
                         checkpoint_id=checkpoint.id, limit=10, offset=0

@@ -460,6 +460,14 @@ PostgreSQL repository integration test, Ruff, strict mypy, Alembic upgrade/downg
 Alembic drift check. The recurring desktop task invokes exactly one batch per run and reports the
 updated checkpoint/readiness; it never calls the arbitrary-window endpoint directly.
 
+The first live automated batch exposed a repository-boundary defect that passed raw UUID and
+datetime values from the per-event dataclasses directly to PostgreSQL JSONB. Release `0.11.13`
+normalizes those immutable audit facts through the typed JSON serializer before persistence. A
+UUID-bearing unit regression and the PostgreSQL checkpoint integration test now cover the exact
+failure. All 496 backend tests, Ruff, and strict mypy pass. A manual production-like run then
+persisted batch sequence 1, advanced the test cursor from offset 0 to 10, and retained eight labeled
+outcomes plus two explicit incomplete-feature reasons without enabling any model or trading path.
+
 ## Previous-phase schema repair
 
 **Status:** Complete
