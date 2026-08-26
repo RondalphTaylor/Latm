@@ -12,6 +12,8 @@ from app.models.matching import MarketEventMatchRecord
 from app.models.mlb import (
     MlbBackfillBatchRecord,
     MlbBackfillCheckpointRecord,
+    MlbDatasetQualityAuditExampleRecord,
+    MlbDatasetQualityAuditRecord,
     MlbFittedResearchModelExampleRecord,
     MlbFittedResearchModelRecord,
     MlbGameFeatureVectorRecord,
@@ -41,6 +43,8 @@ __all__ = [
     "MarketResolutionRecord",
     "MlbBackfillBatchRecord",
     "MlbBackfillCheckpointRecord",
+    "MlbDatasetQualityAuditExampleRecord",
+    "MlbDatasetQualityAuditRecord",
     "MlbFittedResearchModelExampleRecord",
     "MlbFittedResearchModelRecord",
     "MlbLineupSnapshotRecord",

@@ -1526,6 +1526,13 @@ validation, and test intervals; the prospective holdout is operational-pregame-o
 backfill can use complete official postgame lineups, but every derived source and example retains
 retrospective provenance and cannot satisfy the holdout or any trading gate.
 
+Before fitting, the approved canonical selection can be frozen into an immutable dataset-quality
+audit. V1 recomputes chronological and pregame leakage constraints, feature-policy and safety
+identity, missingness, duplicates, and outcome timing, then reports class/team/date coverage,
+feature distributions, zero variance, and minimum-side source support. A passing quality report is
+descriptive and structural only; it cannot satisfy readiness thresholds, publish a probability, or
+enable trading.
+
 ---
 
 # 53. Recommended Development Principle

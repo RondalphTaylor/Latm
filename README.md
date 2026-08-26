@@ -212,6 +212,22 @@ approved thresholds and appends one immutable fitted artifact plus foreign-key-p
 example lineage. Exact semantic retries replay it. Persisted artifacts remain research-only: they
 cannot publish an operational probability or enter any opportunity or trading path.
 
+Run and inspect an immutable quality audit over the exact approved canonical dataset:
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8000/mlb-dataset-quality-audits/run"
+Invoke-RestMethod "http://localhost:8000/mlb-dataset-quality-audits?limit=25&offset=0"
+```
+
+The audit recomputes chronological splits, pregame timing and prospective provenance, feature-policy
+identity, missingness, duplicate lineage, outcome timing, and research-only safety flags. It also
+reports home/away outcome balance, date and team coverage, per-feature distributions and zero
+variance, and conservative minimum-side Statcast sample support. Reports and their ordered source
+examples are immutable and idempotent. `quality_passed` is not a readiness or model-approval flag;
+the separate 500/150/150/200 gates still apply, and the audit cannot fit or publish a probability.
+Legacy retrospective labels at or after the prospective cutoff remain available in raw history but
+are excluded from the canonical selection and therefore cannot enter an audit or model dataset.
+
 Ingest only the exact official Kalshi MLB game-winner series and inspect its typed classifications:
 
 ```powershell

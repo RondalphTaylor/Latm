@@ -516,6 +516,33 @@ type checking, and the production build also passed. A live paper-mode smoke ret
 `409` with train 500, validation 59, test 0, and prospective-holdout 200 shortfalls and confirmed
 that no fitted model was persisted.
 
+## Offseason MLB immutable dataset-quality audits
+
+**Status:** Complete
+**Completed:** 2026-08-26
+
+The twelfth MLB pilot slice adds a deterministic audit over the approved canonical labeled dataset.
+It fails closed on duplicate identities, split leakage, retrospective holdout evidence, feature-policy
+drift, missing selected values, invalid pregame or outcome timing, and any probability/trading safety
+flag. Descriptive output separately reports split and outcome balance, team/date coverage, all eight
+feature distributions and zero variance, plus conservative minimum-side lineup and starter sample
+support.
+
+Each run appends or semantically replays one `mlb_dataset_quality_audits` artifact containing the
+exact report, readiness snapshot, source manifest, and fingerprints. Ordered lineage rows retain
+foreign keys to every canonical labeled example. The parameterless route calls no external provider
+and cannot fit a model or publish a probability. A clean audit explicitly does not mean readiness;
+the approved sample shortfalls remain authoritative.
+
+The first live report exposed three legacy retrospective rows assigned after the prospective cutoff.
+Those immutable rows remain available in raw audit history, while canonical selection now excludes
+all retrospective holdout evidence. The corrected live report selected 264 unique games across all
+30 teams, found all eight features complete and non-constant, and passed with zero errors or
+warnings; an exact replay returned the same artifact. Readiness remained independently blocked at
+train 0/500, validation 102/150, test 158/150, and prospective holdout 4/200. Final validation passed
+all 522 PostgreSQL-backed backend tests, Ruff, strict mypy, the disposable-database migration
+upgrade/downgrade round trip, all 8 frontend tests, lint, type checking, and the production build.
+
 ## Next phase
 
 Run the checkpointed retrospective workflow until the 500/150/150 exploratory thresholds are met

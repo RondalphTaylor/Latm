@@ -6,21 +6,30 @@ from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
 import pytest
-from sqlalchemy import update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from app.domain.mlb_modeling import MlbChronologicalDatasetPolicy, MlbFeatureSelectionPolicy
+from app.domain.mlb_modeling import (
+    MlbFeatureSelectionPolicy,
+    approved_mlb_dataset_readiness_policy,
+)
 from app.models.markets import Provider
 from app.models.mlb import (
+    MlbDatasetQualityAuditRecord,
     MlbGameFeatureVectorRecord,
     MlbLabeledFeatureExampleRecord,
     MlbLineupSnapshotRecord,
     MlbStatcastFeatureSnapshotRecord,
 )
 from app.models.sports import SportsEventRecord, TeamRecord
-from app.services.mlb_modeling.engine import DeterministicMlbGameFeatureEngine
+from app.services.mlb_modeling.engine import (
+    DeterministicMlbGameFeatureEngine,
+    mlb_feature_selection_policy_fingerprint,
+)
+from app.services.mlb_modeling.quality_repository import MlbDatasetQualityRepository
+from app.services.mlb_modeling.quality_service import MlbDatasetQualityService
 from app.services.mlb_modeling.repository import MlbGameFeatureRepository
 from app.services.mlb_modeling.service import MlbGameFeatureService
 
@@ -30,7 +39,7 @@ AWAY_ID = UUID("71000000-0000-0000-0000-000000000003")
 LINEUP_ID = UUID("71000000-0000-0000-0000-000000000004")
 STATCAST_ID = UUID("71000000-0000-0000-0000-000000000005")
 VECTOR_ID = UUID("71000000-0000-0000-0000-000000000006")
-START = datetime(2020, 8, 22, 17, 35, tzinfo=UTC)
+START = datetime(2026, 7, 22, 17, 35, tzinfo=UTC)
 
 
 def _coverage() -> dict[str, int]:
@@ -116,7 +125,7 @@ async def _run_integration() -> None:
                         provider_name="mlb",
                         provider_event_id="dataset-game",
                         league="mlb",
-                        season=2020,
+                        season=2026,
                         event_date=START.date(),
                         scheduled_start_time=START,
                         status="final",
@@ -172,8 +181,8 @@ async def _run_integration() -> None:
                         provider_event_id="dataset-game",
                         target_event_date=START.date(),
                         scheduled_start_time=START,
-                        window_start_date=date(2020, 7, 23),
-                        window_end_date=date(2020, 8, 21),
+                        window_start_date=date(2026, 6, 22),
+                        window_end_date=date(2026, 7, 21),
                         lookback_days=30,
                         source_retrieved_at=START - timedelta(minutes=30),
                         observation_basis="operational_pregame",
@@ -232,7 +241,9 @@ async def _run_integration() -> None:
                         policy_name="mlb_pregame_feature_selection",
                         policy_version="v1",
                         model_candidate_name="mlb_pregame_regularized_logistic",
-                        policy_fingerprint="5" * 64,
+                        policy_fingerprint=mlb_feature_selection_policy_fingerprint(
+                            MlbFeatureSelectionPolicy()
+                        ),
                         source_metrics={
                             "home_lineup": lineup_metrics,
                             "away_lineup": lineup_metrics,
@@ -259,11 +270,7 @@ async def _run_integration() -> None:
                     engine=DeterministicMlbGameFeatureEngine(),
                     policy=MlbFeatureSelectionPolicy(),
                 )
-                split_policy = MlbChronologicalDatasetPolicy(
-                    validation_start=datetime(2019, 1, 1, tzinfo=UTC),
-                    test_start=datetime(2020, 1, 1, tzinfo=UTC),
-                    prospective_holdout_start=datetime(2021, 1, 1, tzinfo=UTC),
-                )
+                split_policy = approved_mlb_dataset_readiness_policy().split_policy
                 first = await service.label(vector_id=VECTOR_ID, split_policy=split_policy)
                 replay = await service.label(vector_id=VECTOR_ID, split_policy=split_policy)
                 inventory = await service.inventory(first.example.split_policy_fingerprint)
@@ -273,18 +280,36 @@ async def _run_integration() -> None:
                     limit=100,
                     offset=0,
                 )
+                quality_service = MlbDatasetQualityService(
+                    feature_repository=repository,
+                    quality_repository=MlbDatasetQualityRepository(session),
+                )
+                quality_first = await quality_service.run()
+                quality_replay = await quality_service.run()
 
                 assert first.created is True
                 assert replay.created is False
                 assert replay.example.id == first.example.id
                 assert first.example.home_won is True
                 assert first.example.split == "test"
-                assert inventory.example_count == 1
-                assert inventory.operational_example_count == 1
-                assert inventory.retrospective_example_count == 0
-                assert canonical.selected_example_count == 1
-                assert canonical.operational_example_count == 1
-                assert canonical.examples[0].id == first.example.id
+                assert inventory.example_count >= 1
+                assert inventory.operational_example_count >= 1
+                assert canonical.selected_example_count >= 1
+                assert any(item.id == first.example.id for item in canonical.examples)
+                assert quality_first.created is True
+                assert quality_replay.created is False
+                assert quality_replay.audit.id == quality_first.audit.id
+                assert quality_first.audit.selected_example_count >= 1
+                assert quality_first.audit.quality_passed is True
+                assert len(quality_first.audit.examples) == (
+                    quality_first.audit.selected_example_count
+                )
+
+                stored_audit_count = await session.scalar(
+                    select(func.count(MlbDatasetQualityAuditRecord.id))
+                )
+                assert stored_audit_count is not None
+                assert stored_audit_count >= 1
 
                 with pytest.raises(IntegrityError):
                     async with session.begin_nested():

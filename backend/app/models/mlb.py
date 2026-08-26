@@ -634,6 +634,169 @@ class MlbFittedResearchModelExampleRecord(Base):
     example: Mapped[MlbLabeledFeatureExampleRecord] = relationship(lazy="joined")
 
 
+class MlbDatasetQualityAuditRecord(Base):
+    """Immutable quality report over one exact canonical MLB dataset selection."""
+
+    __tablename__ = "mlb_dataset_quality_audits"
+    __table_args__ = (
+        UniqueConstraint(
+            "input_fingerprint",
+            name="uq_mlb_dataset_quality_audits_input",
+        ),
+        CheckConstraint(
+            "selected_example_count >= 0 "
+            "AND operational_example_count >= 0 "
+            "AND retrospective_example_count >= 0 "
+            "AND unique_event_count >= 0 "
+            "AND unique_team_count >= 0 "
+            "AND home_win_count >= 0 "
+            "AND away_win_count >= 0 "
+            "AND error_count >= 0 "
+            "AND warning_count >= 0",
+            name="ck_mlb_dataset_quality_audits_counts",
+        ),
+        CheckConstraint(
+            "operational_example_count + retrospective_example_count = selected_example_count "
+            "AND home_win_count + away_win_count = selected_example_count "
+            "AND unique_event_count <= selected_example_count",
+            name="ck_mlb_dataset_quality_audits_reconciliation",
+        ),
+        CheckConstraint(
+            "quality_passed = (error_count = 0)",
+            name="ck_mlb_dataset_quality_audits_status",
+        ),
+        CheckConstraint(
+            "(selected_example_count = 0 "
+            "AND first_scheduled_start_time IS NULL "
+            "AND last_scheduled_start_time IS NULL) OR "
+            "(selected_example_count > 0 "
+            "AND first_scheduled_start_time IS NOT NULL "
+            "AND last_scheduled_start_time IS NOT NULL "
+            "AND first_scheduled_start_time <= last_scheduled_start_time)",
+            name="ck_mlb_dataset_quality_audits_time_range",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(report) = 'object' "
+            "AND jsonb_typeof(readiness_snapshot) = 'object' "
+            "AND jsonb_typeof(source_manifest) = 'array' "
+            "AND jsonb_array_length(source_manifest) = selected_example_count",
+            name="ck_mlb_dataset_quality_audits_json",
+        ),
+        CheckConstraint(
+            "policy_fingerprint ~ '^[0-9a-f]{64}$' "
+            "AND readiness_policy_fingerprint ~ '^[0-9a-f]{64}$' "
+            "AND split_policy_fingerprint ~ '^[0-9a-f]{64}$' "
+            "AND feature_policy_fingerprint ~ '^[0-9a-f]{64}$' "
+            "AND source_data_fingerprint ~ '^[0-9a-f]{64}$' "
+            "AND report_fingerprint ~ '^[0-9a-f]{64}$' "
+            "AND input_fingerprint ~ '^[0-9a-f]{64}$'",
+            name="ck_mlb_dataset_quality_audits_fingerprints",
+        ),
+        CheckConstraint(
+            "research_only = true AND probability_generated = false "
+            "AND automatic_trading_eligible = false",
+            name="ck_mlb_dataset_quality_audits_safety",
+        ),
+        Index(
+            "ix_mlb_dataset_quality_audits_evaluated",
+            "evaluated_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    policy_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    policy_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    policy_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    readiness_policy_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    split_policy_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    feature_policy_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_data_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    report_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    input_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    selected_example_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    operational_example_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    retrospective_example_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    unique_event_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    unique_team_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    home_win_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    away_win_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    error_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    warning_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    quality_passed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    first_scheduled_start_time: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_scheduled_start_time: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    report: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    readiness_snapshot: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    source_manifest: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False)
+    evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    research_only: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    probability_generated: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    automatic_trading_eligible: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+    examples: Mapped[list[MlbDatasetQualityAuditExampleRecord]] = relationship(
+        back_populates="audit",
+        lazy="selectin",
+        order_by="MlbDatasetQualityAuditExampleRecord.ordinal",
+    )
+
+
+class MlbDatasetQualityAuditExampleRecord(Base):
+    """Foreign-key-protected ordered example lineage for one quality audit."""
+
+    __tablename__ = "mlb_dataset_quality_audit_examples"
+    __table_args__ = (
+        UniqueConstraint(
+            "audit_id",
+            "example_id",
+            name="uq_mlb_dataset_quality_audit_examples_example",
+        ),
+        UniqueConstraint(
+            "audit_id",
+            "ordinal",
+            name="uq_mlb_dataset_quality_audit_examples_ordinal",
+        ),
+        CheckConstraint("ordinal >= 0", name="ck_mlb_dataset_quality_audit_examples_ordinal"),
+        CheckConstraint(
+            "split IN ('train', 'validation', 'test', 'prospective_holdout') "
+            "AND availability_basis IN ('operational_pregame', 'retrospective')",
+            name="ck_mlb_dataset_quality_audit_examples_roles",
+        ),
+        CheckConstraint(
+            "example_fingerprint ~ '^[0-9a-f]{64}$' "
+            "AND feature_vector_input_fingerprint ~ '^[0-9a-f]{64}$' "
+            "AND research_only = true",
+            name="ck_mlb_dataset_quality_audit_examples_safety",
+        ),
+        Index(
+            "ix_mlb_dataset_quality_audit_examples_audit_split_ordinal",
+            "audit_id",
+            "split",
+            "ordinal",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    audit_id: Mapped[UUID] = mapped_column(
+        ForeignKey("mlb_dataset_quality_audits.id", ondelete="RESTRICT"), nullable=False
+    )
+    example_id: Mapped[UUID] = mapped_column(
+        ForeignKey("mlb_labeled_feature_examples.id", ondelete="RESTRICT"), nullable=False
+    )
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    split: Mapped[str] = mapped_column(String(30), nullable=False)
+    availability_basis: Mapped[str] = mapped_column(String(30), nullable=False)
+    example_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    feature_vector_input_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    research_only: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+    audit: Mapped[MlbDatasetQualityAuditRecord] = relationship(back_populates="examples")
+    example: Mapped[MlbLabeledFeatureExampleRecord] = relationship(lazy="raise")
+
+
 class MlbBackfillCheckpointRecord(Base):
     """Mutable cursor projection for the approved historical MLB research workflow."""
 

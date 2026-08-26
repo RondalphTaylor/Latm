@@ -1347,7 +1347,10 @@ checkpointed historical workflow that processes one regular-season batch per inv
 append-only batch audits, and retains its cursor on source failure. The eleventh slice adds a
 readiness-gated immutable fitted-research-model record with exact ordered example lineage and
 idempotent audit reads. Live data still blocks materialization until 500/150/150 is reached, and the
-slice publishes no probability. Evidence,
+slice publishes no probability. The twelfth slice adds deterministic immutable canonical-dataset
+quality audits covering split leakage, source timing and provenance, duplicate identity,
+missingness, class/team/date coverage, feature distributions, and source sample support. Quality
+status remains separate from readiness and grants no model or trading authority. Evidence,
 opportunities, evaluation, and trading are not implemented for MLB.
 
 The live first-batch audit defect discovered on 2026-08-23 is repaired in `0.11.13`: UUID-bearing
@@ -1366,6 +1369,12 @@ Release `0.11.16` adds the immutable MLB fitted-research-artifact boundary. The 
 500/150/150 source counts, exact ordered foreign-key lineage, append-only semantic identity, and
 research-only safety flags. The live materialization route remains blocked by current shortfalls and
 cannot generate a probability or grant trading authority.
+
+Release `0.11.17` adds immutable MLB dataset-quality audits with exact canonical-example lineage.
+The audit is provider-free, deterministic, and research-only; a clean report cannot override the
+500/150/150/200 readiness policy or enable probability generation or trading. The first live audit
+also closed a legacy canonical-selection gap: retrospective rows in the operational-only holdout
+remain in raw history but can no longer enter canonical model data.
 
 ## Goal
 

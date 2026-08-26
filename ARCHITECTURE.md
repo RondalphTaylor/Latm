@@ -552,6 +552,8 @@ Canonical dataset reads rank immutable labeled examples within each event. Opera
 evidence always outranks retrospective evidence, followed by newest feature build, official outcome
 observation, label time, and stable ID. Retrospective fallback is explicit and research-only. The
 selection is deterministic and paginated, but it fits no coefficients and emits no probability.
+Retrospective examples assigned to the prospective-holdout interval remain visible in raw label
+history but are excluded from canonical selection because that interval is operational-only.
 
 The approved MLB dataset-readiness V1 policy freezes chronological boundaries at June 1, July 1,
 and August 23, 2026, with minimum counts of 500 train, 150 validation, 150 test, and 200 prospective
@@ -586,6 +588,16 @@ Materialization appends one `mlb_fitted_research_models` artifact and an ordered
 The artifact freezes standardization, coefficients, candidate selection, validation/test metrics,
 readiness, source manifest, and semantic fingerprints. Exact retries replay; an effective-version
 conflict fails closed. Neither path publishes a probability.
+
+Canonical dataset quality is evaluated independently from fitting and sample readiness. The
+deterministic V1 audit recomputes split assignment, pregame timing, holdout provenance, feature
+policy identity, missingness, duplicate identity, outcome timing, and safety flags, then reports
+class/date/team coverage, per-feature distributions and zero variance, and conservative minimum-side
+source-sample support. `mlb_dataset_quality_audits` stores the immutable report, exact readiness
+snapshot, and source manifest; `mlb_dataset_quality_audit_examples` protects every ordered source
+example with a foreign key. Exact semantic reruns replay. A passing report means only that no
+structural audit error was found—it does not satisfy sample thresholds, fit a model, publish a
+probability, or grant trading authority.
 
 This shared storage does not make the downstream pipeline sport-agnostic by implication. The
 matcher now supports separately versioned NBA and MLB alias policies, while the Elo model, forecast

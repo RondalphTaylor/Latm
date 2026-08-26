@@ -7,10 +7,10 @@ from datetime import datetime
 from typing import cast
 from uuid import UUID, uuid5
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import defaultload, noload, selectinload
 from sqlalchemy.sql.selectable import Subquery
 
 from app.domain.mlb_modeling import (
@@ -480,6 +480,13 @@ class MlbGameFeatureRepository:
             statement = statement.where(
                 MlbLabeledFeatureExampleRecord.availability_basis == "operational_pregame"
             )
+        else:
+            statement = statement.where(
+                or_(
+                    MlbLabeledFeatureExampleRecord.availability_basis == "operational_pregame",
+                    MlbLabeledFeatureExampleRecord.split != "prospective_holdout",
+                )
+            )
         return statement.subquery()
 
     async def canonical_dataset(
@@ -512,6 +519,15 @@ class MlbGameFeatureRepository:
                     select(MlbLabeledFeatureExampleRecord)
                     .join(ranked, ranked.c.example_id == MlbLabeledFeatureExampleRecord.id)
                     .where(ranked.c.row_number == 1)
+                    .options(
+                        noload(MlbLabeledFeatureExampleRecord.sports_event),
+                        defaultload(MlbLabeledFeatureExampleRecord.feature_vector).noload(
+                            MlbGameFeatureVectorRecord.sports_event
+                        ),
+                        defaultload(MlbLabeledFeatureExampleRecord.feature_vector).noload(
+                            MlbGameFeatureVectorRecord.statcast_snapshot
+                        ),
+                    )
                     .order_by(
                         MlbLabeledFeatureExampleRecord.scheduled_start_time,
                         MlbLabeledFeatureExampleRecord.sports_event_id,
