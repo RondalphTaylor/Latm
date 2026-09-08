@@ -134,6 +134,10 @@ class FakeRepository:
     async def get_or_create_checkpoint(self, _: object) -> MlbBackfillCheckpointRecord:
         return self.checkpoint
 
+    async def get_checkpoint(self, checkpoint_id: UUID) -> MlbBackfillCheckpointRecord | None:
+        assert checkpoint_id == self.checkpoint.id
+        return self.checkpoint
+
     async def persist_batch(
         self, **kwargs: object
     ) -> tuple[MlbBackfillCheckpointRecord, MlbBackfillBatchRecord, bool]:
@@ -343,3 +347,71 @@ async def _exhausted_train_range() -> None:
 
 def test_workflow_fails_closed_when_regular_season_range_is_exhausted() -> None:
     asyncio.run(_exhausted_train_range())
+
+
+class ExpiringCheckpoint:
+    """Mimic a checkpoint ORM record invalidated by a nested repository rollback."""
+
+    def __init__(self, record: MlbBackfillCheckpointRecord) -> None:
+        self._values = vars(record).copy()
+        self._expired = False
+
+    def expire(self) -> None:
+        self._expired = True
+
+    def __getattr__(self, name: str) -> object:
+        if self._expired:
+            raise RuntimeError("expired checkpoint ORM attribute access")
+        try:
+            return self._values[name]
+        except KeyError as exc:
+            raise AttributeError(name) from exc
+
+
+class ExpiringCheckpointBackfillService(FakeBackfillService):
+    def __init__(self, checkpoint: ExpiringCheckpoint) -> None:
+        super().__init__(examined=10)
+        self._checkpoint = checkpoint
+
+    async def run(self, **kwargs: object) -> MlbBackfillRunResult:
+        result = await super().run(**kwargs)
+        self._checkpoint.expire()
+        return result
+
+
+class ReloadingFakeRepository(FakeRepository):
+    def __init__(
+        self,
+        original: ExpiringCheckpoint,
+        reloaded: MlbBackfillCheckpointRecord,
+    ) -> None:
+        super().__init__(cast(MlbBackfillCheckpointRecord, original))
+        self._reloaded = reloaded
+        self.reloads = 0
+
+    async def get_checkpoint(self, checkpoint_id: UUID) -> MlbBackfillCheckpointRecord | None:
+        assert checkpoint_id == CHECKPOINT_ID
+        self.reloads += 1
+        self.checkpoint = self._reloaded
+        return self._reloaded
+
+
+async def _reload_checkpoint_after_collection_rollback() -> None:
+    original = ExpiringCheckpoint(_checkpoint())
+    repository = ReloadingFakeRepository(original, _checkpoint())
+    backfill = ExpiringCheckpointBackfillService(original)
+    service = _service(
+        repository=repository,
+        backfill=backfill,
+        assessments=(_readiness(), _readiness(test=24)),
+    )
+
+    result = await service.run_once()
+
+    assert result.action == "ran_batch"
+    assert repository.reloads == 1
+    assert repository.persisted_plan is not None
+
+
+def test_workflow_reloads_checkpoint_after_collection_rollback() -> None:
+    asyncio.run(_reload_checkpoint_after_collection_rollback())

@@ -536,6 +536,9 @@ class MlbHistoricalBackfillWorkflowService:
                 readiness=readiness_before,
             )
 
+        checkpoint_id = checkpoint.id
+        checkpoint_state_fingerprint = checkpoint.state_fingerprint
+        split_lower_bound = self._lower_bound(checkpoint, plan.split)
         result = await self._backfill_service.run(
             start_date=plan.window_date,
             end_date=plan.window_date,
@@ -546,6 +549,12 @@ class MlbHistoricalBackfillWorkflowService:
             raise MlbBackfillWorkflowRetryableError(
                 "official MLB or Baseball Savant source unavailable; cursor retained"
             )
+        reloaded_checkpoint = await self._repository.get_checkpoint(checkpoint_id)
+        if reloaded_checkpoint is None:
+            raise RuntimeError("MLB backfill checkpoint disappeared during collection")
+        if reloaded_checkpoint.state_fingerprint != checkpoint_state_fingerprint:
+            raise MlbBackfillWorkflowConflictError("MLB backfill checkpoint advanced")
+        checkpoint = reloaded_checkpoint
         cursor_date_after = plan.window_date
         cursor_offset_after = plan.offset + plan.limit
         if result.examined < plan.limit:
@@ -555,7 +564,7 @@ class MlbHistoricalBackfillWorkflowService:
         next_status: BackfillStatus = "active"
         if readiness_after.exploratory_fit_data_ready:
             next_status = "complete"
-        elif cursor_date_after < self._lower_bound(checkpoint, plan.split):
+        elif cursor_date_after < split_lower_bound:
             next_status = "exhausted"
         checkpoint_after, batch, created = await self._repository.persist_batch(
             checkpoint=checkpoint,

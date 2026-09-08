@@ -1376,6 +1376,14 @@ The audit is provider-free, deterministic, and research-only; a clean report can
 also closed a legacy canonical-selection gap: retrospective rows in the operational-only holdout
 remain in raw history but can no longer enter canonical model data.
 
+Release `0.11.18` repairs the collection loop after a handled repository rollback. Both prospective
+and retrospective collectors now materialize the complete selected event page into immutable scalar
+inputs before per-event work begins. A schedule or lineage conflict remains an explicit ineligible
+event reason, later games continue normally, and stage identifiers are retained across later
+transaction boundaries. The workflow reloads and fingerprint-verifies its checkpoint after
+collection, so an expired async ORM record cannot leak as HTTP 500 and concurrent cursor movement
+still fails closed. Existing append-only partial progress replays without duplication.
+
 ## Goal
 
 Expand the system beyond NBA markets.

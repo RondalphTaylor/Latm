@@ -195,6 +195,14 @@ official source is unavailable. `complete` means the 500/150/150 exploratory gat
 `exhausted` means the approved regular-season date range ran out first. Neither state grants model,
 probability, opportunity, or trading authority.
 
+Before event-level work begins, both MLB collectors copy the selected schedule page into immutable
+scalar inputs. A handled lineage conflict can therefore roll back its repository transaction without
+expiring the remaining page or turning the expected per-event reason into an internal server error.
+Stage result identifiers are copied before the next transaction boundary, and the workflow reloads
+the checkpoint after collection while verifying its original state fingerprint. Already-created
+append-only artifacts replay naturally, while the completed batch audit and cursor still commit
+together.
+
 The dependency-free research fitter uses population standardization learned from fitting rows,
 Newton optimization with L2 candidates `0.01`, `0.1`, `1`, and `10`, validation mean Brier score for
 selection, and a final train-plus-validation refit evaluated once on the untouched test interval.

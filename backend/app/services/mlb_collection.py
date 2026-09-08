@@ -8,6 +8,7 @@ from typing import Literal
 from uuid import UUID
 
 from app.domain.mlb_modeling import approved_mlb_dataset_readiness_policy
+from app.models.sports import SportsEventRecord
 from app.providers.sports.base import SportsDataProviderError
 from app.services.mlb_lineups.repository import MlbLineupSourceConflictError
 from app.services.mlb_lineups.service import MlbLineupService
@@ -19,6 +20,30 @@ from app.services.sports.ingestion import EventIngestionResult, SportsIngestionS
 from app.services.sports.repository import SportsRepository
 
 _MAX_COLLECTION_RANGE_DAYS = 7
+
+
+@dataclass(frozen=True)
+class _MlbCollectionSourceEvent:
+    """Session-independent event fields used across per-event transaction boundaries."""
+
+    id: UUID
+    provider_event_id: str
+    scheduled_start_time: datetime
+    status: str
+    postponed: bool
+    game_type: str | None
+
+    @classmethod
+    def from_record(cls, event: SportsEventRecord) -> _MlbCollectionSourceEvent:
+        game_type = event.raw_data.get("gameType")
+        return cls(
+            id=event.id,
+            provider_event_id=event.provider_event_id,
+            scheduled_start_time=event.scheduled_start_time,
+            status=event.status,
+            postponed=event.postponed,
+            game_type=game_type if isinstance(game_type, str) else None,
+        )
 
 
 @dataclass(frozen=True)
@@ -130,15 +155,18 @@ class MlbProspectiveCollectionService:
         refresh: EventIngestionResult = await self._sports_ingestion.ingest_events(
             start_date=start_date, end_date=end_date
         )
-        events = await self._sports_repository.list_events(
-            start_date=start_date,
-            end_date=end_date,
-            league="mlb",
-            event_status=None,
-            team_id=None,
-            provider_name="mlb",
-            limit=limit,
-            offset=offset,
+        events = tuple(
+            _MlbCollectionSourceEvent.from_record(event)
+            for event in await self._sports_repository.list_events(
+                start_date=start_date,
+                end_date=end_date,
+                league="mlb",
+                event_status=None,
+                team_id=None,
+                provider_name="mlb",
+                limit=limit,
+                offset=offset,
+            )
         )
         run_at = self._clock()
         if run_at.tzinfo is None or run_at.utcoffset() is None:
@@ -180,7 +208,10 @@ class MlbProspectiveCollectionService:
                 continue
             try:
                 lineup = await self._lineup_service.ingest(event.id)
-                if not lineup.snapshot.complete_for_pregame_model:
+                lineup_snapshot_id = lineup.snapshot.id
+                lineup_complete = lineup.snapshot.complete_for_pregame_model
+                lineup_created = lineup.created
+                if not lineup_complete:
                     results.append(
                         MlbCollectionEventResult(
                             event_id=event.id,
@@ -188,16 +219,21 @@ class MlbProspectiveCollectionService:
                             scheduled_start_time=event.scheduled_start_time,
                             stage="lineup_observed",
                             reason_code="lineup_incomplete",
-                            lineup_snapshot_id=lineup.snapshot.id,
-                            lineup_created=lineup.created,
+                            lineup_snapshot_id=lineup_snapshot_id,
+                            lineup_created=lineup_created,
                         )
                     )
                     continue
                 statcast = await self._statcast_service.ingest(
                     event_id=event.id,
-                    lineup_snapshot_id=lineup.snapshot.id,
+                    lineup_snapshot_id=lineup_snapshot_id,
                 )
-                vector = await self._feature_service.build(statcast.snapshot.id)
+                statcast_snapshot_id = statcast.snapshot.id
+                statcast_created = statcast.created
+                vector = await self._feature_service.build(statcast_snapshot_id)
+                vector_id = vector.vector.id
+                operational_model_input_eligible = vector.vector.operational_model_input_eligible
+                feature_vector_created = vector.created
                 results.append(
                     MlbCollectionEventResult(
                         event_id=event.id,
@@ -206,18 +242,16 @@ class MlbProspectiveCollectionService:
                         stage="feature_built",
                         reason_code=(
                             "operational_feature_ready"
-                            if vector.vector.operational_model_input_eligible
+                            if operational_model_input_eligible
                             else "retrospective_only"
                         ),
-                        lineup_snapshot_id=lineup.snapshot.id,
-                        statcast_snapshot_id=statcast.snapshot.id,
-                        game_feature_vector_id=vector.vector.id,
-                        lineup_created=lineup.created,
-                        statcast_created=statcast.created,
-                        feature_vector_created=vector.created,
-                        operational_model_input_eligible=(
-                            vector.vector.operational_model_input_eligible
-                        ),
+                        lineup_snapshot_id=lineup_snapshot_id,
+                        statcast_snapshot_id=statcast_snapshot_id,
+                        game_feature_vector_id=vector_id,
+                        lineup_created=lineup_created,
+                        statcast_created=statcast_created,
+                        feature_vector_created=feature_vector_created,
+                        operational_model_input_eligible=operational_model_input_eligible,
                     )
                 )
             except SportsDataProviderError:
@@ -298,15 +332,18 @@ class MlbRetrospectiveBackfillService:
         refresh = await self._sports_ingestion.ingest_events(
             start_date=start_date, end_date=end_date
         )
-        events = await self._sports_repository.list_events(
-            start_date=start_date,
-            end_date=end_date,
-            league="mlb",
-            event_status=None,
-            team_id=None,
-            provider_name="mlb",
-            limit=limit,
-            offset=offset,
+        events = tuple(
+            _MlbCollectionSourceEvent.from_record(event)
+            for event in await self._sports_repository.list_events(
+                start_date=start_date,
+                end_date=end_date,
+                league="mlb",
+                event_status=None,
+                team_id=None,
+                provider_name="mlb",
+                limit=limit,
+                offset=offset,
+            )
         )
         run_at = self._clock()
         if run_at.tzinfo is None or run_at.utcoffset() is None:
@@ -325,8 +362,7 @@ class MlbRetrospectiveBackfillService:
                     )
                 )
                 continue
-            game_type = event.raw_data.get("gameType")
-            if game_type != "R":
+            if event.game_type != "R":
                 results.append(
                     MlbBackfillEventResult(
                         event_id=event.id,
@@ -361,7 +397,10 @@ class MlbRetrospectiveBackfillService:
                 continue
             try:
                 lineup = await self._lineup_service.ingest(event.id)
-                if not lineup.snapshot.complete_for_research_features:
+                lineup_snapshot_id = lineup.snapshot.id
+                lineup_complete = lineup.snapshot.complete_for_research_features
+                lineup_created = lineup.created
+                if not lineup_complete:
                     results.append(
                         MlbBackfillEventResult(
                             event_id=event.id,
@@ -369,19 +408,25 @@ class MlbRetrospectiveBackfillService:
                             scheduled_start_time=event.scheduled_start_time,
                             stage="lineup_observed",
                             reason_code="historical_lineup_incomplete",
-                            lineup_snapshot_id=lineup.snapshot.id,
-                            lineup_created=lineup.created,
+                            lineup_snapshot_id=lineup_snapshot_id,
+                            lineup_created=lineup_created,
                         )
                     )
                     continue
                 statcast = await self._statcast_service.ingest(
                     event_id=event.id,
-                    lineup_snapshot_id=lineup.snapshot.id,
+                    lineup_snapshot_id=lineup_snapshot_id,
                 )
-                vector = await self._feature_service.build(statcast.snapshot.id)
-                if vector.vector.feature_availability_basis != "retrospective":
+                statcast_snapshot_id = statcast.snapshot.id
+                statcast_created = statcast.created
+                vector = await self._feature_service.build(statcast_snapshot_id)
+                vector_id = vector.vector.id
+                feature_availability_basis = vector.vector.feature_availability_basis
+                complete_feature_vector = vector.vector.complete_feature_vector
+                feature_vector_created = vector.created
+                if feature_availability_basis != "retrospective":
                     raise ValueError("historical backfill produced a non-retrospective vector")
-                if not vector.vector.complete_feature_vector:
+                if not complete_feature_vector:
                     results.append(
                         MlbBackfillEventResult(
                             event_id=event.id,
@@ -389,19 +434,22 @@ class MlbRetrospectiveBackfillService:
                             scheduled_start_time=event.scheduled_start_time,
                             stage="feature_built",
                             reason_code="feature_vector_incomplete",
-                            lineup_snapshot_id=lineup.snapshot.id,
-                            statcast_snapshot_id=statcast.snapshot.id,
-                            game_feature_vector_id=vector.vector.id,
-                            lineup_created=lineup.created,
-                            statcast_created=statcast.created,
-                            feature_vector_created=vector.created,
+                            lineup_snapshot_id=lineup_snapshot_id,
+                            statcast_snapshot_id=statcast_snapshot_id,
+                            game_feature_vector_id=vector_id,
+                            lineup_created=lineup_created,
+                            statcast_created=statcast_created,
+                            feature_vector_created=feature_vector_created,
                         )
                     )
                     continue
                 label = await self._feature_service.label(
-                    vector_id=vector.vector.id,
+                    vector_id=vector_id,
                     split_policy=split_policy,
                 )
+                dataset_example_id = label.example.id
+                split = label.example.split
+                dataset_example_created = label.created
                 results.append(
                     MlbBackfillEventResult(
                         event_id=event.id,
@@ -409,15 +457,15 @@ class MlbRetrospectiveBackfillService:
                         scheduled_start_time=event.scheduled_start_time,
                         stage="labeled",
                         reason_code="retrospective_example_ready",
-                        lineup_snapshot_id=lineup.snapshot.id,
-                        statcast_snapshot_id=statcast.snapshot.id,
-                        game_feature_vector_id=vector.vector.id,
-                        dataset_example_id=label.example.id,
-                        split=label.example.split,
-                        lineup_created=lineup.created,
-                        statcast_created=statcast.created,
-                        feature_vector_created=vector.created,
-                        dataset_example_created=label.created,
+                        lineup_snapshot_id=lineup_snapshot_id,
+                        statcast_snapshot_id=statcast_snapshot_id,
+                        game_feature_vector_id=vector_id,
+                        dataset_example_id=dataset_example_id,
+                        split=split,
+                        lineup_created=lineup_created,
+                        statcast_created=statcast_created,
+                        feature_vector_created=feature_vector_created,
+                        dataset_example_created=dataset_example_created,
                     )
                 )
             except SportsDataProviderError:

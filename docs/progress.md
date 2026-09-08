@@ -543,6 +543,32 @@ train 0/500, validation 102/150, test 158/150, and prospective holdout 4/200. Fi
 all 522 PostgreSQL-backed backend tests, Ruff, strict mypy, the disposable-database migration
 upgrade/downgrade round trip, all 8 frontend tests, lint, type checking, and the production build.
 
+## MLB backfill rollback-expiration repair
+
+**Status:** Complete
+**Completed:** 2026-09-08
+
+A live validation batch encountered an official schedule conflict for a suspended and resumed game.
+The lineage repository correctly rolled back, but that request-scoped rollback expired every loaded
+SQLAlchemy event. The collector then read the expired event while constructing its intended
+`source_or_outcome_ineligible` result, triggering `MissingGreenlet` and HTTP 500 after four valid
+append-only examples had already committed. The checkpoint correctly remained at its prior cursor.
+
+Release `0.11.18` materializes the entire selected event page into immutable scalar inputs and copies
+each successful stage's identifiers before invoking the next repository transaction. A rollback can
+now be reported without touching expired ORM state, and later events continue through the bounded
+page. The workflow retains the expected checkpoint identity and fingerprint, then reloads that row
+after collection before calculating or persisting its transition. The lineage check remains strict;
+existing partial facts are preserved and replay idempotently rather than deleted or duplicated.
+Regression coverage simulates expiration of source events, completed pipeline records, and the
+workflow checkpoint across those transaction boundaries.
+
+Live verification against the existing paper-mode stack returned HTTP 200 and durably recorded
+validation batch 54 for 2026-06-16 offset 0. The ten-event batch reported seven ready examples, two
+incomplete feature vectors, and the suspended-game conflict as one
+`source_or_outcome_ineligible`; checkpoint version 54 advanced atomically to validation offset 10.
+No forecast, probability, opportunity, risk, execution, account, or order path was invoked.
+
 ## Next phase
 
 Run the checkpointed retrospective workflow until the 500/150/150 exploratory thresholds are met
