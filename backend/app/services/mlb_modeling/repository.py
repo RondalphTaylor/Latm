@@ -276,6 +276,7 @@ class MlbGameFeatureRepository:
                 )
                 .where(MlbGameFeatureVectorRecord.id == vector_id)
                 .with_for_update(of=SportsEventRecord)
+                .execution_options(populate_existing=True)
             )
         ).one_or_none()
         if row is None:
@@ -312,6 +313,36 @@ class MlbGameFeatureRepository:
         }
         record_id = mlb_labeled_feature_example_record_id(example.example_fingerprint)
         try:
+            # get_label_candidate holds the event lock through this transaction.
+            # Compare only the latest observation: A -> B -> A is a new correction,
+            # whereas a refresh of A -> A must preserve the original audit artifact.
+            latest = await self._session.scalar(
+                select(MlbLabeledFeatureExampleRecord)
+                .where(
+                    MlbLabeledFeatureExampleRecord.game_feature_vector_id == candidate.vector.id,
+                    MlbLabeledFeatureExampleRecord.split_policy_fingerprint
+                    == example.split_policy_fingerprint,
+                )
+                .order_by(
+                    MlbLabeledFeatureExampleRecord.outcome_source_last_seen_at.desc(),
+                    MlbLabeledFeatureExampleRecord.labeled_at.desc(),
+                    MlbLabeledFeatureExampleRecord.id.desc(),
+                )
+                .limit(1)
+            )
+            if (
+                latest is not None
+                and latest.sports_event_id == example.sports_event_id
+                and latest.feature_vector_input_fingerprint
+                == example.feature_vector_input_fingerprint
+                and latest.scheduled_start_time == example.scheduled_start_time
+                and latest.split == example.split.value
+                and latest.outcome_status == event.status
+                and latest.home_score == event.home_score
+                and latest.away_score == event.away_score
+            ):
+                await self._session.commit()
+                return latest, False
             inserted_id = await self._session.scalar(
                 insert(MlbLabeledFeatureExampleRecord)
                 .values(

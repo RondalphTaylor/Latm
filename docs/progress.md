@@ -569,6 +569,22 @@ incomplete feature vectors, and the suspended-game conflict as one
 `source_or_outcome_ineligible`; checkpoint version 54 advanced atomically to validation offset 10.
 No forecast, probability, opportunity, risk, execution, account, or order path was invoked.
 
+## MLB repeated-label replay repair
+
+**Status:** Complete
+**Completed:** 2026-09-08
+
+Release `0.11.19` stops timestamp-only result refreshes from creating duplicate labels. The existing
+outcome fingerprint includes observation time; the repository now compares the latest label for
+the exact vector and split policy under the official-event lock before inserting. Unchanged final
+scores and schedule replay the original immutable artifact. Score corrections, winner changes,
+and reversions append revisions. Existing labels and fingerprints are preserved without migration.
+
+Verification passed 24 focused tests, including isolated PostgreSQL refresh/correction/reversion
+and split-policy regressions, plus lint and scoped mypy. A paper-mode live refresh of 96 events
+followed by labeling the seven eligible operational vectors returned zero created, seven replayed,
+and zero failures. Historical duplicate rows remain available as audit history.
+
 ## Next phase
 
 Run the checkpointed retrospective workflow until the 500/150/150 exploratory thresholds are met

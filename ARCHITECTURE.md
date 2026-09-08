@@ -537,7 +537,11 @@ Official MLB outcome labels are separate append-only `mlb_labeled_feature_exampl
 locks the mutable normalized event parent, captures database time after the lock, requires a final
 decisive official score, then freezes the event/source snapshot, exact vector, split boundaries, and
 fingerprints in one transaction. Result corrections append a new semantic fact rather than mutating
-old evidence. Dataset inventory is always keyed by one split-policy fingerprint and separates
+old evidence. Under that same lock, an unchanged final score and schedule replay the latest label
+for the exact vector and split policy, retaining its original source snapshot and timestamps.
+Polling timestamps alone do not append labels. Only the latest label is compared, so a correction
+back to an earlier score still appends a new revision. Existing fingerprints and history remain
+unchanged. Dataset inventory is always keyed by one split-policy fingerprint and separates
 operational from retrospective provenance. It reports duplicate-event examples without treating raw
 history as a training set.
 

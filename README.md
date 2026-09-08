@@ -203,6 +203,11 @@ the checkpoint after collection while verifying its original state fingerprint. 
 append-only artifacts replay naturally, while the completed batch audit and cursor still commit
 together.
 
+MLB result refreshes replay the latest label when the vector, split policy, final scores, and
+scheduled start are unchanged. The original label snapshot and timestamps remain immutable;
+score corrections (including reversions) append new revisions. Legacy duplicate history remains
+available, but polling timestamps alone no longer create additional labels.
+
 The dependency-free research fitter uses population standardization learned from fitting rows,
 Newton optimization with L2 candidates `0.01`, `0.1`, `1`, and `10`, validation mean Brier score for
 selection, and a final train-plus-validation refit evaluated once on the untouched test interval.

@@ -1384,6 +1384,10 @@ transaction boundaries. The workflow reloads and fingerprint-verifies its checkp
 collection, so an expired async ORM record cannot leak as HTTP 500 and concurrent cursor movement
 still fails closed. Existing append-only partial progress replays without duplication.
 
+Release `0.11.19` stops MLB label churn on timestamp-only result refreshes. The event-locked
+repository replays the latest matching vector/policy/result label while preserving correction
+history, original fingerprints, and canonical selection.
+
 ## Goal
 
 Expand the system beyond NBA markets.

@@ -272,7 +272,26 @@ async def _run_integration() -> None:
                 )
                 split_policy = approved_mlb_dataset_readiness_policy().split_policy
                 first = await service.label(vector_id=VECTOR_ID, split_policy=split_policy)
+                original_snapshot = dict(first.example.outcome_source_snapshot)
+                original_labeled_at = first.example.labeled_at
+                await session.execute(
+                    update(SportsEventRecord)
+                    .where(SportsEventRecord.id == EVENT_ID)
+                    .values(last_seen_at=START + timedelta(hours=5))
+                )
+                await session.commit()
                 replay = await service.label(vector_id=VECTOR_ID, split_policy=split_policy)
+                assert replay.example.outcome_source_snapshot == original_snapshot
+                assert replay.example.labeled_at == original_labeled_at
+                assert replay.example.outcome_source_last_seen_at == START + timedelta(hours=4)
+                assert (
+                    await session.scalar(
+                        select(func.count(MlbLabeledFeatureExampleRecord.id)).where(
+                            MlbLabeledFeatureExampleRecord.game_feature_vector_id == VECTOR_ID
+                        )
+                    )
+                    == 1
+                )
                 inventory = await service.inventory(first.example.split_policy_fingerprint)
                 canonical = await service.canonical_dataset(
                     split_policy_fingerprint=first.example.split_policy_fingerprint,
@@ -310,6 +329,69 @@ async def _run_integration() -> None:
                 )
                 assert stored_audit_count is not None
                 assert stored_audit_count >= 1
+
+                # A score correction matters even when the winning team stays the same.
+                await session.execute(
+                    update(SportsEventRecord)
+                    .where(SportsEventRecord.id == EVENT_ID)
+                    .values(home_score=6, last_seen_at=START + timedelta(hours=6))
+                )
+                await session.commit()
+                correction = await service.label(vector_id=VECTOR_ID, split_policy=split_policy)
+                assert correction.created is True
+                assert correction.example.id != first.example.id
+                assert correction.example.home_won is True
+                await session.execute(
+                    update(SportsEventRecord)
+                    .where(SportsEventRecord.id == EVENT_ID)
+                    .values(home_score=5, last_seen_at=START + timedelta(hours=7))
+                )
+                await session.commit()
+                restored = await service.label(vector_id=VECTOR_ID, split_policy=split_policy)
+                assert restored.created is True
+                assert restored.example.id not in {first.example.id, correction.example.id}
+                latest = await service.canonical_dataset(
+                    split_policy_fingerprint=first.example.split_policy_fingerprint,
+                    include_retrospective_research=False,
+                    limit=100,
+                    offset=0,
+                )
+                assert any(item.id == restored.example.id for item in latest.examples)
+                await session.execute(
+                    update(SportsEventRecord)
+                    .where(SportsEventRecord.id == EVENT_ID)
+                    .values(last_seen_at=START + timedelta(hours=8))
+                )
+                await session.commit()
+                restored_replay = await service.label(
+                    vector_id=VECTOR_ID, split_policy=split_policy
+                )
+                assert restored_replay.created is False
+                assert restored_replay.example.id == restored.example.id
+                assert (
+                    await session.scalar(
+                        select(func.count(MlbLabeledFeatureExampleRecord.id)).where(
+                            MlbLabeledFeatureExampleRecord.game_feature_vector_id == VECTOR_ID
+                        )
+                    )
+                    == 3
+                )
+
+                await session.execute(
+                    update(SportsEventRecord)
+                    .where(SportsEventRecord.id == EVENT_ID)
+                    .values(home_score=2, last_seen_at=START + timedelta(hours=9))
+                )
+                await session.commit()
+                reversed_winner = await service.label(
+                    vector_id=VECTOR_ID, split_policy=split_policy
+                )
+                assert reversed_winner.created is True
+                assert reversed_winner.example.home_won is False
+                other_policy = split_policy.model_copy(update={"policy_version": "replay-test"})
+                other_split = await service.label(vector_id=VECTOR_ID, split_policy=other_policy)
+                assert other_split.created is True
+                assert other_split.example.id != reversed_winner.example.id
 
                 with pytest.raises(IntegrityError):
                     async with session.begin_nested():
