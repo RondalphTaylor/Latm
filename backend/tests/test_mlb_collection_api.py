@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from types import SimpleNamespace
 from typing import cast
@@ -66,6 +67,8 @@ def test_collection_api_is_bounded_research_only_and_has_no_trade_controls() -> 
     assert response.status_code == 200
     body = response.json()
     assert body["events_refreshed"] == 15
+    assert body["has_more"] is False
+    assert body["next_offset"] is None
     assert body["research_only"] is True
     assert body["probability_generated"] is False
     assert body["automatic_trading_eligible"] is False
@@ -102,6 +105,27 @@ def test_backfill_api_is_bounded_and_keeps_probability_and_trading_disabled() ->
         "offset",
     ]
     assert "requestBody" not in operation
+
+
+def test_collection_api_returns_continuation_for_another_bounded_page() -> None:
+    class PagedCollectionService(FakeCollectionService):
+        async def run(self, **kwargs: object) -> MlbCollectionRunResult:
+            assert kwargs["limit"] == 25
+            assert kwargs["offset"] == 25
+            result = await super().run(**kwargs)
+            return replace(result, examined=25, has_more=True, next_offset=50)
+
+    app = create_app()
+    app.dependency_overrides[get_mlb_collection_service] = PagedCollectionService
+    with TestClient(app) as client:
+        response = client.post(
+            "/mlb-research-collection/run?start_date=2026-08-22&end_date=2026-08-22"
+            "&limit=25&offset=25"
+        )
+
+    assert response.status_code == 200
+    assert response.json()["has_more"] is True
+    assert response.json()["next_offset"] == 50
 
 
 def _workflow_checkpoint() -> MlbBackfillCheckpointRecord:

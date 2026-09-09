@@ -585,6 +585,26 @@ and split-policy regressions, plus lint and scoped mypy. A paper-mode live refre
 followed by labeling the seven eligible operational vectors returned zero created, seven replayed,
 and zero failures. Historical duplicate rows remain available as audit history.
 
+## MLB prospective coverage repair
+
+**Status:** Complete
+**Completed:** 2026-09-08
+
+Release `0.11.20` exposes `has_more` and `next_offset` from a one-row look-ahead while preserving
+the 25-game processing cap. Schedule ordering now breaks equal-start ties by event ID. First-pitch
+checks use the current time for each game, and incomplete feature vectors receive their own reason
+instead of being described as retrospective-only.
+
+The existing automation follows continuation pages (at most ten, reporting truncation) and checks
+prospective lineups hourly from 11:30 through 23:30 Eastern, plus 03:30. Result refresh, labeling,
+and historical backfill retain their original 03:30/11:30/14:30/17:30 slots. Schedule changes between
+requests remain a best-effort offset-pagination limitation; every invocation restarts at zero.
+
+Live paper-mode verification covered 30 unique games in pages of 25 and 5, with five operational
+feature vectors, fifteen incomplete lineups, and ten not-scheduled events. All 33 relevant tests,
+lint/format checks, and scoped type checks passed. More frequent observation cannot guarantee
+that official lineups or quantitative fields are available before first pitch.
+
 ## Next phase
 
 Run the checkpointed retrospective workflow until the 500/150/150 exploratory thresholds are met

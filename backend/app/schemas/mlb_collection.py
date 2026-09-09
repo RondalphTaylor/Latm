@@ -43,6 +43,8 @@ class MlbCollectionRunResponse(BaseModel):
     operational_feature_vectors: int
     result_counts: dict[str, int]
     events: tuple[MlbCollectionEventResponse, ...]
+    has_more: bool = False
+    next_offset: int | None = None
     research_only: Literal[True]
     probability_generated: Literal[False]
     automatic_trading_eligible: Literal[False]

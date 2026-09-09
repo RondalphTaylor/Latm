@@ -203,6 +203,18 @@ the checkpoint after collection while verifying its original state fingerprint. 
 append-only artifacts replay naturally, while the completed batch audit and cursor still commit
 together.
 
+Prospective collection returns `has_more` and `next_offset`; callers must follow these fields to
+cover the whole requested schedule window. Each request processes at most 25 games, ordered by
+scheduled start and stable event ID. Pagination is best effort if official schedules change between
+requests; the next invocation starts from offset zero. First-pitch eligibility is checked again
+for each game as processing progresses. `feature_vector_incomplete` distinguishes missing
+quantitative inputs from complete but retrospective-only evidence.
+
+The research automation checks prospective coverage hourly at 11:30 through 23:30 and at 03:30
+America/New_York, following pages (up to ten per invocation). Result refresh, labeling, and the
+single historical batch remain restricted to the original 03:30, 11:30, 14:30, and 17:30 slots.
+Additional collection opportunities cannot guarantee that official lineups will be available.
+
 MLB result refreshes replay the latest label when the vector, split policy, final scores, and
 scheduled start are unchanged. The original label snapshot and timestamps remain immutable;
 score corrections (including reversions) append new revisions. Legacy duplicate history remains

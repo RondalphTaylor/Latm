@@ -267,7 +267,7 @@ class SportsRepository:
                 joinedload(SportsEventRecord.home_team),
                 joinedload(SportsEventRecord.away_team),
             )
-            .order_by(SportsEventRecord.scheduled_start_time)
+            .order_by(SportsEventRecord.scheduled_start_time, SportsEventRecord.id)
             .limit(limit)
             .offset(offset)
         )

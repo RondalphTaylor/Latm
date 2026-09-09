@@ -547,7 +547,10 @@ history as a training set.
 
 The bounded prospective collector is an orchestration layer over the existing official schedule,
 lineup, Statcast, and game-feature services. It accepts at most seven calendar days, returns at most
-25 events per call, and advances only scheduled games strictly before first pitch. Each underlying
+25 events per call, exposes look-ahead `has_more`/`next_offset`, and advances only scheduled games
+strictly before first pitch using a fresh per-game clock check. Schedule ordering includes stable
+event ID to break equal-start ties. Callers follow every page; schedule changes between requests
+remain a best-effort offset-pagination limitation. Each underlying
 append is independently transactional, so an interrupted batch retains auditable partial progress
 and can be replayed safely. The application does not contain a scheduler; an external timer must
 invoke collection near lineup publication.

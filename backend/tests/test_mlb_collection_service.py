@@ -123,6 +123,7 @@ class FakeFeatureService:
             SimpleNamespace(
                 id=UUID(int=statcast_snapshot_id.int + 300),
                 operational_model_input_eligible=True,
+                complete_feature_vector=True,
             ),
         )
         return MlbGameFeatureBuildResult(created=True, vector=vector)
@@ -148,6 +149,8 @@ async def _run_collection() -> None:
     assert len(features.calls) == 1
     assert result.events_refreshed == 4
     assert result.examined == 4
+    assert result.has_more is False
+    assert result.next_offset is None
     assert result.lineup_observed == 2
     assert result.complete_lineups == 1
     assert result.feature_vectors_built == 1
@@ -164,6 +167,133 @@ async def _run_collection() -> None:
 
 def test_collection_advances_only_upcoming_complete_lineups() -> None:
     asyncio.run(_run_collection())
+
+
+class PagedSportsRepository:
+    def __init__(self, events: list[FakeEvent]) -> None:
+        self.events = events
+        self.calls: list[tuple[int, int]] = []
+
+    async def list_events(self, *, limit: int, offset: int, **_: object) -> list[FakeEvent]:
+        self.calls.append((limit, offset))
+        return self.events[offset : offset + limit]
+
+
+async def _collect_every_event_across_pages() -> None:
+    events = [
+        FakeEvent(UUID(int=FUTURE_ID.int + index), str(index), NOW + timedelta(hours=2))
+        for index in range(30)
+    ]
+    repository = PagedSportsRepository(events)
+    lineup = FakeLineupService()
+    service = MlbProspectiveCollectionService(
+        sports_ingestion=cast(SportsIngestionService, FakeSportsIngestion()),
+        sports_repository=cast(SportsRepository, repository),
+        lineup_service=cast(MlbLineupService, lineup),
+        statcast_service=cast(MlbStatcastService, FakeStatcastService()),
+        feature_service=cast(MlbGameFeatureService, FakeFeatureService()),
+        clock=lambda: NOW,
+    )
+
+    first = await service.run(start_date=NOW.date(), end_date=NOW.date(), limit=25, offset=0)
+    assert first.examined == 25
+    assert first.has_more is True
+    assert first.next_offset == 25
+    assert lineup.calls == [event.id for event in events[:25]]
+
+    second = await service.run(
+        start_date=NOW.date(), end_date=NOW.date(), limit=25, offset=first.next_offset
+    )
+    assert second.examined == 5
+    assert second.has_more is False
+    assert second.next_offset is None
+    assert repository.calls == [(26, 0), (26, 25)]
+    assert lineup.calls == [event.id for event in events]
+    assert [event.event_id for event in (*first.events, *second.events)] == [
+        event.id for event in events
+    ]
+
+
+def test_collection_pages_through_thirty_events_without_omissions_or_probe_processing() -> None:
+    asyncio.run(_collect_every_event_across_pages())
+
+
+async def _recheck_first_pitch_after_slow_previous_event() -> None:
+    current_time = NOW
+
+    class SlowLineupService(FakeLineupService):
+        async def ingest(self, event_id: UUID) -> MlbLineupIngestionResult:
+            nonlocal current_time
+            result = await super().ingest(event_id)
+            current_time = NOW + timedelta(minutes=2)
+            return result
+
+    repository = PagedSportsRepository(
+        [
+            FakeEvent(INCOMPLETE_ID, "slow", NOW + timedelta(hours=1)),
+            FakeEvent(FUTURE_ID, "first-pitch", NOW + timedelta(minutes=1)),
+        ]
+    )
+    lineup = SlowLineupService()
+    service = MlbProspectiveCollectionService(
+        sports_ingestion=cast(SportsIngestionService, FakeSportsIngestion()),
+        sports_repository=cast(SportsRepository, repository),
+        lineup_service=cast(MlbLineupService, lineup),
+        statcast_service=cast(MlbStatcastService, FakeStatcastService()),
+        feature_service=cast(MlbGameFeatureService, FakeFeatureService()),
+        clock=lambda: current_time,
+    )
+    result = await service.run(start_date=NOW.date(), end_date=NOW.date(), limit=25, offset=0)
+
+    assert result.run_at == NOW
+    assert lineup.calls == [INCOMPLETE_ID]
+    assert result.result_counts == {"first_pitch_reached": 1, "lineup_incomplete": 1}
+    assert result.events[1].reason_code == "first_pitch_reached"
+
+
+def test_collection_checks_current_time_before_each_event() -> None:
+    asyncio.run(_recheck_first_pitch_after_slow_previous_event())
+
+
+async def _classify_feature_vector(complete: bool, eligible: bool, reason: str) -> None:
+    class FeatureService(FakeFeatureService):
+        async def build(self, statcast_snapshot_id: UUID) -> MlbGameFeatureBuildResult:
+            result = await super().build(statcast_snapshot_id)
+            result.vector.complete_feature_vector = complete
+            result.vector.operational_model_input_eligible = eligible
+            return result
+
+    service = MlbProspectiveCollectionService(
+        sports_ingestion=cast(SportsIngestionService, FakeSportsIngestion()),
+        sports_repository=cast(
+            SportsRepository,
+            PagedSportsRepository([FakeEvent(FUTURE_ID, "future", NOW + timedelta(hours=1))]),
+        ),
+        lineup_service=cast(MlbLineupService, FakeLineupService()),
+        statcast_service=cast(MlbStatcastService, FakeStatcastService()),
+        feature_service=cast(MlbGameFeatureService, FeatureService()),
+        clock=lambda: NOW,
+    )
+    result = await service.run(start_date=NOW.date(), end_date=NOW.date(), limit=25, offset=0)
+
+    assert result.result_counts == {reason: 1}
+    assert result.feature_vectors_built == 1
+    assert result.operational_feature_vectors == int(eligible)
+    assert result.events[0].stage == "feature_built"
+
+
+@pytest.mark.parametrize(
+    ("complete", "eligible", "reason"),
+    [
+        (True, True, "operational_feature_ready"),
+        (False, False, "feature_vector_incomplete"),
+        (True, False, "retrospective_only"),
+    ],
+)
+def test_collection_distinguishes_missing_features_from_retrospective_data(
+    complete: bool, eligible: bool, reason: str
+) -> None:
+    asyncio.run(_classify_feature_vector(complete, eligible, reason))
 
 
 async def _reject_range() -> None:

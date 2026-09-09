@@ -75,6 +75,8 @@ class MlbCollectionRunResult:
     operational_feature_vectors: int
     result_counts: dict[str, int]
     events: tuple[MlbCollectionEventResult, ...]
+    has_more: bool = False
+    next_offset: int | None = None
     research_only: Literal[True] = True
     probability_generated: Literal[False] = False
     automatic_trading_eligible: Literal[False] = False
@@ -164,7 +166,7 @@ class MlbProspectiveCollectionService:
                 event_status=None,
                 team_id=None,
                 provider_name="mlb",
-                limit=limit,
+                limit=limit + 1,
                 offset=offset,
             )
         )
@@ -172,7 +174,7 @@ class MlbProspectiveCollectionService:
         if run_at.tzinfo is None or run_at.utcoffset() is None:
             raise ValueError("MLB collection clock must be timezone-aware")
         results: list[MlbCollectionEventResult] = []
-        for event in events:
+        for event in events[:limit]:
             if event.postponed:
                 results.append(
                     MlbCollectionEventResult(
@@ -195,7 +197,7 @@ class MlbProspectiveCollectionService:
                     )
                 )
                 continue
-            if event.scheduled_start_time <= run_at:
+            if event.scheduled_start_time <= self._clock():
                 results.append(
                     MlbCollectionEventResult(
                         event_id=event.id,
@@ -243,7 +245,11 @@ class MlbProspectiveCollectionService:
                         reason_code=(
                             "operational_feature_ready"
                             if operational_model_input_eligible
-                            else "retrospective_only"
+                            else (
+                                "feature_vector_incomplete"
+                                if not vector.vector.complete_feature_vector
+                                else "retrospective_only"
+                            )
                         ),
                         lineup_snapshot_id=lineup_snapshot_id,
                         statcast_snapshot_id=statcast_snapshot_id,
@@ -297,6 +303,8 @@ class MlbProspectiveCollectionService:
             ),
             result_counts=dict(sorted(counts.items())),
             events=tuple(results),
+            has_more=len(events) > limit,
+            next_offset=offset + limit if len(events) > limit else None,
         )
 
 

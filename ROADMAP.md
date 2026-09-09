@@ -1392,6 +1392,10 @@ history, original fingerprints, and canonical selection.
 
 Expand the system beyond NBA markets.
 
+Release `0.11.20` adds explicit prospective pagination, stable equal-start ordering, per-game
+first-pitch checks, and distinct incomplete-vector reasons. The collection automation now follows
+all pages and adds hourly evening checks while keeping historical batches at their original slots.
+
 Potential order:
 
 ```text
