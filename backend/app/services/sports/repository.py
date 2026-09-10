@@ -47,6 +47,7 @@ class SportsRepository:
     def _provider_values(provider_names: set[str]) -> list[dict[str, object]]:
         display_names = {
             "balldontlie": "BALLDONTLIE",
+            "balldontlie_nfl": "BALLDONTLIE NFL",
             "mlb": "MLB Stats API",
         }
         return [
@@ -292,7 +293,7 @@ class SportsRepository:
         return list(result.unique().all())
 
     async def get_event(self, event_id: UUID) -> SportsEventRecord | None:
-        """Return one persisted NBA event by stable internal ID."""
+        """Return one persisted sports event by stable internal ID."""
         statement = (
             select(SportsEventRecord)
             .where(SportsEventRecord.id == event_id)

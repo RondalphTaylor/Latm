@@ -55,6 +55,32 @@ Invoke-RestMethod "http://localhost:8000/markets/<internal-market-uuid>"
 
 `POST /markets/ingest` reads public provider data and writes normalized snapshots only to the local PostgreSQL database. It cannot place an order. Repeated observations update market and outcome identities while preserving timestamped price history.
 
+## NFL data ingestion (research-only)
+
+Select `provider=balldontlie_nfl` explicitly; the NBA ingestion default is unchanged.
+The NFL adapter uses the existing `BALLDONTLIE_API_KEY` and the separate
+`BALLDONTLIE_NFL_API_BASE_URL` (default `https://api.balldontlie.io/nfl/v1`).
+Keep keys in the Git-ignored `.env` file, never in commands or committed fixtures.
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8000/teams/ingest?provider=balldontlie_nfl"
+Invoke-RestMethod -Method Post "http://localhost:8000/events/ingest?provider=balldontlie_nfl&start_date=2026-09-09&end_date=2026-09-14"
+Invoke-RestMethod "http://localhost:8000/events?league=nfl&provider=balldontlie_nfl"
+```
+
+Requests retain the shared maximum of 31 inclusive dates. Dates are interpreted in
+America/New_York; UTC kickoff timestamps remain timezone-aware. NFL team/game IDs use
+the `balldontlie_nfl` namespace, so equal numeric NBA IDs cannot collide. Existing
+string league columns and provider-scoped keys support NFL without a database migration.
+Source payloads preserve week and other metadata. Missing period uses the existing `0`
+sentinel (unknown/not started), not an inferred quarter; unknown lifecycle values stay unknown.
+Tied final scores are retained. These are sports results, not exchange settlement assertions.
+
+This slice adds no NFL market matching, forecasts, opportunities, settlement, or trading.
+Provider failures do not persist a partial ingestion response. The adapter retains the
+configured request pacing, bounded retries, and cursor/page guards. See the
+[BALLDONTLIE NFL documentation](https://nfl.balldontlie.io/) for source access requirements.
+
 ## NBA data ingestion
 
 Create a BALLDONTLIE API key and set `BALLDONTLIE_API_KEY` in `.env`. The default 12.1-second request interval respects the provider's documented free-tier limit of five requests per minute.

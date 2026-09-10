@@ -607,6 +607,39 @@ that official lineups or quantitative fields are available before first pitch.
 
 ## Next phase
 
+### NFL ingestion foundation (`0.11.21`)
+
+The NFL pilot adds a dedicated read-only BALLDONTLIE adapter selected as
+`provider=balldontlie_nfl`, league-filtered team/event reads, and cross-sport identity
+isolation. Existing provider-scoped UUIDs and string league columns support NFL without
+a schema migration. A domain check rejects cross-league teams. The provider shares the
+existing credential/retry/pacing transport but overrides every team/game retrieval method.
+
+NFL uses documented `dates[]` queries in bounded chunks with one-day timezone padding,
+followed by exact America/New_York date filtering. Cursor loops and page exhaustion fail
+without returning partial ingestion data. Explicit `status_state` drives lifecycle; unknown,
+delayed, suspended, and abandoned observations remain unknown. Final scores must exist;
+ties remain ties. Week and other source fields remain in raw JSON. Missing period uses the
+shared zero sentinel, never an inferred quarter. Windows installs `tzdata` for IANA timezone
+support; Linux uses system timezone data.
+
+Regression coverage includes provider authentication/retry/validation, all four retrieval
+methods, ET/DST boundaries, pagination, ID isolation, repeat ingestion, schedule/score
+corrections, ties, PostgreSQL persistence, and NFL API selection/filtering. Tests use mocked
+providers and an isolated migrated PostgreSQL database, never live trading.
+
+Final verification passed all 568 backend tests with PostgreSQL integration enabled,
+Ruff lint and format checks, strict mypy across 218 files, and Compose configuration
+validation. The live backend health remained `ok` with trading mode exactly `paper`.
+
+The live paper-mode API loaded the new route and failed safely on provider authentication:
+the configured key now receives HTTP 401 even on a direct NFL teams request. No NFL rows
+were ingested by that failed request. A working locally configured key is required to finish
+live Week 1 ingestion/replay verification. Do not expose the secret in logs or Git.
+
+NFL remains ingestion-only: market matching, baseline forecasting, exchange settlement
+(including fractional tie payouts), and paper execution are not enabled by this release.
+
 Run the checkpointed retrospective workflow until the 500/150/150 exploratory thresholds are met
 while collecting and labeling operational games toward the 200-game prospective holdout. Then
 materialize the first immutable fitted research model and implement prospective prediction capture.

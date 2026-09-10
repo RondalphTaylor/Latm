@@ -1,5 +1,17 @@
 # Data Sources
 
+## NFL ingestion pilot
+
+Use the documented [BALLDONTLIE NFL API](https://nfl.balldontlie.io/) for read-only
+teams and games via `https://api.balldontlie.io/nfl/v1`. Credentials are supplied through
+`BALLDONTLIE_API_KEY`; the NFL provider identity is `balldontlie_nfl`, separate from NBA.
+The free tier documents teams/games access with five requests per minute. Actual entitlement
+and rate-limit responses remain authoritative; no subscription is purchased automatically.
+The source's explicit lifecycle and timestamp fields drive normalization. Unknown states and
+missing fields are never replaced with guessed outcomes. Raw snapshots preserve week, venue,
+and provider metadata. NFL game results are not Kalshi settlement instructions, especially for
+ties, abandoned games, or discretionary fair-price settlements.
+
 ## 1. Purpose
 
 This document defines the initial external data sources used by the prediction-market trading platform.

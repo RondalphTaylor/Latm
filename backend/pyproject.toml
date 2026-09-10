@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "latm-backend"
-version = "0.11.20"
+version = "0.11.21"
 description = "Backend for the LATM prediction-market research platform."
 requires-python = ">=3.13,<3.14"
 dependencies = [
@@ -15,6 +15,7 @@ dependencies = [
     "pydantic>=2.11,<3",
     "pydantic-settings>=2.10,<3",
     "sqlalchemy[asyncio]>=2.0.41,<3",
+    "tzdata>=2025.2; sys_platform == 'win32'",
     "uvicorn[standard]>=0.35,<1",
 ]
 

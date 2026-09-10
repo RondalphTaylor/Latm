@@ -14,6 +14,7 @@ class SportsLeague(StrEnum):
 
     NBA = "nba"
     MLB = "mlb"
+    NFL = "nfl"
 
 
 class SportsEventStatus(StrEnum):
@@ -86,6 +87,8 @@ class SportsEvent(BaseModel):
         away_identity = (self.away_team.provider_name, self.away_team.provider_team_id)
         if home_identity == away_identity:
             raise ValueError("home and away teams must be distinct")
+        if self.home_team.league != self.league or self.away_team.league != self.league:
+            raise ValueError("home and away teams must belong to the event league")
         if (self.home_score is None) != (self.away_score is None):
             raise ValueError("home and away scores must both be present or absent")
         if self.status is SportsEventStatus.FINAL and self.home_score is None:

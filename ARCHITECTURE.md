@@ -493,7 +493,13 @@ A normalized game should contain:
 
 Forecasting code should operate against normalized events.
 
-The sports domain now supports `nba` and `mlb`. BALLDONTLIE remains the NBA provider, while the
+The sports domain now supports `nba`, `mlb`, and `nfl`. NFL uses a separate read-only
+`balldontlie_nfl` adapter identity to prevent numeric-ID collisions with NBA BALLDONTLIE
+records. Existing string league columns, provider foreign keys, and provider-scoped UUIDs
+support persistence without a schema migration. NFL dates use America/New_York with aware
+UTC kickoff timestamps; source metadata remains in raw payloads, and tied final results are
+preserved without implying exchange settlement. NFL ingestion grants no matching, forecasting,
+or trading authority. BALLDONTLIE remains the NBA provider, while the
 offseason pilot adds a public read-only official MLB Stats API adapter for active teams, bounded
 schedules, lifecycle state, scores, venue, and series metadata. Both providers persist into the
 same normalized tables with stable provider identities and explicit league values.

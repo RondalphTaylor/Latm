@@ -20,6 +20,7 @@ from app.providers.sports.base import (
     SportsProviderAuthenticationError,
 )
 from app.providers.sports.mlb import MlbStatsSportsDataProvider
+from app.providers.sports.nfl import BallDontLieNflSportsDataProvider
 from app.schemas.sports import (
     EventIngestionResponse,
     SportsEventResponse,
@@ -62,6 +63,26 @@ def _build_balldontlie_provider(
 
 
 @lru_cache(maxsize=4)
+def _build_nfl_provider(
+    api_key: SecretStr,
+    base_url: str,
+    timeout_seconds: float,
+    max_retries: int,
+    max_pages: int,
+    request_interval_seconds: float,
+) -> BallDontLieNflSportsDataProvider:
+    """Reuse the read-only NFL adapter across requests for request pacing."""
+    return BallDontLieNflSportsDataProvider(
+        api_key=api_key,
+        base_url=base_url,
+        timeout_seconds=timeout_seconds,
+        max_retries=max_retries,
+        max_pages=max_pages,
+        request_interval_seconds=request_interval_seconds,
+    )
+
+
+@lru_cache(maxsize=4)
 def _build_mlb_provider(
     base_url: str,
     timeout_seconds: float,
@@ -83,7 +104,10 @@ def get_sports_data_provider(
 ) -> SportsDataProvider:
     """Build a selected read-only sports adapter without trading capability."""
     provider_name = provider or settings.sports_data_provider
-    if provider_name is SportsDataProviderName.BALLDONTLIE:
+    if provider_name in {
+        SportsDataProviderName.BALLDONTLIE,
+        SportsDataProviderName.BALLDONTLIE_NFL,
+    }:
         if (
             settings.balldontlie_api_key is None
             or not settings.balldontlie_api_key.get_secret_value().strip()
@@ -91,6 +115,15 @@ def get_sports_data_provider(
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="sports-data provider credentials are not configured",
+            )
+        if provider_name is SportsDataProviderName.BALLDONTLIE_NFL:
+            return _build_nfl_provider(
+                settings.balldontlie_api_key,
+                settings.balldontlie_nfl_api_base_url,
+                settings.provider_request_timeout_seconds,
+                settings.provider_max_retries,
+                settings.sports_provider_max_pages,
+                settings.sports_provider_request_interval_seconds,
             )
         return _build_balldontlie_provider(
             settings.balldontlie_api_key,

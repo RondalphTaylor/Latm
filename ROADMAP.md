@@ -1325,6 +1325,11 @@ Phase 20 is complete when:
 
 # Phase 21: Additional Sports
 
+The NFL ingestion foundation adds explicit `balldontlie_nfl` selection, league-isolated
+teams/games, bounded source ingestion and league-filtered reads. Existing database structures
+support NFL without migration. NFL market matching, a sport-specific baseline, evaluation,
+and paper execution remain subsequent work; NBA parameters and trading eligibility are not reused.
+
 **Implementation status:** In progress. The ingestion foundation adds official read-only MLB team,
 schedule, and result normalization, selectable ingestion, shared persistence, and league-filtered
 reads. The second slice adds exact Kalshi `KXMLBGAME` classification and deterministic MLB

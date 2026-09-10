@@ -34,6 +34,7 @@ services:
       SPORTS_DATA_PROVIDER: ${SPORTS_DATA_PROVIDER:-balldontlie}
       BALLDONTLIE_API_KEY: ${BALLDONTLIE_API_KEY:-}
       BALLDONTLIE_API_BASE_URL: ${BALLDONTLIE_API_BASE_URL:-https://api.balldontlie.io/v1}
+      BALLDONTLIE_NFL_API_BASE_URL: ${BALLDONTLIE_NFL_API_BASE_URL:-https://api.balldontlie.io/nfl/v1}
       MLB_API_BASE_URL: ${MLB_API_BASE_URL:-https://statsapi.mlb.com/api/v1}
       # Read-only official Statcast CSV source; no authentication or trading surface.
       BASEBALL_SAVANT_BASE_URL: ${BASEBALL_SAVANT_BASE_URL:-https://baseballsavant.mlb.com}

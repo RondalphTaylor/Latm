@@ -24,6 +24,7 @@ class SportsDataProviderName(StrEnum):
     """Sports-data providers available in the current read-only build."""
 
     BALLDONTLIE = "balldontlie"
+    BALLDONTLIE_NFL = "balldontlie_nfl"
     MLB = "mlb"
 
 
@@ -47,6 +48,7 @@ class Settings(BaseSettings):
     sports_data_provider: SportsDataProviderName = SportsDataProviderName.BALLDONTLIE
     balldontlie_api_key: SecretStr | None = None
     balldontlie_api_base_url: str = "https://api.balldontlie.io/v1"
+    balldontlie_nfl_api_base_url: str = "https://api.balldontlie.io/nfl/v1"
     mlb_api_base_url: str = "https://statsapi.mlb.com/api/v1"
     baseball_savant_base_url: str = "https://baseballsavant.mlb.com"
     sports_provider_max_pages: int = Field(default=10, ge=1, le=100)

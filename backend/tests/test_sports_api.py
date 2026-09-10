@@ -324,8 +324,8 @@ def test_invalid_league_filters_return_422() -> None:
     _, test_client = sports_client(repository=FakeSportsRepository())
 
     with test_client:
-        team_response = test_client.get("/teams?league=nfl")
-        event_response = test_client.get("/events?league=nfl")
+        team_response = test_client.get("/teams?league=unsupported")
+        event_response = test_client.get("/events?league=unsupported")
 
     assert team_response.status_code == 422
     assert event_response.status_code == 422
