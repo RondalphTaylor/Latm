@@ -66,11 +66,11 @@ async def _run(fault: str | None) -> None:
                             MarketPriceRecord(
                                 id=uuid4(),
                                 market_id=market_id,
-                                yes_bid=Decimal("0.45"),
-                                yes_ask=Decimal("0.50"),
-                                no_bid=Decimal("0.45"),
-                                no_ask=Decimal("0.55"),
-                                last_price=Decimal("0.50"),
+                                yes_bid=Decimal("0.20"),
+                                yes_ask=Decimal("0.30"),
+                                no_bid=Decimal("0.20"),
+                                no_ask=Decimal("0.75"),
+                                last_price=Decimal("0.30"),
                                 volume=None,
                                 volume_24h=None,
                                 open_interest=None,
@@ -82,6 +82,7 @@ async def _run(fault: str | None) -> None:
                     repository = NflPaperOpportunityRepository(session)
                     first, created = await repository.run(forecast.id, "opportunity-test")
                     assert created
+                    first_id = first.id
                     if fault == "no_quote":
                         assert first.price_id is None
                         assert first.yes_status == first.no_status == "ineligible"
@@ -103,7 +104,7 @@ async def _run(fault: str | None) -> None:
                     )
                     with pytest.raises(ValueError, match="another forecast"):
                         await repository.run(UUID(int=999), "opportunity-test")
-                    assert await repository.get_opportunity(first.id) is not None
+                    assert await repository.get_opportunity(first_id) is not None
                     assert len(await repository.list_opportunities(limit=10, offset=0)) == 1
                     assert (
                         await session.scalar(select(func.count()).select_from(BaseForecastRecord))
