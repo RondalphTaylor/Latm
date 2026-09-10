@@ -786,6 +786,15 @@ Every effective parameter set receives a configuration fingerprint embedded in i
 
 # 14. Research Architecture
 
+NFL retrospective research is isolated under `services/nfl_research` and the
+read-only `/nfl-research-baseline` route. A fixed weekly walk-forward Elo policy
+estimates expected home payout with ties represented by 0.5, not complementary
+win probabilities. The self-contained response includes exact source inputs and
+fingerprints, coverage/exclusion audits, and chronological split diagnostics.
+There is no operational forecast, model publication, or execution dependency.
+Research-run persistence and verified historical completeness remain separate work;
+the returned JSON must be retained to survive changes to mutable source events.
+
 Research providers retrieve external information related to a market or event.
 
 Potential sources include:

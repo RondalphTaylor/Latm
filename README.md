@@ -55,6 +55,33 @@ Invoke-RestMethod "http://localhost:8000/markets/<internal-market-uuid>"
 
 `POST /markets/ingest` reads public provider data and writes normalized snapshots only to the local PostgreSQL database. It cannot place an order. Repeated observations update market and outcome identities while preserving timestamped price history.
 
+## NFL historical baseline (research-only)
+
+Release `0.11.23` adds a bounded manual collector and `GET /nfl-research-baseline`.
+From `backend`, collect a window using the already configured localhost API:
+
+```powershell
+.venv/Scripts/python.exe -m app.services.nfl_research.collection --start-date 2018-08-01 --end-date 2026-02-28 --max-windows 1
+Invoke-RestMethod "http://localhost:8000/nfl-research-baseline"
+```
+
+The collector requires healthy paper mode, uses at most 31 days per ingestion,
+stops on failure, and prints the next date for manual resumption. It does not save a
+durable cursor. Replaying a window uses existing event upserts. Provider authentication
+currently blocks real historical collection; a successful software test is not a
+successful real-data backtest.
+
+The fixed experimental Elo policy evaluates regular-season 2018–2022 development,
+2023–2024 validation, and 2025 test data, batching updates by week. It estimates
+expected ordinary-game payout (ties=0.5), **not** a win probability. Reports include
+paired mean squared payout error against two simple benchmarks, calibration,
+coverage, exact source inputs, and reproducibility fingerprints. Empty data blocks
+evaluation; partial data never proves completeness or readiness. Save the returned
+JSON if you need an audit artifact across later source corrections; this read-only
+slice does not persist research-run records. NFL trading stays disabled.
+
+See [the model policy and limitations](docs/decisions/0020-nfl-research-payout-baseline.md).
+
 ## NFL data ingestion (research-only)
 
 Select `provider=balldontlie_nfl` explicitly; the NBA ingestion default is unchanged.

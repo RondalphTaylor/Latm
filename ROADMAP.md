@@ -1325,12 +1325,20 @@ Phase 20 is complete when:
 
 # Phase 21: Additional Sports
 
+Release `0.11.23` adds a bounded manual NFL historical collector and a read-only,
+weekly walk-forward Elo expected-payout baseline with chronological split metrics,
+benchmarks, calibration, and source fingerprints. Provider authentication blocks
+real historical collection/evaluation. This is research infrastructure, not a
+validated NFL model; coverage verification, durable research artifacts, operational
+forecasting, fractional settlement, and paper execution remain outstanding.
+
 The NFL ingestion foundation adds explicit `balldontlie_nfl` selection, league-isolated
 teams/games, bounded source ingestion and league-filtered reads. Existing database structures
 support NFL without migration. The next NFL slice adds exact game-winner classification,
 versioned contract recognition, conservative aliases/date matching, and migration0021 for
-research-only match constraints. A sport-specific baseline, evaluation, fractional settlement,
-and paper execution remain subsequent work; NBA parameters and trading eligibility are not reused.
+research-only match constraints. The research payout baseline now has exploratory evaluation;
+validated operational forecasts, fractional settlement, and paper execution remain subsequent
+work. NBA trading eligibility is not reused.
 
 **Implementation status:** In progress. The ingestion foundation adds official read-only MLB team,
 schedule, and result normalization, selectable ingestion, shared persistence, and league-filtered
