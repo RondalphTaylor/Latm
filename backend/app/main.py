@@ -18,6 +18,7 @@ from app.api.mlb_modeling import router as mlb_modeling_router
 from app.api.mlb_statcast import router as mlb_statcast_router
 from app.api.nfl_research import router as nfl_research_router
 from app.api.nfl_shadow import router as nfl_shadow_router
+from app.api.nfl_shadow_evaluation import router as nfl_shadow_evaluation_router
 from app.api.opportunities import router as opportunities_router
 from app.api.portfolio import router as portfolio_router
 from app.api.position_monitoring import router as position_monitoring_router
@@ -37,7 +38,7 @@ def create_app() -> FastAPI:
     """Build and configure the FastAPI application."""
     application = FastAPI(
         title="LATM API",
-        version="0.11.24",
+        version="0.11.25",
         lifespan=lifespan,
     )
     application.include_router(health_router)
@@ -45,6 +46,7 @@ def create_app() -> FastAPI:
     application.include_router(sports_router)
     application.include_router(nfl_research_router)
     application.include_router(nfl_shadow_router)
+    application.include_router(nfl_shadow_evaluation_router)
     application.include_router(mlb_lineups_router)
     application.include_router(mlb_statcast_router)
     application.include_router(mlb_modeling_router)

@@ -57,6 +57,21 @@ Invoke-RestMethod "http://localhost:8000/markets/<internal-market-uuid>"
 
 ## NFL historical baseline (research-only)
 
+Release `0.11.25` adds immutable shadow outcome labels and prospective performance.
+Apply migration `0023_nfl_shadow_evaluations`, refresh completed NFL results, then:
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8000/nfl-shadow-labels/run?snapshot_id=<uuid>"
+Invoke-RestMethod "http://localhost:8000/nfl-shadow-labels?limit=25&offset=0"
+Invoke-RestMethod "http://localhost:8000/nfl-shadow-performance"
+```
+
+Non-final games remain unscored. Ties have a 0.5 outcome; corrections append/replay
+semantic labels without overwriting evidence. Performance uses the earliest
+snapshot per game/model/seed before label selection, so multiple contracts cannot
+inflate game counts. No metric groups are emitted until games are labeled. Sports-result labels do not settle
+contracts or enable trading. See [the evaluation policy](docs/decisions/0022-nfl-shadow-outcomes-and-performance.md).
+
 Release `0.11.24` adds immutable prospective **shadow** payout snapshots, separate
 from operational forecasts and trading. After refreshing NFL events/markets and
 matching them, select a current matched contract and run:

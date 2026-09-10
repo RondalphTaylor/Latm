@@ -786,6 +786,14 @@ Every effective parameter set receives a configuration fingerprint embedded in i
 
 # 14. Research Architecture
 
+NFL shadow outcomes are append-only `nfl_shadow_evaluations` facts freezing one
+snapshot against validated local final-result semantics. Score corrections append;
+timestamp-only refreshes replay. Canonical performance first picks the earliest
+snapshot per event/model/seed, then requires a label matching current result
+semantics. This prevents duplicate-contract weighting and labeled-snapshot fallback.
+Pending and ineligible cases remain visible; empty metrics are null. Score-based
+payout labels have no dependency on exchange settlement or portfolio accounting.
+
 NFL prospective research snapshots use a separate append-only
 `nfl_shadow_forecasts` table. A pinned 2018–2025 baseline seed produces frozen
 2026 expected payouts only for freshly revalidated future matched contracts.

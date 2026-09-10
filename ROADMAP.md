@@ -1325,10 +1325,16 @@ Phase 20 is complete when:
 
 # Phase 21: Additional Sports
 
+Release `0.11.25` adds immutable NFL shadow outcome labeling and prospective
+performance with correction-aware results, ties, canonical one-game counting,
+benchmark payout error, and calibration. Pending results are never guessed.
+Promotion criteria, current-season model updates, fractional exchange settlement,
+and NFL paper execution remain subsequent work.
+
 Release `0.11.24` adds immutable prospective NFL shadow payout snapshots with
 pregame timing, pinned historical inputs, current contract validation, and replay
 audits. This permits real-time shadow observation without enabling NFL orders.
-Prospective labels/evaluation, promotion criteria, current-season updates,
+Promotion criteria, current-season updates,
 fractional settlement, and paper execution remain subsequent work.
 
 Release `0.11.23` adds a bounded manual NFL historical collector and a read-only,

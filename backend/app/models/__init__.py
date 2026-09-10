@@ -22,6 +22,7 @@ from app.models.mlb import (
     MlbStatcastFeatureSnapshotRecord,
 )
 from app.models.nfl_shadow import NflShadowForecastRecord
+from app.models.nfl_shadow_evaluation import NflShadowEvaluationRecord
 from app.models.opportunities import OpportunityRecord
 from app.models.portfolio import (
     PortfolioRecord,
@@ -55,6 +56,7 @@ __all__ = [
     "ModelVersionRecord",
     "OpportunityRecord",
     "NflShadowForecastRecord",
+    "NflShadowEvaluationRecord",
     "PortfolioRecord",
     "PortfolioSnapshotRecord",
     "PositionSizeProposalRecord",
