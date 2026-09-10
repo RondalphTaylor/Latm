@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from decimal import ROUND_CEILING, ROUND_DOWN, Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -25,6 +27,21 @@ class NflPaperPreflightPolicy(BaseModel):
     slippage_bps: Decimal = Field(ge=Decimal("0"), le=Decimal("10000"))
     fee_bps: Decimal = Field(ge=Decimal("0"), le=Decimal("10000"))
     minimum_adjusted_edge: Decimal = Field(ge=Decimal("0"), le=Decimal("1"))
+
+
+def preflight_policy_fingerprint(policy: NflPaperPreflightPolicy) -> str:
+    """Fingerprint every cost assumption and the unconditional pilot block."""
+    payload = {
+        "policy": policy.model_dump(mode="json"),
+        "price_rounding": "ROUND_CEILING_0.000001",
+        "money_rounding": "ROUND_CEILING_0.01",
+        "risk_decision": "reject",
+        "execution_enabled": False,
+        "reason": "nfl_pilot_not_approved",
+    }
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
 
 
 class NflPaperPreflightInput(BaseModel):

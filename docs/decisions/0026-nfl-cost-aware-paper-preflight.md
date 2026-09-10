@@ -9,10 +9,10 @@ rounding execution price and per-contract unit cost upward to six decimal places
 money costs upward to cents. It selects the greatest whole-contract quantity whose
 all-in simulated cost fits the cap.
 
-The result is not persisted and is not an order, position-size proposal, risk
-authorization, trade, or portfolio action. It does not access a provider, a market,
-or a database. Callers must supply the immutable opportunity values they intend to
-inspect.
+The pure calculator has no side effects. Its paper-mode API wrapper persists a
+separate immutable review only after revalidating the source shadow and latest quote;
+the record is not an order, position-size proposal, risk authorization, trade, or
+portfolio action.
 
 ## Safety boundary
 

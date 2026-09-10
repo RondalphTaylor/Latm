@@ -23,6 +23,7 @@ from app.models.mlb import (
 )
 from app.models.nfl_forecasting import NflPayoutForecastRecord
 from app.models.nfl_opportunities import NflPaperOpportunityRecord
+from app.models.nfl_preflights import NflPaperPreflightRecord
 from app.models.nfl_shadow import NflShadowForecastRecord
 from app.models.nfl_shadow_evaluation import NflShadowEvaluationRecord
 from app.models.opportunities import OpportunityRecord
@@ -60,6 +61,7 @@ __all__ = [
     "NflShadowForecastRecord",
     "NflPayoutForecastRecord",
     "NflPaperOpportunityRecord",
+    "NflPaperPreflightRecord",
     "NflShadowEvaluationRecord",
     "PortfolioRecord",
     "PortfolioSnapshotRecord",
