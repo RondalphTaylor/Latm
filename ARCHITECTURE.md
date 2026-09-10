@@ -786,6 +786,13 @@ Every effective parameter set receives a configuration fingerprint embedded in i
 
 # 14. Research Architecture
 
+NFL prospective research snapshots use a separate append-only
+`nfl_shadow_forecasts` table. A pinned 2018–2025 baseline seed produces frozen
+2026 expected payouts only for freshly revalidated future matched contracts.
+Actual capture time is database-controlled, source parents are locked, and exact
+seed/target/match evidence is retained. These records never enter `base_forecasts`
+or the opportunity/execution path. This is shadow observation, not model promotion.
+
 NFL retrospective research is isolated under `services/nfl_research` and the
 read-only `/nfl-research-baseline` route. A fixed weekly walk-forward Elo policy
 estimates expected home payout with ties represented by 0.5, not complementary

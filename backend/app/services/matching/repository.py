@@ -138,6 +138,15 @@ class MatchingRepository:
             return 0
         inserted = 0
         try:
+            # Serialize latest-match changes with source-locked shadow captures.
+            # Sort all parents once so concurrent batches cannot invert lock order.
+            market_ids = sorted({decision.market_id for decision in decisions}, key=str)
+            await self._session.scalars(
+                select(PredictionMarketRecord.id)
+                .where(PredictionMarketRecord.id.in_(market_ids))
+                .order_by(PredictionMarketRecord.id)
+                .with_for_update()
+            )
             for batch in batched(decisions, _MATCH_INSERT_BATCH_SIZE, strict=False):
                 values = [self._decision_values(decision) for decision in batch]
                 statement = (

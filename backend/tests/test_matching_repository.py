@@ -83,7 +83,7 @@ def test_database_model_declares_policy_and_safety_constraints() -> None:
 def test_insert_is_stable_append_oriented_and_semantically_idempotent() -> None:
     match = decision()
     expected_id = match_record_id(match)
-    session = RecordingSession(results=[[expected_id]])
+    session = RecordingSession(results=[[match.market_id], [expected_id]])
     repository = MatchingRepository(cast(AsyncSession, session))
 
     inserted = asyncio.run(repository.insert_decisions([match]))
@@ -92,7 +92,9 @@ def test_insert_is_stable_append_oriented_and_semantically_idempotent() -> None:
     assert session.commits == 1
     assert session.rollbacks == 0
     assert match_record_id(match) == expected_id
-    sql = str(session.statements[0])
+    lock_sql = str(session.statements[0])
+    assert "ORDER BY markets.id FOR UPDATE" in lock_sql
+    sql = str(session.statements[1])
     assert "ON CONFLICT ON CONSTRAINT uq_market_event_matches_semantic_input DO NOTHING" in sql
     assert "RETURNING market_event_matches.id" in sql
 

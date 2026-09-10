@@ -57,6 +57,23 @@ Invoke-RestMethod "http://localhost:8000/markets/<internal-market-uuid>"
 
 ## NFL historical baseline (research-only)
 
+Release `0.11.24` adds immutable prospective **shadow** payout snapshots, separate
+from operational forecasts and trading. After refreshing NFL events/markets and
+matching them, select a current matched contract and run:
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8000/nfl-shadow-forecasts/run?match_id=<uuid>"
+Invoke-RestMethod "http://localhost:8000/nfl-shadow-forecasts?limit=25&offset=0"
+Invoke-RestMethod "http://localhost:8000/nfl-shadow-forecasts/<snapshot-uuid>"
+```
+
+Apply migration `0022_nfl_shadow_forecasts` first. Captures must precede kickoff
+and use fresh, revalidated source records. The model uses a pinned 2018–2025 seed,
+not 2026 results or injuries; "preseason" describes the input seasons, not a claim
+that it existed before September 2026. Payout is not win probability. The detail
+response preserves replay inputs; list responses are audit history, not trading
+signals. See [the shadow policy](docs/decisions/0021-nfl-prospective-shadow-snapshots.md).
+
 Release `0.11.23` adds a bounded manual collector and `GET /nfl-research-baseline`.
 From `backend`, collect a window using the already configured localhost API:
 
@@ -104,7 +121,7 @@ Source payloads preserve week and other metadata. Missing period uses the existi
 sentinel (unknown/not started), not an inferred quarter; unknown lifecycle values stay unknown.
 Tied final scores are retained. These are sports results, not exchange settlement assertions.
 
-NFL forecasts, opportunities, settlement, and trading remain disabled.
+NFL operational forecasts, opportunities, settlement, and trading remain disabled.
 Provider failures do not persist a partial ingestion response. The adapter retains the
 configured request pacing, bounded retries, and cursor/page guards. See the
 [BALLDONTLIE NFL documentation](https://nfl.balldontlie.io/) for source access requirements.

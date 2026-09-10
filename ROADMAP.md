@@ -1325,6 +1325,12 @@ Phase 20 is complete when:
 
 # Phase 21: Additional Sports
 
+Release `0.11.24` adds immutable prospective NFL shadow payout snapshots with
+pregame timing, pinned historical inputs, current contract validation, and replay
+audits. This permits real-time shadow observation without enabling NFL orders.
+Prospective labels/evaluation, promotion criteria, current-season updates,
+fractional settlement, and paper execution remain subsequent work.
+
 Release `0.11.23` adds a bounded manual NFL historical collector and a read-only,
 weekly walk-forward Elo expected-payout baseline with chronological split metrics,
 benchmarks, calibration, and source fingerprints. Provider access was restored on
