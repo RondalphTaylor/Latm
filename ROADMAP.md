@@ -1325,6 +1325,12 @@ Phase 20 is complete when:
 
 # Phase 21: Additional Sports
 
+Release `0.11.27` implements a distinct NFL expected-payout forecast interface with
+fresh locked source checks, bounded expiry, immutable candidates and request-key
+replay. It preserves the pinned model, blocked promotion and disabled NFL trading.
+Payout-aware opportunities, sizing/risk/entry integration, cohort evidence and
+reviewed pilot authorization remain subsequent work.
+
 Release `0.11.26` defines versioned, manual NFL promotion review criteria and adds
 official fractional binary-contract settlement normalization/storage for the paper
 ledger. Engineering fixtures need no prospective wait. Cohort coverage evidence,

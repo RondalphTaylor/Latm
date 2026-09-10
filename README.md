@@ -57,6 +57,19 @@ Invoke-RestMethod "http://localhost:8000/markets/<internal-market-uuid>"
 
 ## NFL historical baseline (research-only)
 
+Release `0.11.27` adds an [NFL paper-candidate forecast interface](docs/decisions/0024-nfl-paper-forecast-candidates.md),
+backed by immutable payout forecasts and migration 0025. It does **not** promote the
+model or enable trading. After refreshing and matching local NFL sources:
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8000/nfl-operational-forecasts/run?match_id=<uuid>&idempotency_key=<unique-request-key>"
+Invoke-RestMethod "http://localhost:8000/nfl-operational-forecasts?limit=25&offset=0"
+```
+
+Use the same key to retry the same request; it preserves the original expiry.
+An intentional new capture needs a new key. All records remain unpromoted paper
+candidates, and list/detail reads are history rather than current authorizations.
+
 Release `0.11.26` adds explicit official fractional settlement support for paper
 accounting and defines [NFL promotion review gates](docs/decisions/0023-nfl-promotion-and-fractional-paper-settlement.md).
 Apply migration 0024 before ingesting scalar resolutions. Paper engineering tests

@@ -786,6 +786,12 @@ Every effective parameter set receives a configuration fingerprint embedded in i
 
 # 14. Research Architecture
 
+NFL paper forecast candidates use separate immutable `nfl_payout_forecasts` records
+with explicit expected-payout semantics. Current locked sources and the pinned
+historical model produce a bounded-expiry candidate, not a promoted win probability.
+Request-key retries preserve original timestamps. No record enters `base_forecasts`
+or grants opportunity/risk/execution eligibility; promotion remains blocked.
+
 NFL shadow outcomes are append-only `nfl_shadow_evaluations` facts freezing one
 snapshot against validated local final-result semantics. Score corrections append;
 timestamp-only refreshes replay. Canonical performance first picks the earliest
