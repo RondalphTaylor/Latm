@@ -177,7 +177,7 @@ class MarketPriceRecord(Base):
 
 
 class MarketResolutionRecord(Base):
-    """Append-only official settlement for a standard binary market."""
+    """Append-only official standard or fractional settlement of a binary contract."""
 
     __tablename__ = "market_resolutions"
     __table_args__ = (
@@ -186,17 +186,20 @@ class MarketResolutionRecord(Base):
             "input_fingerprint",
             name="uq_market_resolutions_semantic_input",
         ),
-        CheckConstraint("result IN ('yes', 'no')", name="ck_market_resolutions_result"),
+        CheckConstraint("result IN ('yes', 'no', 'scalar')", name="ck_market_resolutions_result"),
         CheckConstraint(
-            "resolution_type = 'standard_binary' AND source = 'official_provider'",
+            "resolution_type IN ('standard_binary', 'fractional_binary') AND source = 'official_provider'",
             name="ck_market_resolutions_source",
         ),
         CheckConstraint(
             "yes_payout >= 0 AND yes_payout <= 1 "
             "AND no_payout >= 0 AND no_payout <= 1 "
             "AND yes_payout + no_payout = 1 "
+            "AND ((resolution_type = 'standard_binary' "
             "AND ((result = 'yes' AND yes_payout = 1 AND no_payout = 0) "
-            "OR (result = 'no' AND yes_payout = 0 AND no_payout = 1))",
+            "OR (result = 'no' AND yes_payout = 0 AND no_payout = 1))) "
+            "OR (resolution_type = 'fractional_binary' AND result = 'scalar' "
+            "AND yes_payout > 0 AND yes_payout < 1 AND no_payout > 0 AND no_payout < 1))",
             name="ck_market_resolutions_binary_payout",
         ),
         CheckConstraint(

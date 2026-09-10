@@ -87,7 +87,9 @@ class FakeMonitoringRepository:
             no_bid=Decimal("1") - bid,
             retrieved_at=NOW,
         )
-        self.resolutions = (resolution,) if resolution is not None else ()
+        self.resolutions: tuple[MarketResolutionRecord, ...] = (
+            (resolution,) if resolution is not None else ()
+        )
         self.events: dict[tuple[UUID, str, str], PositionEventRecord] = {}
         self.latest_event: PositionEventRecord | None = None
         self.commits = 0

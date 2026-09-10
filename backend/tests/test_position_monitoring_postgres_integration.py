@@ -148,7 +148,7 @@ async def _open_phase8_position(session: AsyncSession) -> PaperPositionRecord:
     return execution.position
 
 
-async def _run_integration() -> None:
+async def _run_integration(payout: Decimal = Decimal("1")) -> None:
     engine = create_async_engine(os.environ["DATABASE_URL"])
     async with engine.connect() as connection:
         outer_transaction = await connection.begin()
@@ -212,15 +212,15 @@ async def _run_integration() -> None:
                     MarketResolutionRecord(
                         id=RESOLUTION_ID,
                         market_id=MARKET_ID,
-                        result="yes",
-                        yes_payout=Decimal("1.000000"),
-                        no_payout=Decimal("0.000000"),
-                        resolution_type="standard_binary",
+                        result="yes" if payout == 1 else "scalar",
+                        yes_payout=payout,
+                        no_payout=Decimal("1") - payout,
+                        resolution_type="standard_binary" if payout == 1 else "fractional_binary",
                         source="official_provider",
                         settled_at=resolution_time,
                         retrieved_at=resolution_time,
                         input_fingerprint="8" * 64,
-                        source_snapshot={"provider_result": "yes"},
+                        source_snapshot={"provider_result": "yes" if payout == 1 else "scalar"},
                     )
                 )
                 await session.commit()
@@ -229,11 +229,14 @@ async def _run_integration() -> None:
                 settled_replay = await monitoring.evaluate(position.id)
                 assert settled.event.decision == "settle"
                 assert settled.position.status == "settled"
-                assert settled.position.realized_pnl == Decimal("8.82")
+                expected_cash = Decimal("990.82") + (18 * payout).quantize(
+                    Decimal("0.01"), rounding="ROUND_DOWN"
+                )
+                assert settled.position.realized_pnl == expected_cash - Decimal("1000")
                 assert settled.snapshot is not None
                 assert settled.snapshot.sequence == 3
-                assert settled.snapshot.current_bankroll == Decimal("1008.82")
-                assert settled.snapshot.cash_balance == Decimal("1008.82")
+                assert settled.snapshot.current_bankroll == expected_cash
+                assert settled.snapshot.cash_balance == expected_cash
                 assert settled.snapshot.committed_capital == Decimal("0.00")
                 assert settled_replay.created is False
                 assert settled_replay.event.id == settled.event.id
@@ -254,5 +257,9 @@ async def _run_integration() -> None:
     await engine.dispose()
 
 
-def test_postgres_phase8_entry_then_reduce_and_official_settlement() -> None:
-    asyncio.run(_run_integration())
+@pytest.mark.parametrize(
+    "payout",
+    [Decimal("1"), Decimal("0.5"), Decimal("0.333333"), Decimal("0.000001"), Decimal("0.999999")],
+)
+def test_postgres_phase8_entry_then_reduce_and_official_settlement(payout: Decimal) -> None:
+    asyncio.run(_run_integration(payout))

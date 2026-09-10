@@ -175,11 +175,79 @@ def test_normalizes_explicit_no_result_with_zero_yes_payout() -> None:
     assert normalized.resolution.no_payout == Decimal("1.000000")
 
 
+@pytest.mark.parametrize("terminal_status", ["settled", "finalized"])
+@pytest.mark.parametrize("payout", ["0.500000", "0.333333", "0.000001", "0.999999"])
+def test_normalizes_only_explicit_fractional_binary_settlement(
+    terminal_status: str, payout: str
+) -> None:
+    payload = market_payload()
+    payload.update(
+        {
+            "status": terminal_status,
+            "result": "scalar",
+            "settlement_value_dollars": payout,
+            "settlement_ts": "2026-08-01T12:30:00Z",
+        }
+    )
+    normalized = normalize_kalshi_market(
+        KalshiMarketPayload.model_validate(payload),
+        event=None,
+        retrieved_at=datetime(2026, 8, 1, 13, tzinfo=UTC),
+    )
+    assert normalized.resolution is not None
+    assert normalized.resolution.result.value == "scalar"
+    assert normalized.resolution.resolution_type == "fractional_binary"
+    assert normalized.resolution.yes_payout == Decimal(payout)
+    assert normalized.resolution.no_payout == Decimal(1) - Decimal(payout)
+    assert normalized.resolution.source_snapshot["provider_settlement_value_dollars"] == payout
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"status": "determined"},
+        {"status": "disputed"},
+        {"status": "amended"},
+        {"market_type": "scalar"},
+        {"result": None},
+        {"settlement_value_dollars": None},
+        {"settlement_value_dollars": "0"},
+        {"settlement_value_dollars": "1"},
+        {"settlement_value_dollars": "0.1234567"},
+        {"settlement_value_dollars": "-0.1"},
+        {"settlement_ts": None},
+        {"settlement_ts": "2026-08-01T12:30:00"},
+        {"settlement_ts": "2026-08-02T12:30:00Z"},
+    ],
+)
+def test_unconfirmed_or_invalid_fractional_settlement_stays_unresolved(
+    changes: dict[str, object],
+) -> None:
+    payload = market_payload()
+    payload.update(
+        {
+            "status": "finalized",
+            "result": "scalar",
+            "settlement_value_dollars": "0.5",
+            "settlement_ts": "2026-08-01T12:30:00Z",
+            "home_score": 17,
+            "away_score": 17,
+        }
+    )
+    payload.update(changes)
+    normalized = normalize_kalshi_market(
+        KalshiMarketPayload.model_validate(payload),
+        event=None,
+        retrieved_at=datetime(2026, 8, 1, 13, tzinfo=UTC),
+    )
+    assert normalized.resolution is None
+
+
 @pytest.mark.parametrize(
     ("updates", "extra"),
     [
         ({"status": "open", "result": "yes", "settlement_value_dollars": "1"}, {}),
-        ({"status": "finalized", "result": "scalar", "settlement_value_dollars": "0.5"}, {}),
+        ({"status": "finalized", "result": "scalar"}, {}),
         ({"status": "finalized", "result": "yes"}, {}),
         (
             {"status": "finalized", "result": "yes", "settlement_value_dollars": "0"},

@@ -1325,6 +1325,12 @@ Phase 20 is complete when:
 
 # Phase 21: Additional Sports
 
+Release `0.11.26` defines versioned, manual NFL promotion review criteria and adds
+official fractional binary-contract settlement normalization/storage for the paper
+ledger. Engineering fixtures need no prospective wait. Cohort coverage evidence,
+promotion reporting, operational NFL forecast/edge/risk integration and a reviewed
+paper pilot remain outstanding; no model or trading eligibility is promoted here.
+
 Release `0.11.25` adds immutable NFL shadow outcome labeling and prospective
 performance with correction-aware results, ties, canonical one-game counting,
 benchmark payout error, and calibration. Pending results are never guessed.

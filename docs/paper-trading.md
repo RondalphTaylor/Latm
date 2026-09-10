@@ -1,5 +1,12 @@
 # Paper Trading Specification
 
+Release 0.11.26 extends the implemented settlement path to explicit official scalar
+results with complementary fractional payouts. Remaining quantity times held-side
+payout rounds down to cents; no sports-derived payout, synthetic provider result,
+live execution or NFL entry authorization is added. Exchange fees/netting are not
+fully simulated. The versioned [NFL promotion policy](decisions/0023-nfl-promotion-and-fractional-paper-settlement.md)
+separates immediate engineering tests from model and pilot review requirements.
+
 ## 1. Purpose
 
 This document defines the paper-trading system for the prediction-market platform.

@@ -57,6 +57,13 @@ Invoke-RestMethod "http://localhost:8000/markets/<internal-market-uuid>"
 
 ## NFL historical baseline (research-only)
 
+Release `0.11.26` adds explicit official fractional settlement support for paper
+accounting and defines [NFL promotion review gates](docs/decisions/0023-nfl-promotion-and-fractional-paper-settlement.md).
+Apply migration 0024 before ingesting scalar resolutions. Paper engineering tests
+can run immediately; model promotion requires a fixed prospective cohort and review.
+NFL operational entry and real-money trading remain disabled. A sports tie is not
+an exchange settlement instruction; cent-rounded paper payouts are simulated.
+
 Release `0.11.25` adds immutable shadow outcome labels and prospective performance.
 Apply migration `0023_nfl_shadow_evaluations`, refresh completed NFL results, then:
 

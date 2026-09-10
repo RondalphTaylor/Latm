@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal, cast
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.domain.markets import SportsMarketType
+from app.domain.markets import BinaryMarketResolution, SettlementResult, SportsMarketType
 from app.domain.sports import SportsLeague
 from app.models.markets import PredictionMarketRecord
 
@@ -45,14 +46,29 @@ class MarketResolutionResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     id: UUID
-    result: str
-    yes_payout: Decimal
-    no_payout: Decimal
-    resolution_type: str
-    source: str
+    result: SettlementResult
+    yes_payout: Decimal = Field(ge=0, le=1, decimal_places=6)
+    no_payout: Decimal = Field(ge=0, le=1, decimal_places=6)
+    resolution_type: Literal["standard_binary", "fractional_binary"]
+    source: str = Field(pattern=r"^official_provider$")
     settled_at: datetime
     retrieved_at: datetime
     input_fingerprint: str
+
+    @model_validator(mode="after")
+    def validate_resolution(self) -> MarketResolutionResponse:
+        """Keep API payout semantics identical to the normalized source contract."""
+        BinaryMarketResolution(
+            result=self.result,
+            yes_payout=self.yes_payout,
+            no_payout=self.no_payout,
+            resolution_type=self.resolution_type,
+            source=self.source,
+            settled_at=self.settled_at,
+            retrieved_at=self.retrieved_at,
+            source_snapshot={},
+        )
+        return self
 
 
 class MarketResponse(BaseModel):
@@ -112,10 +128,13 @@ class MarketResponse(BaseModel):
         if latest_resolution_record is not None:
             latest_resolution = MarketResolutionResponse(
                 id=latest_resolution_record.id,
-                result=latest_resolution_record.result,
+                result=SettlementResult(latest_resolution_record.result),
                 yes_payout=latest_resolution_record.yes_payout,
                 no_payout=latest_resolution_record.no_payout,
-                resolution_type=latest_resolution_record.resolution_type,
+                resolution_type=cast(
+                    Literal["standard_binary", "fractional_binary"],
+                    latest_resolution_record.resolution_type,
+                ),
                 source=latest_resolution_record.source,
                 settled_at=latest_resolution_record.settled_at,
                 retrieved_at=latest_resolution_record.retrieved_at,

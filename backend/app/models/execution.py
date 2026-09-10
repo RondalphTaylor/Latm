@@ -437,7 +437,7 @@ class PositionEventRecord(Base):
             "AND realized_pnl_increment = net_proceeds - allocated_total_cost_basis) OR "
             "(decision = 'settle' AND settlement_payout_per_contract >= 0 "
             "AND settlement_payout_per_contract <= 1 "
-            "AND gross_proceeds = settlement_payout_per_contract * action_quantity "
+            "AND gross_proceeds = floor(settlement_payout_per_contract * action_quantity * 100) / 100 "
             "AND realized_pnl_increment = net_proceeds - allocated_total_cost_basis)",
             name="ck_position_events_proceeds",
         ),

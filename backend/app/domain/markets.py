@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator, model_validator
 
@@ -18,6 +18,14 @@ class OutcomeSide(StrEnum):
 
     YES = "yes"
     NO = "no"
+
+
+class SettlementResult(StrEnum):
+    """Exchange settlement results, distinct from the two tradable contract sides."""
+
+    YES = "yes"
+    NO = "no"
+    SCALAR = "scalar"
 
 
 class MarketStatusFilter(StrEnum):
@@ -75,14 +83,14 @@ class MarketPrice(BaseModel):
 
 
 class BinaryMarketResolution(BaseModel):
-    """Official provider settlement for one standard binary market."""
+    """Official binary-contract settlement, including fractional terminal payouts."""
 
     model_config = ConfigDict(frozen=True)
 
-    result: OutcomeSide
-    yes_payout: ProbabilityPrice
-    no_payout: ProbabilityPrice
-    resolution_type: str = Field(default="standard_binary", pattern=r"^standard_binary$")
+    result: SettlementResult
+    yes_payout: Decimal = Field(ge=0, le=1, decimal_places=6, allow_inf_nan=False)
+    no_payout: Decimal = Field(ge=0, le=1, decimal_places=6, allow_inf_nan=False)
+    resolution_type: Literal["standard_binary", "fractional_binary"] = "standard_binary"
     source: str = Field(default="official_provider", pattern=r"^official_provider$")
     settled_at: datetime
     retrieved_at: datetime
@@ -96,16 +104,24 @@ class BinaryMarketResolution(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def validate_standard_binary_payout(self) -> BinaryMarketResolution:
+    def validate_binary_payout(self) -> BinaryMarketResolution:
         if self.settled_at > self.retrieved_at:
             raise ValueError("market settlement cannot postdate its retrieval")
         if self.yes_payout + self.no_payout != Decimal("1"):
             raise ValueError("binary settlement payouts must sum to one")
-        if self.result is OutcomeSide.YES and (
+        if self.result is SettlementResult.SCALAR:
+            if self.resolution_type != "fractional_binary" or not (
+                Decimal("0") < self.yes_payout < Decimal("1")
+            ):
+                raise ValueError("a scalar result requires an interior fractional-binary payout")
+            return self
+        if self.resolution_type != "standard_binary":
+            raise ValueError("YES and NO results require standard-binary settlement")
+        if self.result is SettlementResult.YES and (
             self.yes_payout != Decimal("1") or self.no_payout != Decimal("0")
         ):
             raise ValueError("a YES result requires a one-dollar YES payout")
-        if self.result is OutcomeSide.NO and (
+        if self.result is SettlementResult.NO and (
             self.yes_payout != Decimal("0") or self.no_payout != Decimal("1")
         ):
             raise ValueError("a NO result requires a one-dollar NO payout")

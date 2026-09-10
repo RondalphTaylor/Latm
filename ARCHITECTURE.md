@@ -1152,7 +1152,7 @@ RISK_REDUCTION
 MARKET_RESOLVED
 ```
 
-Official settlement is normalized through the read-only provider adapter into append-only `market_resolutions`. It requires a terminal standard-binary provider status, typed YES/NO result, explicit consistent per-side payout, and official settlement time. Scores and unvalidated raw provider fields cannot settle a contract. Conflicting or incomplete observations remain pending. A valid settlement pays the held side without exit slippage or fees and uses the same atomic ledger transition as a close.
+Official settlement is normalized through the read-only provider adapter into append-only `market_resolutions`. It requires a terminal provider status, typed YES/NO or SCALAR result, explicit consistent per-side payout, and official settlement time. Standard results pay 1/0; scalar results require strictly interior six-decimal complementary payouts. Scores and unvalidated raw provider fields cannot settle a contract. Conflicting or incomplete observations remain pending. A valid settlement pays the held side with gross proceeds rounded down to cents, without modeled exit slippage or fees, and uses the same atomic ledger transition as a close. Exchange-level netting and scalar fees remain simulation limitations. Versioned NFL promotion criteria require manual review and do not change research-only eligibility.
 
 ---
 
