@@ -22,6 +22,7 @@ class IngestionResult(BaseModel):
     fetched: int
     nba_markets: int
     mlb_markets: int
+    nfl_markets: int = 0
     selected_league: SportsLeague | None
     persisted: int
 
@@ -78,6 +79,10 @@ class MarketIngestionService:
             fetched=len(fetched_markets),
             nba_markets=(classified_nba_count if league is not None else len(nba_markets)),
             mlb_markets=len(mlb_markets),
+            nfl_markets=sum(
+                classification is not None and classification.league is SportsLeague.NFL
+                for _, classification in classified_markets
+            ),
             selected_league=league,
             persisted=persisted,
         )

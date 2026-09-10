@@ -76,10 +76,39 @@ Source payloads preserve week and other metadata. Missing period uses the existi
 sentinel (unknown/not started), not an inferred quarter; unknown lifecycle values stay unknown.
 Tied final scores are retained. These are sports results, not exchange settlement assertions.
 
-This slice adds no NFL market matching, forecasts, opportunities, settlement, or trading.
+NFL forecasts, opportunities, settlement, and trading remain disabled.
 Provider failures do not persist a partial ingestion response. The adapter retains the
 configured request pacing, bounded retries, and cursor/page guards. See the
 [BALLDONTLIE NFL documentation](https://nfl.balldontlie.io/) for source access requirements.
+
+### NFL market matching and contract eligibility
+
+Release `0.11.22` adds exact `KXNFLGAME` / Pro Football / Game classification and
+local-only matching against `balldontlie_nfl` events. Apply Alembic migration
+`0021_nfl_market_matching` before ingesting NFL markets. Migration downgrade refuses
+to remove NFL classification or match audit history when such rows exist.
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8000/markets/ingest?league=nfl"
+Invoke-RestMethod -Method Post "http://localhost:8000/matches/run?league=nfl&start_date=2026-09-09&end_date=2026-09-14"
+Invoke-RestMethod "http://localhost:8000/matches?league=nfl&latest_only=true"
+```
+
+Classification identifies candidate full-game team-winner contracts; it does not approve
+rules or trading. Matching requires consistent team/ticker identities and a reviewed exact
+rule template, including $0.50 ties and 48-hour postponements followed by exchange-set fair
+price if necessary. The complete source rule strings and the versioned research-eligibility
+decision are retained in match evidence. Missing or changed wording fails closed until reviewed.
+Overtime and exceptional exchange settlement must still be implemented separately before trading.
+
+NFL aliases distinguish NY Giants/Jets and LA Rams/Chargers. An explicit occurrence time
+is checked against event time and the contract's Eastern calendar date. If occurrence time
+is absent, a unique team pair on the exact contract date can match without fabricating kickoff
+time or using a later market close. Same-date duplicate candidates remain ambiguous. Schedule
+shifts to another date are conservatively rejected rather than assuming postponement eligibility.
+Matched does not mean pregame or executable: `automatic_trading_eligible` remains false in
+both domain and database constraints. Rule recognition is reported in
+`evidence.contract_eligible_for_research`; no NFL probability or trade is produced.
 
 ## NBA data ingestion
 

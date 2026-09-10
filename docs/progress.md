@@ -607,6 +607,41 @@ that official lineups or quantitative fields are available before first pitch.
 
 ## Next phase
 
+### NFL market matching and contract eligibility (`0.11.22`)
+
+Exact `KXNFLGAME`/Pro Football/Game candidate classification now supports NFL market
+ingestion. A separate classifier version preserves existing NBA/MLB fingerprints. NFL
+matching uses its own curated aliases, explicit contract/ticker date consistency, team-ID
+checks, and the reviewed full-game primary/secondary rule template. Unknown wording,
+different tie payouts, old postponement windows, conflicting outcome labels, missing team
+data, incompatible sports, and ambiguous candidates fail closed. When occurrence time is
+absent, exact contract date plus a unique team pair can identify a game without using close
+time as kickoff. No date-shifted postponement is automatically approved.
+
+Immutable match evidence includes the source rules, contract-policy version, recognized
+$0.50 tie payout, 48-hour postponement window, required exchange fair-price handling,
+and research contract eligibility. This is not forecasting, pregame, settlement, or execution
+eligibility. Domain and migration0021 database checks require NFL automatic trading false.
+The migration preserves existing data and refuses downgrade if NFL market/match history exists.
+
+Verification includes classifier/alias/contract tests, changed-rule fingerprinting, full
+database-backed matching/replay, direct SQL eligibility bypass rejection, empty migration
+roundtrip, and populated downgrade refusal. Review found and closed a partial-game qualifier
+loophole by requiring complete team designators on both sides of the matchup. The tightened
+rule policy is `nfl-full-game-rules-v2`, separating it from initial live verification artifacts.
+Final verification passed 657 backend tests with isolated PostgreSQL integration enabled,
+Ruff lint/format checks, strict mypy on 224 files, migration lint/format, and Compose validation.
+
+Live paper-mode verification ingested all 64 open NFL contracts and examined 32 Week 1
+contracts. All remained unmatched (`unresolved_yes_team`) because NFL sports-data ingestion
+is still blocked by the configured provider credential. Replaying persisted zero duplicate
+decisions, and all matches remained trading-ineligible. No real source data was invented to
+make matching appear successful. A working local sports key and bounded NFL ingestion remain
+necessary for a successful live market-to-game match.
+After loading the tightened v2 policy, all 32 still failed closed with
+`unrecognized_yes_designator` because the local NFL team registry is empty; a second run
+again inserted zero rows. Both versions' audit history remains intact.
+
 ### NFL ingestion foundation (`0.11.21`)
 
 The NFL pilot adds a dedicated read-only BALLDONTLIE adapter selected as

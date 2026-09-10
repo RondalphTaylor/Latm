@@ -499,7 +499,12 @@ records. Existing string league columns, provider foreign keys, and provider-sco
 support persistence without a schema migration. NFL dates use America/New_York with aware
 UTC kickoff timestamps; source metadata remains in raw payloads, and tied final results are
 preserved without implying exchange settlement. NFL ingestion grants no matching, forecasting,
-or trading authority. BALLDONTLIE remains the NBA provider, while the
+or trading authority. NFL market ingestion now separately classifies exact Kalshi full-game
+winner candidates. A local matcher checks NFL aliases, source identifiers, exact calendar dates,
+and the versioned reviewed rule template; rule recognition and source rule text remain in
+immutable match evidence. Contract-date fallback is explicit and never manufactures a kickoff.
+NFL matches, like MLB matches, remain trading-ineligible in database and domain invariants.
+BALLDONTLIE remains the NBA provider, while the
 offseason pilot adds a public read-only official MLB Stats API adapter for active teams, bounded
 schedules, lifecycle state, scores, venue, and series metadata. Both providers persist into the
 same normalized tables with stable provider identities and explicit league values.

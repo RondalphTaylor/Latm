@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from itertools import batched
 from uuid import UUID, uuid5
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import noload, selectinload
@@ -63,6 +63,23 @@ class MatchingRepository:
         )
         if market_id is not None:
             statement = statement.where(PredictionMarketRecord.id == market_id)
+        elif league is SportsLeague.NFL:
+            # Contract dates remain usable when occurrence time is absent and close
+            # occurs days later. Exact policy/date validation still happens in matcher.
+            dates = [
+                reference_start.date() + timedelta(days=offset)
+                for offset in range((reference_end.date() - reference_start.date()).days + 1)
+            ]
+            statement = statement.where(
+                or_(
+                    *[
+                        PredictionMarketRecord.provider_event_id.like(
+                            f"KXNFLGAME-{day.strftime('%y%b%d').upper()}%"
+                        )
+                        for day in dates
+                    ]
+                )
+            )
         else:
             reference_time = func.coalesce(
                 PredictionMarketRecord.occurrence_time,

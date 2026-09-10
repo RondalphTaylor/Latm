@@ -81,6 +81,10 @@ class MarketMatchInput(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     id: UUID
+    provider_name: str | None = None
+    provider_market_id: str | None = None
+    provider_event_id: str | None = None
+    series_ticker: str | None = None
     league: SportsLeague = SportsLeague.NBA
     title: str = Field(min_length=1)
     subtitle: str | None = None

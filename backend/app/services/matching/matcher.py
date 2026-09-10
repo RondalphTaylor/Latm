@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import UTC, datetime
+import re
+from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from itertools import combinations
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from app.domain.matching import (
     CandidateScore,
@@ -26,6 +28,16 @@ from app.services.matching.aliases import (
 from app.services.matching.mlb_aliases import (
     extract_mlb_team_signals,
     has_non_mlb_sport_signal,
+)
+from app.services.matching.nfl_aliases import (
+    extract_nfl_team_signals,
+    has_non_nfl_sport_signal,
+    resolve_nfl_team_designator,
+)
+from app.services.matching.nfl_contracts import (
+    NFL_CONTRACT_POLICY_VERSION,
+    evaluate_nfl_contract,
+    nfl_team_codes,
 )
 
 MATCHER_VERSION = "deterministic-team-time-v2"
@@ -82,6 +94,7 @@ def _candidate_score(
     reference_time: datetime | None,
     reference_source: str,
     policy: MatchingPolicy,
+    nfl_date: date | None = None,
 ) -> CandidateScore:
     if reference_time is None:
         temporal_score = Decimal("0")
@@ -102,6 +115,20 @@ def _candidate_score(
             else "team_pair_and_time"
         )
     confidence = _quantize(_TEAM_WEIGHT * team_score + _TEMPORAL_WEIGHT * temporal_score)
+    if nfl_date is not None:
+        date_matches = (
+            event.scheduled_start_time.astimezone(ZoneInfo("America/New_York")).date() == nfl_date
+        )
+        if reference_time is None:
+            # Exact contract calendar date is evidence, not a fabricated kickoff time.
+            temporal_score = Decimal("0.95") if date_matches else Decimal("0")
+            within_window = date_matches
+            method = "nfl_team_pair_contract_date"
+        else:
+            within_window = within_window and date_matches
+            if not within_window:
+                temporal_score = Decimal("0")
+        confidence = _quantize(_TEAM_WEIGHT * team_score + _TEMPORAL_WEIGHT * temporal_score)
     return CandidateScore(
         event_id=event.id,
         scheduled_start_time=event.scheduled_start_time,
@@ -152,6 +179,14 @@ def _fingerprint(
             for event in sorted(relevant_events, key=lambda item: str(item.id))
         ],
     }
+    if market.league is SportsLeague.NFL:
+        payload["nfl_contract"] = {
+            "version": NFL_CONTRACT_POLICY_VERSION,
+            "provider": market.provider_name,
+            "market": market.provider_market_id,
+            "event": market.provider_event_id,
+            "series": market.series_ticker,
+        }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()
 
@@ -173,7 +208,10 @@ class MarketEventMatcher:
         """Return a conservative match decision with inspectible evidence."""
         evaluation_time = evaluated_at or datetime.now(UTC)
         original_text, text = _market_text(market)
-        if market.league is SportsLeague.MLB:
+        if market.league is SportsLeague.NFL:
+            signals = extract_nfl_team_signals(text, teams, original_text=original_text)
+            incompatible_sport_signal = has_non_nfl_sport_signal(text)
+        elif market.league is SportsLeague.MLB:
             signals = extract_mlb_team_signals(text, teams, original_text=original_text)
             incompatible_sport_signal = has_non_mlb_sport_signal(text)
         else:
@@ -194,6 +232,9 @@ class MarketEventMatcher:
             relevant_events=relevant_events,
         )
         reference_time, reference_source = _reference_time(market)
+        nfl_contract = evaluate_nfl_contract(market) if market.league is SportsLeague.NFL else None
+        if nfl_contract is not None and market.occurrence_time is None:
+            reference_time, reference_source = None, "contract_date"
         base_evidence = {
             "normalized_text": text,
             "market_last_seen_at": market.last_seen_at.isoformat(),
@@ -202,6 +243,86 @@ class MarketEventMatcher:
             "league": market.league.value,
             "incompatible_sport_signal": incompatible_sport_signal,
         }
+
+        if nfl_contract is not None:
+            base_evidence.update(
+                {
+                    "contract_policy_version": NFL_CONTRACT_POLICY_VERSION,
+                    "contract_eligible_for_research": nfl_contract.eligible,
+                    "contract_reason": nfl_contract.reason,
+                    "contract_date": nfl_contract.game_date.isoformat()
+                    if nfl_contract.game_date
+                    else None,
+                    "tie_yes_payout": "0.50" if nfl_contract.eligible else None,
+                    "postponement_window_hours": "48" if nfl_contract.eligible else None,
+                    "rules_primary": market.rules_primary,
+                    "rules_secondary": market.rules_secondary,
+                    "exceptional_settlement": "official_exchange_fair_price_required",
+                    "execution_supported": False,
+                }
+            )
+            selected: tuple[TeamSignal, ...] = ()
+            if nfl_contract.selected_team:
+                selected_text = f"{nfl_contract.selected_team} Pro Football"
+                selected = extract_nfl_team_signals(
+                    normalize_match_text(selected_text), teams, original_text=selected_text
+                )
+            nfl_reason = nfl_contract.reason if not nfl_contract.eligible else None
+            if nfl_reason is None:
+                designators = re.split(r" (?:vs\.?|at) ", nfl_contract.matchup or "")
+                resolved_pair = {resolve_nfl_team_designator(value, teams) for value in designators}
+                if len(designators) != 2 or None in resolved_pair or resolved_pair != signal_ids:
+                    nfl_reason = "unrecognized_matchup_designators"
+                if resolve_nfl_team_designator(nfl_contract.selected_team or "", teams) is None:
+                    nfl_reason = "unrecognized_yes_designator"
+            if nfl_reason is None and (len(selected) != 1 or selected[0].team_id not in signal_ids):
+                nfl_reason = "unresolved_yes_team"
+            if nfl_reason is None:
+                selected_team = next(team for team in teams if team.id == selected[0].team_id)
+                suffix = (market.provider_market_id or "").rsplit("-", 1)[-1]
+                if suffix not in nfl_team_codes(selected_team.abbreviation):
+                    nfl_reason = "conflicting_yes_team_identifier"
+                pair_text = f"{nfl_contract.matchup} Pro Football"
+                pair = extract_nfl_team_signals(
+                    normalize_match_text(pair_text), teams, original_text=pair_text
+                )
+                if len(pair) != 2 or {signal.team_id for signal in pair} != signal_ids:
+                    nfl_reason = "conflicting_matchup_teams"
+                else:
+                    pair_teams = [team for team in teams if team.id in signal_ids]
+                    first_codes = nfl_team_codes(pair_teams[0].abbreviation)
+                    second_codes = nfl_team_codes(pair_teams[1].abbreviation)
+                    ticker_pair = (market.provider_event_id or "").split("-")[-1][7:]
+                    if ticker_pair not in {
+                        code for a in first_codes for b in second_codes for code in (a + b, b + a)
+                    }:
+                        nfl_reason = "conflicting_matchup_identifiers"
+                for label in market.outcome_labels:
+                    if label.casefold() in {"yes", "no"}:
+                        continue
+                    label_text = f"{label} Pro Football"
+                    label_signals = extract_nfl_team_signals(
+                        normalize_match_text(label_text), teams, original_text=label_text
+                    )
+                    if len(label_signals) != 1 or label_signals[0].team_id != selected[0].team_id:
+                        nfl_reason = "conflicting_outcome_labels"
+            if nfl_reason is not None:
+                reason = nfl_reason
+                base_evidence["contract_eligible_for_research"] = False
+                base_evidence["contract_reason"] = reason
+                return self._decision(
+                    market=market,
+                    status=MarketEventMatchStatus.UNMATCHED,
+                    confidence=Decimal("0"),
+                    method="nfl_contract_ineligible",
+                    reason=reason,
+                    fingerprint=fingerprint,
+                    signals=signals,
+                    candidates=(),
+                    evidence=base_evidence,
+                    evaluated_at=evaluation_time,
+                )
+            base_evidence["yes_team_id"] = str(selected[0].team_id)
 
         if incompatible_sport_signal:
             return self._decision(
@@ -245,6 +366,7 @@ class MarketEventMatcher:
                         reference_time=reference_time,
                         reference_source=reference_source,
                         policy=self._policy,
+                        nfl_date=nfl_contract.game_date if nfl_contract else None,
                     )
                     for event in relevant_events
                 ),
@@ -283,7 +405,7 @@ class MarketEventMatcher:
                 evaluated_at=evaluation_time,
             )
 
-        if reference_time is None:
+        if reference_time is None and nfl_contract is None:
             return self._decision(
                 market=market,
                 status=MarketEventMatchStatus.AMBIGUOUS,

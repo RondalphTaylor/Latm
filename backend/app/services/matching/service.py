@@ -23,6 +23,7 @@ _MAX_MATCHING_RANGE_DAYS = 31
 _SPORTS_PROVIDER_BY_LEAGUE = {
     SportsLeague.NBA: "balldontlie",
     SportsLeague.MLB: "mlb",
+    SportsLeague.NFL: "balldontlie_nfl",
 }
 
 
@@ -166,6 +167,10 @@ class MarketEventMatchingService:
             raise ValueError("matching requires an exact persisted sports classification")
         return MarketMatchInput(
             id=record.id,
+            provider_name=record.provider_name,
+            provider_market_id=record.provider_market_id,
+            provider_event_id=record.provider_event_id,
+            series_ticker=record.series_ticker,
             league=SportsLeague(record.sports_league),
             title=record.title,
             subtitle=record.subtitle,

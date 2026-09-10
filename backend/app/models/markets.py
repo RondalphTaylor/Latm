@@ -54,7 +54,7 @@ class PredictionMarketRecord(Base):
             "AND sports_classification_method IS NULL "
             "AND sports_classification_version IS NULL "
             "AND sports_classification_fingerprint IS NULL) OR "
-            "(sports_league IN ('nba', 'mlb') "
+            "(sports_league IN ('nba', 'mlb', 'nfl') "
             "AND sports_market_type = 'single_game_winner' "
             "AND sports_classification_method IS NOT NULL "
             "AND sports_classification_version IS NOT NULL "

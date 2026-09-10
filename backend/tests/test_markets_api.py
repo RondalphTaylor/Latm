@@ -252,6 +252,7 @@ def test_ingestion_endpoint_reports_counts() -> None:
         "fetched": 8,
         "nba_markets": 2,
         "mlb_markets": 3,
+        "nfl_markets": 0,
         "selected_league": None,
         "persisted": 2,
     }

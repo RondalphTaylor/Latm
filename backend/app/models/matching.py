@@ -54,14 +54,14 @@ class MarketEventMatchRecord(Base):
             name="ck_market_event_matches_status",
         ),
         CheckConstraint(
-            "league IN ('nba', 'mlb')",
+            "league IN ('nba', 'mlb', 'nfl')",
             name="ck_market_event_matches_league",
         ),
         CheckConstraint(
             "(status = 'matched' AND sports_event_id IS NOT NULL "
             "AND confidence >= min_confidence "
             "AND ((league = 'nba' AND automatic_trading_eligible = true) "
-            "OR (league = 'mlb' AND automatic_trading_eligible = false))) OR "
+            "OR (league IN ('mlb', 'nfl') AND automatic_trading_eligible = false))) OR "
             "(status IN ('ambiguous', 'unmatched') AND sports_event_id IS NULL "
             "AND automatic_trading_eligible = false)",
             name="ck_market_event_matches_safety_state",

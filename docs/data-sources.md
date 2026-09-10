@@ -12,6 +12,14 @@ missing fields are never replaced with guessed outcomes. Raw snapshots preserve 
 and provider metadata. NFL game results are not Kalshi settlement instructions, especially for
 ties, abandoned games, or discretionary fair-price settlements.
 
+NFL market candidates use Kalshi's exact `KXNFLGAME` series with `Pro Football` /
+`Game` product metadata. The reviewed September 2026 full-game summaries specify $0.50
+per team on ties, a 48-hour postponement window, and exchange-determined fair-price exceptions.
+See [football contract terms](https://kalshi-public-docs.s3.amazonaws.com/contract_terms/NFLGAME.pdf).
+Older summaries used different windows; no historical wording is silently treated as equivalent.
+The matcher preserves exact primary/secondary rule strings in its audit evidence and rejects
+unreviewed changes. Recognition is research eligibility only, not financial settlement support.
+
 ## 1. Purpose
 
 This document defines the initial external data sources used by the prediction-market trading platform.

@@ -1327,7 +1327,9 @@ Phase 20 is complete when:
 
 The NFL ingestion foundation adds explicit `balldontlie_nfl` selection, league-isolated
 teams/games, bounded source ingestion and league-filtered reads. Existing database structures
-support NFL without migration. NFL market matching, a sport-specific baseline, evaluation,
+support NFL without migration. The next NFL slice adds exact game-winner classification,
+versioned contract recognition, conservative aliases/date matching, and migration0021 for
+research-only match constraints. A sport-specific baseline, evaluation, fractional settlement,
 and paper execution remain subsequent work; NBA parameters and trading eligibility are not reused.
 
 **Implementation status:** In progress. The ingestion foundation adds official read-only MLB team,

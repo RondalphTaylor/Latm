@@ -176,5 +176,6 @@ class MarketIngestionResponse(BaseModel):
     fetched: int
     nba_markets: int
     mlb_markets: int
+    nfl_markets: int = 0
     selected_league: SportsLeague | None
     persisted: int

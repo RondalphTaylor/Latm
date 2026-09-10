@@ -13,10 +13,50 @@ from app.domain.sports import SportsLeague
 
 SPORTS_CLASSIFICATION_VERSION = "kalshi-official-series-v1"
 SPORTS_CLASSIFICATION_METHOD = "official_series_metadata"
+NFL_CLASSIFICATION_VERSION = "kalshi-nfl-game-shape-v1"
 _SUPPORTED_SERIES = {
     SportsLeague.NBA: "KXNBAGAME",
     SportsLeague.MLB: "KXMLBGAME",
+    SportsLeague.NFL: "KXNFLGAME",
 }
+
+_NFL_UNSUPPORTED_SHAPE = re.compile(
+    r"\b(?:spread|total|over|under|touchdowns?|yards?|passing|rushing|receiving|"
+    r"props?|periods?|quarters?|half|halves|halftime|regulation|1h|2h|q[1-4]|[1-4]q|first score|"
+    r"super bowl|championship|playoffs?|division|conference|season|futures?|"
+    r"margin|wins? by)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_nfl_game_shape(market: PredictionMarket, metadata: dict[str, object]) -> bool:
+    """Recognize a candidate game-winner shape, not settlement/trading eligibility."""
+    event_id = market.provider_event_id
+    if event_id is None or re.fullmatch(r"KXNFLGAME-[A-Z0-9]+", event_id) is None:
+        return False
+    if re.fullmatch(rf"{re.escape(event_id)}-[A-Z]{{2,3}}", market.provider_market_id) is None:
+        return False
+    if metadata.get("competition") != "Pro Football":
+        return False
+    if re.search(r"\b(?:wins?|winner)\b", market.title, re.IGNORECASE) is None:
+        return False
+    texts = [market.title, market.subtitle or ""]
+    for key in ("event", "market"):
+        raw = market.raw_data.get(key)
+        if not isinstance(raw, dict):
+            continue
+        expected = {"event_ticker": event_id, "series_ticker": "KXNFLGAME"}
+        if key == "market":
+            expected["ticker"] = market.provider_market_id
+        for field, value in expected.items():
+            if raw.get(field) is not None and raw[field] != value:
+                return False
+        for field in ("title", "subtitle", "sub_title", "yes_sub_title", "no_sub_title"):
+            raw_text = raw.get(field)
+            if isinstance(raw_text, str):
+                texts.append(raw_text)
+    return not any(_NFL_UNSUPPORTED_SHAPE.search(value) for value in texts)
+
 
 _NBA_TEAM_NAMES = (
     "atlanta hawks",
@@ -92,6 +132,8 @@ def _contains_token(text: str, token: str) -> bool:
 
 def is_likely_nba_market(market: PredictionMarket) -> bool:
     """Identify likely NBA markets, preferring structured provider metadata."""
+    if market.series_ticker == "KXNFLGAME":
+        return False
     structured_text = " ".join(
         value.lower()
         for value in (
@@ -176,6 +218,12 @@ def classify_sports_market(
     ):
         return None
 
+    if league is SportsLeague.NFL and not _is_nfl_game_shape(market, product_metadata):
+        return None
+    version = (
+        NFL_CLASSIFICATION_VERSION if league is SportsLeague.NFL else SPORTS_CLASSIFICATION_VERSION
+    )
+
     payload = {
         "provider_name": market.provider_name,
         "provider_market_id": market.provider_market_id,
@@ -187,13 +235,16 @@ def classify_sports_market(
         "competition_scope": product_metadata.get("competition_scope"),
         "sports_market_type": SportsMarketType.SINGLE_GAME_WINNER.value,
         "method": SPORTS_CLASSIFICATION_METHOD,
-        "version": SPORTS_CLASSIFICATION_VERSION,
+        "version": version,
     }
+    if league is SportsLeague.NFL:
+        payload["title"] = market.title
+        payload["subtitle"] = market.subtitle
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return SportsMarketClassification(
         league=league,
         sports_market_type=SportsMarketType.SINGLE_GAME_WINNER,
         method=SPORTS_CLASSIFICATION_METHOD,
-        version=SPORTS_CLASSIFICATION_VERSION,
+        version=version,
         fingerprint=hashlib.sha256(encoded).hexdigest(),
     )
