@@ -1327,8 +1327,9 @@ Phase 20 is complete when:
 
 Release `0.11.23` adds a bounded manual NFL historical collector and a read-only,
 weekly walk-forward Elo expected-payout baseline with chronological split metrics,
-benchmarks, calibration, and source fingerprints. Provider authentication blocks
-real historical collection/evaluation. This is research infrastructure, not a
+benchmarks, calibration, and source fingerprints. Provider access was restored on
+2026-09-10; 2,127 regular-season games were collected and evaluated, with exact inputs
+and metrics retained in docs/research/nfl-baseline-2026-09-10. This is research infrastructure, not a
 validated NFL model; coverage verification, durable research artifacts, operational
 forecasting, fractional settlement, and paper execution remain outstanding.
 

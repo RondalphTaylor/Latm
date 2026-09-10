@@ -68,8 +68,9 @@ Invoke-RestMethod "http://localhost:8000/nfl-research-baseline"
 The collector requires healthy paper mode, uses at most 31 days per ingestion,
 stops on failure, and prints the next date for manual resumption. It does not save a
 durable cursor. Replaying a window uses existing event upserts. Provider authentication
-currently blocks real historical collection; a successful software test is not a
-successful real-data backtest.
+was restored on September 10, 2026; collection and retrospective evaluation completed
+on 2,127 regular-season games from 2018–2025. See the
+[frozen research results](docs/research/nfl-baseline-2026-09-10/README.md).
 
 The fixed experimental Elo policy evaluates regular-season 2018–2022 development,
 2023–2024 validation, and 2025 test data, batching updates by week. It estimates
