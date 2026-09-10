@@ -1325,6 +1325,12 @@ Phase 20 is complete when:
 
 # Phase 21: Additional Sports
 
+Release `0.11.29` adds a pure [NFL cost-aware paper preflight](docs/decisions/0026-nfl-cost-aware-paper-preflight.md).
+It computes slippage, estimated fees, whole-contract affordability and adjusted
+expected-payout edge from supplied immutable opportunity values, but always returns
+a rejected, execution-disabled result pending explicit pilot approval. It does not
+write a proposal, risk decision, trade, position or portfolio state.
+
 Release `0.11.28` adds immutable NFL two-sided direct-ask comparisons with raw
 expected-payout edge bands, latest-source checks, quote-unavailability reasons and
 request-key replay. All results remain promotion-blocked and trading-ineligible.

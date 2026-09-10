@@ -57,6 +57,12 @@ Invoke-RestMethod "http://localhost:8000/markets/<internal-market-uuid>"
 
 ## NFL historical baseline (research-only)
 
+Release `0.11.29` adds a pure [cost-aware NFL paper preflight](docs/decisions/0026-nfl-cost-aware-paper-preflight.md).
+It can calculate all-in whole-contract affordability, slippage, fees and an
+adjusted expected-payout edge from an already-audited comparison, but it has no API
+or persistence path and always rejects execution until an NFL pilot is explicitly
+approved.
+
 Release `0.11.28` adds [NFL paper-opportunity comparisons](docs/decisions/0025-nfl-paper-opportunity-comparisons.md)
 against current direct YES/NO asks. After a quote refresh and an unexpired forecast:
 
