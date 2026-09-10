@@ -57,6 +57,18 @@ Invoke-RestMethod "http://localhost:8000/markets/<internal-market-uuid>"
 
 ## NFL historical baseline (research-only)
 
+Release `0.11.28` adds [NFL paper-opportunity comparisons](docs/decisions/0025-nfl-paper-opportunity-comparisons.md)
+against current direct YES/NO asks. After a quote refresh and an unexpired forecast:
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8000/nfl-paper-opportunities/run?forecast_id=<uuid>&idempotency_key=<unique-request-key>"
+Invoke-RestMethod "http://localhost:8000/nfl-paper-opportunities?limit=25&offset=0"
+```
+
+Results show separate pre-cost edges and unavailable-quote reasons. `paper_candidate`
+is a research status, not trading approval. Fees/slippage/depth are not included;
+history reads and same-key retries do not refresh quotes or renew expiry.
+
 Release `0.11.27` adds an [NFL paper-candidate forecast interface](docs/decisions/0024-nfl-paper-forecast-candidates.md),
 backed by immutable payout forecasts and migration 0025. It does **not** promote the
 model or enable trading. After refreshing and matching local NFL sources:

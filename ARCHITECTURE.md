@@ -929,6 +929,14 @@ The system should make the method versioned and reproducible.
 
 # 18. Opportunity Engine
 
+NFL uses separate immutable `nfl_paper_opportunities` comparisons, never NBA
+probability-based opportunity records. The latest unexpired payout forecast and
+latest direct-ask snapshot are validated under source locks. Each side retains its
+pre-cost raw edge or explicit quote-unavailability reason. Request-key replay keeps
+the original observation and deadline; all statuses remain unpromoted and unable
+to authorize sizing, risk or execution. List/detail reads expose audit history,
+not a current-only trading feed.
+
 The opportunity engine compares internal forecasts with market prices.
 
 The Phase 5 implementation is a deterministic, provider-neutral raw-edge engine. It consumes only locally persisted normalized data and the exact current `nba_elo` operational model identity. For each supported binary event-winner contract it resolves YES and NO to the matched event teams, then evaluates each side independently:

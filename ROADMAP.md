@@ -1325,6 +1325,11 @@ Phase 20 is complete when:
 
 # Phase 21: Additional Sports
 
+Release `0.11.28` adds immutable NFL two-sided direct-ask comparisons with raw
+expected-payout edge bands, latest-source checks, quote-unavailability reasons and
+request-key replay. All results remain promotion-blocked and trading-ineligible.
+Cost-aware sizing, risk/entry integration and reviewed pilot evidence remain next.
+
 Release `0.11.27` implements a distinct NFL expected-payout forecast interface with
 fresh locked source checks, bounded expiry, immutable candidates and request-key
 replay. It preserves the pinned model, blocked promotion and disabled NFL trading.
