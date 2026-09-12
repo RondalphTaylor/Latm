@@ -42,7 +42,7 @@ def create_app() -> FastAPI:
     """Build and configure the FastAPI application."""
     application = FastAPI(
         title="LATM API",
-        version="0.11.30",
+        version="0.11.31",
         lifespan=lifespan,
     )
     application.include_router(health_router)

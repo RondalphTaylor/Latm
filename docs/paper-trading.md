@@ -1,5 +1,11 @@
 # Paper Trading Specification
 
+Release 0.11.31 adds an NFL-only position lifecycle. A fresh directional quote can
+append a mark event for an open pilot entry; settlement accepts only a normalized,
+official market-resolution fact, including a fractional payout. Both actions are
+idempotent, paper-only, and retain their own NFL audit history. Sports scores do
+not settle a pilot contract.
+
 Release 0.11.30 adds a separate NFL pilot-entry journal. It accepts only a current,
 cost-qualified NFL preflight attached to a registered paper scenario, revalidates the
 underlying shadow source and market quote, and enforces that scenario's per-entry and

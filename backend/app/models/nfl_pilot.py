@@ -127,3 +127,98 @@ class NflPilotEntryRecord(Base):
     policy_version: Mapped[str] = mapped_column(String(100), nullable=False)
     policy_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     audit: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+
+
+class NflPilotPositionRecord(Base):
+    """Current projection for one NFL pilot entry, derived from immutable events."""
+
+    __tablename__ = "nfl_pilot_positions"
+    __table_args__ = (
+        UniqueConstraint("entry_id", name="uq_nfl_pilot_positions_entry"),
+        CheckConstraint(
+            "execution_mode = 'paper' AND NOT live_trading_enabled AND status IN ('open', 'settled')",
+            name="ck_nfl_pilot_positions_paper",
+        ),
+        CheckConstraint(
+            "direction IN ('yes', 'no') AND quantity > 0", name="ck_nfl_pilot_positions_side"
+        ),
+        CheckConstraint(
+            "total_cost_basis > 0 AND market_value >= 0 AND status = 'open' OR "
+            "total_cost_basis > 0 AND market_value = 0 AND status = 'settled'",
+            name="ck_nfl_pilot_positions_values",
+        ),
+        CheckConstraint("jsonb_typeof(audit) = 'object'", name="ck_nfl_pilot_positions_audit"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    entry_id: Mapped[UUID] = mapped_column(
+        ForeignKey("nfl_pilot_entries.id", ondelete="RESTRICT"), nullable=False
+    )
+    scenario_id: Mapped[UUID] = mapped_column(
+        ForeignKey("nfl_pilot_scenarios.id", ondelete="RESTRICT"), nullable=False
+    )
+    market_id: Mapped[UUID] = mapped_column(
+        ForeignKey("markets.id", ondelete="RESTRICT"), nullable=False
+    )
+    direction: Mapped[str] = mapped_column(String(3), nullable=False)
+    quantity: Mapped[int] = mapped_column(nullable=False)
+    total_cost_basis: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    mark_price: Mapped[Decimal | None] = mapped_column(Numeric(8, 6))
+    market_value: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    unrealized_pnl: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    realized_pnl: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    official_resolution_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("market_resolutions.id", ondelete="RESTRICT")
+    )
+    execution_mode: Mapped[str] = mapped_column(String(10), nullable=False)
+    live_trading_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    audit: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+
+
+class NflPilotPositionEventRecord(Base):
+    """Append-only mark or official-settlement fact for an NFL pilot position."""
+
+    __tablename__ = "nfl_pilot_position_events"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_nfl_pilot_position_events_idempotency"),
+        UniqueConstraint(
+            "position_id", "market_price_id", name="uq_nfl_pilot_position_events_mark"
+        ),
+        UniqueConstraint(
+            "position_id", "official_resolution_id", name="uq_nfl_pilot_position_events_resolution"
+        ),
+        CheckConstraint(
+            "event_type IN ('mark', 'settlement')", name="ck_nfl_pilot_position_events_type"
+        ),
+        CheckConstraint(
+            "execution_mode = 'paper' AND NOT live_trading_enabled",
+            name="ck_nfl_pilot_position_events_paper",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(audit) = 'object'", name="ck_nfl_pilot_position_events_audit"
+        ),
+        Index("ix_nfl_pilot_position_events_position_recorded", "position_id", "recorded_at"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    idempotency_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    position_id: Mapped[UUID] = mapped_column(
+        ForeignKey("nfl_pilot_positions.id", ondelete="RESTRICT"), nullable=False
+    )
+    market_price_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("market_prices.id", ondelete="RESTRICT")
+    )
+    official_resolution_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("market_resolutions.id", ondelete="RESTRICT")
+    )
+    event_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    mark_price: Mapped[Decimal | None] = mapped_column(Numeric(8, 6))
+    market_value: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    unrealized_pnl: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    realized_pnl: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    execution_mode: Mapped[str] = mapped_column(String(10), nullable=False)
+    live_trading_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    audit: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings, TradingMode, get_settings
 from app.db.session import get_session
 from app.services.nfl_pilot.entries import NflPilotEntryService
+from app.services.nfl_pilot.lifecycle import NflPilotLifecycleService
 from app.services.nfl_pilot.service import NflPilotScenarioService
 
 router = APIRouter(tags=["nfl-paper-pilot"])
@@ -53,6 +54,29 @@ class NflPilotEntryRunResponse(BaseModel):
     entry: NflPilotEntryResponse
 
 
+class NflPilotPositionEventResponse(BaseModel):
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+    id: UUID
+    position_id: UUID
+    event_type: str
+    mark_price: Decimal | None
+    market_value: Decimal
+    unrealized_pnl: Decimal
+    realized_pnl: Decimal
+    recorded_at: datetime
+    execution_mode: str
+    live_trading_enabled: bool
+    warnings: tuple[str, ...] = (
+        "This is an NFL paper-ledger event, not a provider order or live position.",
+    )
+
+
+class NflPilotPositionEventRunResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    created: bool
+    event: NflPilotPositionEventResponse
+
+
 @router.post("/nfl-pilot-scenarios/register", response_model=NflPilotScenarioResponse)
 async def register_nfl_pilot_scenario(
     portfolio_id: UUID,
@@ -92,4 +116,44 @@ async def run_nfl_pilot_entry(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return NflPilotEntryRunResponse(
         created=created, entry=NflPilotEntryResponse.model_validate(record)
+    )
+
+
+@router.post("/nfl-pilot-positions/mark", response_model=NflPilotPositionEventRunResponse)
+async def mark_nfl_pilot_position(
+    entry_id: UUID,
+    idempotency_key: Annotated[str, Query(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$")],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> NflPilotPositionEventRunResponse:
+    if settings.trading_mode is not TradingMode.PAPER:
+        raise HTTPException(status_code=409, detail="NFL pilot position marks require paper mode")
+    try:
+        record, created = await NflPilotLifecycleService(session).mark(entry_id, idempotency_key)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return NflPilotPositionEventRunResponse(
+        created=created, event=NflPilotPositionEventResponse.model_validate(record)
+    )
+
+
+@router.post("/nfl-pilot-positions/settle", response_model=NflPilotPositionEventRunResponse)
+async def settle_nfl_pilot_position(
+    entry_id: UUID,
+    idempotency_key: Annotated[str, Query(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$")],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> NflPilotPositionEventRunResponse:
+    if settings.trading_mode is not TradingMode.PAPER:
+        raise HTTPException(status_code=409, detail="NFL pilot settlement requires paper mode")
+    try:
+        record, created = await NflPilotLifecycleService(session).settle(entry_id, idempotency_key)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return NflPilotPositionEventRunResponse(
+        created=created, event=NflPilotPositionEventResponse.model_validate(record)
     )
