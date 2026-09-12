@@ -23,7 +23,7 @@ from app.models.mlb import (
 )
 from app.models.nfl_forecasting import NflPayoutForecastRecord
 from app.models.nfl_opportunities import NflPaperOpportunityRecord
-from app.models.nfl_pilot import NflPilotScenarioRecord
+from app.models.nfl_pilot import NflPilotEntryRecord, NflPilotScenarioRecord
 from app.models.nfl_preflights import NflPaperPreflightRecord
 from app.models.nfl_shadow import NflShadowForecastRecord
 from app.models.nfl_shadow_evaluation import NflShadowEvaluationRecord
@@ -64,6 +64,7 @@ __all__ = [
     "NflPaperOpportunityRecord",
     "NflPaperPreflightRecord",
     "NflPilotScenarioRecord",
+    "NflPilotEntryRecord",
     "NflShadowEvaluationRecord",
     "PortfolioRecord",
     "PortfolioSnapshotRecord",

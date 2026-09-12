@@ -1,5 +1,11 @@
 # Paper Trading Specification
 
+Release 0.11.30 adds a separate NFL pilot-entry journal. It accepts only a current,
+cost-qualified NFL preflight attached to a registered paper scenario, revalidates the
+underlying shadow source and market quote, and enforces that scenario's per-entry and
+aggregate caps. Entries are simulated fills only; they do not invoke the NBA execution
+engine, create provider orders, enable live trading, or establish live positions.
+
 Release 0.11.26 extends the implemented settlement path to explicit official scalar
 results with complementary fractional payouts. Remaining quantity times held-side
 payout rounds down to cents; no sports-derived payout, synthetic provider result,
