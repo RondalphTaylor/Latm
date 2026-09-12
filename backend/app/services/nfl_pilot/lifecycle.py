@@ -384,7 +384,9 @@ class NflPilotLifecycleService:
         await self._session.commit()
         return True
 
-    async def monitor(self, scenario_id: UUID) -> tuple[int, int, int, int, int, int, int, int]:
+    async def monitor(
+        self, scenario_id: UUID
+    ) -> tuple[int, int, int, int, int, int, int, int, int, int, int, int]:
         """Audit every available open-position quote before making a bounded mark."""
         positions = list(
             await self._session.scalars(
@@ -401,6 +403,7 @@ class NflPilotLifecycleService:
         unusable = 0
         missing = 0
         skipped = 0
+        holds = reduces = closes = attention_required = 0
         for position in positions:
             price = await self._session.scalar(
                 select(MarketPriceRecord)
@@ -411,9 +414,30 @@ class NflPilotLifecycleService:
             if price is None:
                 missing += 1
                 skipped += 1
+                holds += 1
+                attention_required += 1
                 continue
             now = await self._now()
             assessment = _quote_assessment(price, position.direction, now)
+            forecast = await self._session.scalar(
+                select(NflPayoutForecastRecord)
+                .where(NflPayoutForecastRecord.market_id == position.market_id)
+                .order_by(
+                    NflPayoutForecastRecord.generated_at.desc(), NflPayoutForecastRecord.id.desc()
+                )
+                .limit(1)
+            )
+            recommendation = _recommendation(
+                assessment.quote_status,
+                forecast,
+                position.direction,
+                assessment.directional_bid,
+                now,
+            )
+            holds += int(recommendation.recommendation == "hold")
+            reduces += int(recommendation.recommendation == "reduce")
+            closes += int(recommendation.recommendation == "close")
+            attention_required += int(recommendation.requires_attention)
             quote_checks_created += int(
                 await self._record_quote_check(position, price, assessment, now)
             )
@@ -443,4 +467,8 @@ class NflPilotLifecycleService:
             missing,
             marks_created,
             skipped,
+            holds,
+            reduces,
+            closes,
+            attention_required,
         )

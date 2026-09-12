@@ -101,9 +101,9 @@ def test_pilot_entry_rejects_nonpaper_mode() -> None:
 def test_pilot_monitor_reports_stale_quote_skip(monkeypatch: MonkeyPatch) -> None:
     async def monitor_stub(
         self: NflPilotLifecycleService, scenario_id: UUID
-    ) -> tuple[int, int, int, int, int, int, int, int]:
+    ) -> tuple[int, int, int, int, int, int, int, int, int, int, int, int]:
         assert scenario_id == UUID(int=2)
-        return 1, 1, 0, 1, 0, 0, 0, 1
+        return 1, 1, 0, 1, 0, 0, 0, 1, 1, 0, 0, 1
 
     monkeypatch.setattr(NflPilotLifecycleService, "monitor", monitor_stub)
     with TestClient(application()) as client:
@@ -118,4 +118,8 @@ def test_pilot_monitor_reports_stale_quote_skip(monkeypatch: MonkeyPatch) -> Non
         "missing": 0,
         "marks_created": 0,
         "skipped": 1,
+        "holds": 1,
+        "reduces": 0,
+        "closes": 0,
+        "attention_required": 1,
     }

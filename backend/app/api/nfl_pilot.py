@@ -97,6 +97,10 @@ class NflPilotMonitorResponse(BaseModel):
     missing: int
     marks_created: int
     skipped: int
+    holds: int
+    reduces: int
+    closes: int
+    attention_required: int
 
 
 @router.post("/nfl-pilot-scenarios/register", response_model=NflPilotScenarioResponse)
@@ -211,6 +215,10 @@ async def run_nfl_pilot_monitor(
             missing,
             marks_created,
             skipped,
+            holds,
+            reduces,
+            closes,
+            attention_required,
         ) = await NflPilotLifecycleService(session).monitor(scenario_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -223,4 +231,8 @@ async def run_nfl_pilot_monitor(
         missing=missing,
         marks_created=marks_created,
         skipped=skipped,
+        holds=holds,
+        reduces=reduces,
+        closes=closes,
+        attention_required=attention_required,
     )
