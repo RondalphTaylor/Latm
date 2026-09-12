@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from datetime import datetime, timedelta
 from decimal import ROUND_DOWN, Decimal
 from uuid import UUID, uuid4
@@ -19,6 +20,19 @@ from app.models.nfl_pilot import (
 
 def _floor_cent(value: Decimal) -> Decimal:
     return value.quantize(Decimal("0.01"), rounding=ROUND_DOWN)
+
+
+def _official_resolution(
+    resolutions: Sequence[MarketResolutionRecord],
+) -> MarketResolutionRecord:
+    if not resolutions:
+        raise ValueError("NFL pilot settlement requires an official market resolution")
+    if len({(item.yes_payout, item.no_payout) for item in resolutions}) != 1:
+        raise ValueError("NFL pilot settlement has conflicting official resolutions")
+    resolution = resolutions[0]
+    if resolution.source != "official_provider" or resolution.settled_at > resolution.retrieved_at:
+        raise ValueError("NFL pilot settlement resolution is not an official final fact")
+    return resolution
 
 
 class NflPilotLifecycleService:
@@ -187,17 +201,7 @@ class NflPilotLifecycleService:
                     )
                 )
             )
-            if not resolutions:
-                raise ValueError("NFL pilot settlement requires an official market resolution")
-            payout_pairs = {(item.yes_payout, item.no_payout) for item in resolutions}
-            if len(payout_pairs) != 1:
-                raise ValueError("NFL pilot settlement has conflicting official resolutions")
-            resolution = resolutions[0]
-            if (
-                resolution.source != "official_provider"
-                or resolution.settled_at > resolution.retrieved_at
-            ):
-                raise ValueError("NFL pilot settlement resolution is not an official final fact")
+            resolution = _official_resolution(resolutions)
             payout = resolution.yes_payout if position.direction == "yes" else resolution.no_payout
             proceeds = _floor_cent(payout * position.quantity)
             realized = proceeds - position.total_cost_basis
