@@ -103,6 +103,17 @@ class NflPilotMonitorResponse(BaseModel):
     attention_required: int
 
 
+class NflPilotMonitoringDecisionResponse(BaseModel):
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+    id: UUID
+    position_id: UUID
+    recommendation: str
+    reason: str
+    requires_attention: bool
+    remaining_edge: Decimal | None
+    evaluated_at: datetime
+
+
 @router.post("/nfl-pilot-scenarios/register", response_model=NflPilotScenarioResponse)
 async def register_nfl_pilot_scenario(
     portfolio_id: UUID,
@@ -195,6 +206,20 @@ async def get_nfl_pilot_ledger(
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return NflPilotLedgerResponse.model_validate(result)
+
+
+@router.get("/nfl-pilot-monitor/decisions", response_model=list[NflPilotMonitoringDecisionResponse])
+async def list_nfl_pilot_monitoring_decisions(
+    scenario_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    attention_only: bool = False,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[NflPilotMonitoringDecisionResponse]:
+    records = await NflPilotLifecycleService(session).decisions(
+        scenario_id, attention_only, limit, offset
+    )
+    return [NflPilotMonitoringDecisionResponse.model_validate(record) for record in records]
 
 
 @router.post("/nfl-pilot-monitor/run", response_model=NflPilotMonitorResponse)

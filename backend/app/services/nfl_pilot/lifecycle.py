@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -14,6 +15,7 @@ from app.models.markets import MarketPriceRecord, MarketResolutionRecord
 from app.models.nfl_forecasting import NflPayoutForecastRecord
 from app.models.nfl_pilot import (
     NflPilotEntryRecord,
+    NflPilotMonitoringDecisionRecord,
     NflPilotPositionEventRecord,
     NflPilotPositionRecord,
     NflPilotQuoteCheckRecord,
@@ -384,6 +386,62 @@ class NflPilotLifecycleService:
         await self._session.commit()
         return True
 
+    async def _record_decision(
+        self,
+        position: NflPilotPositionRecord,
+        recommendation: PilotRecommendation,
+        price: MarketPriceRecord | None,
+        forecast: NflPayoutForecastRecord | None,
+        now: datetime,
+    ) -> bool:
+        source = f"{position.id}:{price.id if price else 'missing'}:{forecast.id if forecast else 'missing'}"
+        key = "nfl-pilot-decision:" + hashlib.sha256(source.encode()).hexdigest()
+        existing = await self._session.scalar(
+            select(NflPilotMonitoringDecisionRecord).where(
+                NflPilotMonitoringDecisionRecord.idempotency_key == key
+            )
+        )
+        if existing is not None:
+            return False
+        self._session.add(
+            NflPilotMonitoringDecisionRecord(
+                id=uuid4(),
+                idempotency_key=key,
+                position_id=position.id,
+                recommendation=recommendation.recommendation,
+                reason=recommendation.reason,
+                requires_attention=recommendation.requires_attention,
+                remaining_edge=recommendation.remaining_edge,
+                evaluated_at=now,
+                execution_mode="paper",
+                live_trading_enabled=False,
+                audit={
+                    "market_price_id": str(price.id) if price else None,
+                    "forecast_id": str(forecast.id) if forecast else None,
+                },
+            )
+        )
+        await self._session.commit()
+        return True
+
+    async def decisions(
+        self, scenario_id: UUID, attention_only: bool, limit: int, offset: int
+    ) -> list[NflPilotMonitoringDecisionRecord]:
+        statement = (
+            select(NflPilotMonitoringDecisionRecord)
+            .join(NflPilotPositionRecord)
+            .where(NflPilotPositionRecord.scenario_id == scenario_id)
+        )
+        if attention_only:
+            statement = statement.where(NflPilotMonitoringDecisionRecord.requires_attention)
+        return list(
+            await self._session.scalars(
+                statement.order_by(NflPilotMonitoringDecisionRecord.evaluated_at.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+        )
+
     async def monitor(
         self, scenario_id: UUID
     ) -> tuple[int, int, int, int, int, int, int, int, int, int, int, int]:
@@ -416,6 +474,13 @@ class NflPilotLifecycleService:
                 skipped += 1
                 holds += 1
                 attention_required += 1
+                await self._record_decision(
+                    position,
+                    PilotRecommendation("hold", "quote_missing", True, None),
+                    None,
+                    None,
+                    await self._now(),
+                )
                 continue
             now = await self._now()
             assessment = _quote_assessment(price, position.direction, now)
@@ -438,6 +503,7 @@ class NflPilotLifecycleService:
             reduces += int(recommendation.recommendation == "reduce")
             closes += int(recommendation.recommendation == "close")
             attention_required += int(recommendation.requires_attention)
+            await self._record_decision(position, recommendation, price, forecast, now)
             quote_checks_created += int(
                 await self._record_quote_check(position, price, assessment, now)
             )

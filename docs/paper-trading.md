@@ -15,6 +15,12 @@ directional bid/ask, spread, liquidity, quote age, and a `fresh`, `stale`, or
 `unusable` result. Stale, missing, and unusable quotes are counted and skipped;
 they cannot create a mark or any trading action.
 
+Each monitoring pass also records an immutable paper-only recommendation: `hold`,
+`reduce`, or `close`, with the remaining-edge calculation when current data exists.
+Stale or missing source facts always produce a flagged `hold`. These recommendations
+are available through the bounded attention feed and never mutate a position, submit
+an order, or enable live trading.
+
 Release 0.11.30 adds a separate NFL pilot-entry journal. It accepts only a current,
 cost-qualified NFL preflight attached to a registered paper scenario, revalidates the
 underlying shadow source and market quote, and enforces that scenario's per-entry and

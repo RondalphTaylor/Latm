@@ -264,3 +264,34 @@ class NflPilotQuoteCheckRecord(Base):
     execution_mode: Mapped[str] = mapped_column(String(10), nullable=False)
     live_trading_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
     audit: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+
+
+class NflPilotMonitoringDecisionRecord(Base):
+    """Immutable paper-only monitoring recommendation; it cannot change a position."""
+
+    __tablename__ = "nfl_pilot_monitoring_decisions"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_nfl_pilot_monitoring_decision_key"),
+        CheckConstraint(
+            "recommendation IN ('hold', 'reduce', 'close')",
+            name="ck_nfl_pilot_monitoring_decision_action",
+        ),
+        CheckConstraint(
+            "execution_mode = 'paper' AND NOT live_trading_enabled",
+            name="ck_nfl_pilot_monitoring_decision_paper",
+        ),
+        Index("ix_nfl_pilot_monitoring_decision_position_evaluated", "position_id", "evaluated_at"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    idempotency_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    position_id: Mapped[UUID] = mapped_column(
+        ForeignKey("nfl_pilot_positions.id", ondelete="RESTRICT"), nullable=False
+    )
+    recommendation: Mapped[str] = mapped_column(String(20), nullable=False)
+    reason: Mapped[str] = mapped_column(String(100), nullable=False)
+    requires_attention: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    remaining_edge: Mapped[Decimal | None] = mapped_column(Numeric(8, 6))
+    evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    execution_mode: Mapped[str] = mapped_column(String(10), nullable=False)
+    live_trading_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    audit: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
