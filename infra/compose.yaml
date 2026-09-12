@@ -23,6 +23,11 @@ services:
   backend:
     build:
       context: ../backend
+    # The Compose file lives in infra/, while developer credentials live at the
+    # project root.  Keep them out of source control and inject them only into
+    # the local backend container.
+    env_file:
+      - ../.env
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-latm}:${POSTGRES_PASSWORD:-latm}@db:5432/${POSTGRES_DB:-latm}
       TRADING_MODE: ${TRADING_MODE:-paper}
@@ -32,7 +37,6 @@ services:
       PROVIDER_MAX_RETRIES: ${PROVIDER_MAX_RETRIES:-2}
       PROVIDER_MAX_PAGES: ${PROVIDER_MAX_PAGES:-50}
       SPORTS_DATA_PROVIDER: ${SPORTS_DATA_PROVIDER:-balldontlie}
-      BALLDONTLIE_API_KEY: ${BALLDONTLIE_API_KEY:-}
       BALLDONTLIE_API_BASE_URL: ${BALLDONTLIE_API_BASE_URL:-https://api.balldontlie.io/v1}
       BALLDONTLIE_NFL_API_BASE_URL: ${BALLDONTLIE_NFL_API_BASE_URL:-https://api.balldontlie.io/nfl/v1}
       MLB_API_BASE_URL: ${MLB_API_BASE_URL:-https://statsapi.mlb.com/api/v1}
