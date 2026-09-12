@@ -144,6 +144,7 @@ export function Dashboard({ data, mode, viewModel }: DashboardProps) {
 
         <nav className="section-nav" aria-label="Dashboard sections">
           <a href="#positions">Positions</a>
+          <a href="#attention">Attention</a>
           <a href="#forecasts">Forecasts</a>
           <a href="#opportunities">Edges</a>
           <a href="#markets">Markets</a>
@@ -242,6 +243,30 @@ export function Dashboard({ data, mode, viewModel }: DashboardProps) {
             />
           </div>
         )}
+
+        <Section
+          id="attention"
+          eyebrow="NFL pilot"
+          title="Attention feed"
+          description="Paper-only monitoring recommendations that require review. No action is taken from this dashboard."
+          note="Latest 8 flagged recommendations"
+        >
+          {!data.nflAttention.ok ? (
+            <EmptyState title="Attention feed is unavailable">{data.nflAttention.error}</EmptyState>
+          ) : viewModel.nflAttention.length === 0 ? (
+            <EmptyState title="No NFL pilot attention items">Fresh, qualifying pilot inputs will appear here only when review is needed.</EmptyState>
+          ) : (
+            <div className="activity-list">
+              {viewModel.nflAttention.map((item) => (
+                <article key={item.id}>
+                  <span className="activity-icon activity-monitoring" aria-hidden="true">!</span>
+                  <div><div className="activity-title"><strong>{humanize(item.recommendation)}</strong><StatusPill value={item.reason} /></div><p>Position {item.position_id.slice(0, 8)}</p><small>{formatTimestamp(item.evaluated_at)}</small></div>
+                  <div className="activity-values"><strong>{formatSignedPercent(item.remaining_edge)}</strong><span>Recommendation only</span></div>
+                </article>
+              ))}
+            </div>
+          )}
+        </Section>
 
         <Section
           id="positions"

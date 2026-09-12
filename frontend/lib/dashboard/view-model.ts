@@ -97,6 +97,7 @@ export interface DashboardViewModel {
   readonly mlbReadinessRows: readonly MlbReadinessRow[];
   readonly mlbCheckpoint: MlbBackfillCheckpointResponse | null;
   readonly mlbLatestBatch: MlbBackfillBatchResponse | null;
+  readonly nflAttention: DashboardData["nflAttention"]["data"];
 }
 
 function markFailure<T>(state: LoadState<T>, label: string, failures: string[]): void {
@@ -161,6 +162,7 @@ export function buildDashboardViewModel(data: DashboardData): DashboardViewModel
   markFailure(data.mlbReadiness, "MLB dataset readiness", failures);
   markFailure(data.mlbBackfillCheckpoint, "MLB backfill checkpoint", failures);
   markFailure(data.mlbBackfillBatches, "MLB backfill history", failures);
+  markFailure(data.nflAttention, "NFL pilot attention", failures);
 
   const markets = new Map(
     data.markets.data.map((market: MarketResponse): readonly [string, MarketResponse] => [
@@ -288,5 +290,6 @@ export function buildDashboardViewModel(data: DashboardData): DashboardViewModel
     mlbReadinessRows,
     mlbCheckpoint: data.mlbBackfillCheckpoint.data,
     mlbLatestBatch: data.mlbBackfillBatches.data[0] ?? null,
+    nflAttention: data.nflAttention.data,
   };
 }

@@ -222,6 +222,15 @@ async def list_nfl_pilot_monitoring_decisions(
     return [NflPilotMonitoringDecisionResponse.model_validate(record) for record in records]
 
 
+@router.get("/nfl-pilot-monitor/attention", response_model=list[NflPilotMonitoringDecisionResponse])
+async def list_nfl_pilot_attention(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    limit: Annotated[int, Query(ge=1, le=25)] = 8,
+) -> list[NflPilotMonitoringDecisionResponse]:
+    records = await NflPilotLifecycleService(session).attention(limit)
+    return [NflPilotMonitoringDecisionResponse.model_validate(record) for record in records]
+
+
 @router.post("/nfl-pilot-monitor/run", response_model=NflPilotMonitorResponse)
 async def run_nfl_pilot_monitor(
     scenario_id: UUID,

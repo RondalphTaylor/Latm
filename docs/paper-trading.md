@@ -21,6 +21,10 @@ Stale or missing source facts always produce a flagged `hold`. These recommendat
 are available through the bounded attention feed and never mutate a position, submit
 an order, or enable live trading.
 
+The read-only dashboard displays the latest attention-required NFL pilot recommendations
+through `GET /nfl-pilot-monitor/attention`. It contains no monitoring-run, disposition,
+or execution control.
+
 Release 0.11.30 adds a separate NFL pilot-entry journal. It accepts only a current,
 cost-qualified NFL preflight attached to a registered paper scenario, revalidates the
 underlying shadow source and market quote, and enforces that scenario's per-entry and

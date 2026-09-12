@@ -442,6 +442,16 @@ class NflPilotLifecycleService:
             )
         )
 
+    async def attention(self, limit: int) -> list[NflPilotMonitoringDecisionRecord]:
+        return list(
+            await self._session.scalars(
+                select(NflPilotMonitoringDecisionRecord)
+                .where(NflPilotMonitoringDecisionRecord.requires_attention)
+                .order_by(NflPilotMonitoringDecisionRecord.evaluated_at.desc())
+                .limit(limit)
+            )
+        )
+
     async def monitor(
         self, scenario_id: UUID
     ) -> tuple[int, int, int, int, int, int, int, int, int, int, int, int]:

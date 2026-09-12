@@ -1,5 +1,15 @@
 export type DecimalValue = string;
 
+export interface NflPilotMonitoringDecisionResponse {
+  readonly id: string;
+  readonly position_id: string;
+  readonly recommendation: string;
+  readonly reason: string;
+  readonly requires_attention: boolean;
+  readonly remaining_edge: DecimalValue | null;
+  readonly evaluated_at: string;
+}
+
 export interface HealthResponse {
   readonly status: string;
 }
