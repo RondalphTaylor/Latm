@@ -6,7 +6,13 @@ from typing import cast
 import pytest
 
 from app.models.markets import MarketPriceRecord, MarketResolutionRecord
-from app.services.nfl_pilot.lifecycle import _floor_cent, _official_resolution, _quote_assessment
+from app.models.nfl_forecasting import NflPayoutForecastRecord
+from app.services.nfl_pilot.lifecycle import (
+    _floor_cent,
+    _official_resolution,
+    _quote_assessment,
+    _recommendation,
+)
 
 
 def test_nfl_pilot_lifecycle_floors_fractional_contract_payouts_to_cents() -> None:
@@ -83,4 +89,32 @@ def test_quote_assessment_flags_stale_and_unusable_quotes() -> None:
     assert (
         _quote_assessment(cast(MarketPriceRecord, unusable_price), "yes", now).quote_status
         == "unusable"
+    )
+
+
+def test_recommendation_holds_stale_forecast_and_flags_negative_edge() -> None:
+    now = datetime(2026, 9, 12, 12, tzinfo=UTC)
+    stale = SimpleNamespace(
+        generated_at=datetime(2026, 9, 12, 11, 40, tzinfo=UTC),
+        valid_until=datetime(2026, 9, 12, 11, 55, tzinfo=UTC),
+        expected_yes_payout=Decimal("0.55"),
+        expected_no_payout=Decimal("0.45"),
+    )
+    result = _recommendation(
+        "fresh", cast(NflPayoutForecastRecord, stale), "yes", Decimal("0.40"), now
+    )
+    assert (result.recommendation, result.reason) == ("hold", "forecast_stale")
+    current = SimpleNamespace(
+        generated_at=now,
+        valid_until=datetime(2026, 9, 12, 12, 15, tzinfo=UTC),
+        expected_yes_payout=Decimal("0.40"),
+        expected_no_payout=Decimal("0.60"),
+    )
+    result = _recommendation(
+        "fresh", cast(NflPayoutForecastRecord, current), "yes", Decimal("0.41"), now
+    )
+    assert (result.recommendation, result.reason, result.remaining_edge) == (
+        "close",
+        "remaining_edge_nonpositive",
+        Decimal("-0.010000"),
     )

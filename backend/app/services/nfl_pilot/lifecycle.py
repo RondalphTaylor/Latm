@@ -11,6 +11,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.markets import MarketPriceRecord, MarketResolutionRecord
+from app.models.nfl_forecasting import NflPayoutForecastRecord
 from app.models.nfl_pilot import (
     NflPilotEntryRecord,
     NflPilotPositionEventRecord,
@@ -49,6 +50,14 @@ class QuoteAssessment:
     quote_age_seconds: int
 
 
+@dataclass(frozen=True)
+class PilotRecommendation:
+    recommendation: str
+    reason: str
+    requires_attention: bool
+    remaining_edge: Decimal | None
+
+
 def _quote_assessment(price: MarketPriceRecord, direction: str, now: datetime) -> QuoteAssessment:
     bid = price.yes_bid if direction == "yes" else price.no_bid
     ask = price.yes_ask if direction == "yes" else price.no_ask
@@ -69,6 +78,31 @@ def _quote_assessment(price: MarketPriceRecord, direction: str, now: datetime) -
             "unusable", "directional_quote_crossed", bid, ask, spread, age_seconds
         )
     return QuoteAssessment("fresh", None, bid, ask, spread, age_seconds)
+
+
+def _recommendation(
+    quote_status: str,
+    forecast: NflPayoutForecastRecord | None,
+    direction: str,
+    bid: Decimal | None,
+    now: datetime,
+) -> PilotRecommendation:
+    """Recommend a paper action without mutating any position or portfolio state."""
+    if quote_status != "fresh":
+        return PilotRecommendation("hold", f"quote_{quote_status}", True, None)
+    if forecast is None:
+        return PilotRecommendation("hold", "forecast_missing", True, None)
+    if not forecast.generated_at <= now < forecast.valid_until:
+        return PilotRecommendation("hold", "forecast_stale", True, None)
+    if bid is None:
+        return PilotRecommendation("hold", "directional_bid_missing", True, None)
+    expected = forecast.expected_yes_payout if direction == "yes" else forecast.expected_no_payout
+    edge = (expected - bid).quantize(Decimal("0.000001"))
+    if edge <= 0:
+        return PilotRecommendation("close", "remaining_edge_nonpositive", True, edge)
+    if edge < Decimal("0.03"):
+        return PilotRecommendation("reduce", "remaining_edge_below_3_percent", True, edge)
+    return PilotRecommendation("hold", "minimum_hold_edge_met", False, edge)
 
 
 class NflPilotLifecycleService:
