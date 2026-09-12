@@ -27,6 +27,7 @@ from app.models.nfl_pilot import (
     NflPilotEntryRecord,
     NflPilotPositionEventRecord,
     NflPilotPositionRecord,
+    NflPilotQuoteCheckRecord,
     NflPilotScenarioRecord,
 )
 from app.models.nfl_preflights import NflPaperPreflightRecord
@@ -72,6 +73,7 @@ __all__ = [
     "NflPilotEntryRecord",
     "NflPilotPositionRecord",
     "NflPilotPositionEventRecord",
+    "NflPilotQuoteCheckRecord",
     "NflShadowEvaluationRecord",
     "PortfolioRecord",
     "PortfolioSnapshotRecord",

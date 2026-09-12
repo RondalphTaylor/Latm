@@ -8,8 +8,12 @@ not settle a pilot contract.
 
 The NFL pilot ledger reports committed capital, realized P&L, current bankroll,
 and available bankroll separately from generic portfolios. Only open positions
-consume aggregate exposure; official settlement releases that capital. The bounded
-monitor creates at most one mark per fresh quote and reports stale quotes as skipped.
+consume aggregate exposure; official settlement releases that capital. Before a
+bounded monitor creates at most one mark per fresh quote, it writes one immutable
+paper-only quote check per position and provider snapshot. Each check records
+directional bid/ask, spread, liquidity, quote age, and a `fresh`, `stale`, or
+`unusable` result. Stale, missing, and unusable quotes are counted and skipped;
+they cannot create a mark or any trading action.
 
 Release 0.11.30 adds a separate NFL pilot-entry journal. It accepts only a current,
 cost-qualified NFL preflight attached to a registered paper scenario, revalidates the

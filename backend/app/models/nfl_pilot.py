@@ -222,3 +222,45 @@ class NflPilotPositionEventRecord(Base):
     execution_mode: Mapped[str] = mapped_column(String(10), nullable=False)
     live_trading_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
     audit: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+
+
+class NflPilotQuoteCheckRecord(Base):
+    """Append-only quality assessment of a quote observed for an open pilot position."""
+
+    __tablename__ = "nfl_pilot_quote_checks"
+    __table_args__ = (
+        UniqueConstraint(
+            "position_id", "market_price_id", name="uq_nfl_pilot_quote_checks_snapshot"
+        ),
+        CheckConstraint(
+            "quote_status IN ('fresh', 'stale', 'unusable')",
+            name="ck_nfl_pilot_quote_checks_status",
+        ),
+        CheckConstraint(
+            "execution_mode = 'paper' AND NOT live_trading_enabled",
+            name="ck_nfl_pilot_quote_checks_paper",
+        ),
+        CheckConstraint("quote_age_seconds >= 0", name="ck_nfl_pilot_quote_checks_age"),
+        CheckConstraint("jsonb_typeof(audit) = 'object'", name="ck_nfl_pilot_quote_checks_audit"),
+        Index("ix_nfl_pilot_quote_checks_position_checked", "position_id", "checked_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    position_id: Mapped[UUID] = mapped_column(
+        ForeignKey("nfl_pilot_positions.id", ondelete="RESTRICT"), nullable=False
+    )
+    market_price_id: Mapped[UUID] = mapped_column(
+        ForeignKey("market_prices.id", ondelete="RESTRICT"), nullable=False
+    )
+    quote_status: Mapped[str] = mapped_column(String(20), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(100))
+    directional_bid: Mapped[Decimal | None] = mapped_column(Numeric(8, 6))
+    directional_ask: Mapped[Decimal | None] = mapped_column(Numeric(8, 6))
+    spread: Mapped[Decimal | None] = mapped_column(Numeric(8, 6))
+    liquidity: Mapped[Decimal | None] = mapped_column(Numeric(24, 4))
+    quote_retrieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    quote_age_seconds: Mapped[int] = mapped_column(nullable=False)
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    execution_mode: Mapped[str] = mapped_column(String(10), nullable=False)
+    live_trading_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    audit: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)

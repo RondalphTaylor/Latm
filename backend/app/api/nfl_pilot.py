@@ -90,6 +90,11 @@ class NflPilotLedgerResponse(BaseModel):
 class NflPilotMonitorResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
     examined: int
+    quote_checks_created: int
+    fresh: int
+    stale: int
+    unusable: int
+    missing: int
     marks_created: int
     skipped: int
 
@@ -197,9 +202,25 @@ async def run_nfl_pilot_monitor(
     if settings.trading_mode is not TradingMode.PAPER:
         raise HTTPException(status_code=409, detail="NFL pilot monitoring requires paper mode")
     try:
-        examined, marks_created, skipped = await NflPilotLifecycleService(session).monitor(
-            scenario_id
-        )
+        (
+            examined,
+            quote_checks_created,
+            fresh,
+            stale,
+            unusable,
+            missing,
+            marks_created,
+            skipped,
+        ) = await NflPilotLifecycleService(session).monitor(scenario_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return NflPilotMonitorResponse(examined=examined, marks_created=marks_created, skipped=skipped)
+    return NflPilotMonitorResponse(
+        examined=examined,
+        quote_checks_created=quote_checks_created,
+        fresh=fresh,
+        stale=stale,
+        unusable=unusable,
+        missing=missing,
+        marks_created=marks_created,
+        skipped=skipped,
+    )

@@ -5,8 +5,8 @@ from typing import cast
 
 import pytest
 
-from app.models.markets import MarketResolutionRecord
-from app.services.nfl_pilot.lifecycle import _floor_cent, _official_resolution
+from app.models.markets import MarketPriceRecord, MarketResolutionRecord
+from app.services.nfl_pilot.lifecycle import _floor_cent, _official_resolution, _quote_assessment
 
 
 def test_nfl_pilot_lifecycle_floors_fractional_contract_payouts_to_cents() -> None:
@@ -44,3 +44,43 @@ def test_official_fractional_resolution_rejects_conflicts() -> None:
                 cast(MarketResolutionRecord, conflicting),
             ]
         )
+
+
+def test_quote_assessment_requires_fresh_two_sided_directional_quote() -> None:
+    now = datetime(2026, 9, 12, 12, tzinfo=UTC)
+    fresh_price = SimpleNamespace(
+        yes_bid=Decimal("0.400000"),
+        yes_ask=Decimal("0.420000"),
+        no_bid=Decimal("0.580000"),
+        no_ask=Decimal("0.600000"),
+        retrieved_at=datetime(2026, 9, 12, 11, 59, 30, tzinfo=UTC),
+    )
+    assessment = _quote_assessment(cast(MarketPriceRecord, fresh_price), "yes", now)
+    assert assessment.quote_status == "fresh"
+    assert assessment.spread == Decimal("0.020000")
+    assert assessment.quote_age_seconds == 30
+
+
+def test_quote_assessment_flags_stale_and_unusable_quotes() -> None:
+    now = datetime(2026, 9, 12, 12, tzinfo=UTC)
+    stale_price = SimpleNamespace(
+        yes_bid=Decimal("0.400000"),
+        yes_ask=Decimal("0.420000"),
+        no_bid=None,
+        no_ask=None,
+        retrieved_at=datetime(2026, 9, 12, 11, 44, 59, tzinfo=UTC),
+    )
+    assert (
+        _quote_assessment(cast(MarketPriceRecord, stale_price), "yes", now).quote_status == "stale"
+    )
+    unusable_price = SimpleNamespace(
+        yes_bid=None,
+        yes_ask=Decimal("0.420000"),
+        no_bid=None,
+        no_ask=None,
+        retrieved_at=datetime(2026, 9, 12, 12, tzinfo=UTC),
+    )
+    assert (
+        _quote_assessment(cast(MarketPriceRecord, unusable_price), "yes", now).quote_status
+        == "unusable"
+    )

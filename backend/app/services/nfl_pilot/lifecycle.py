@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import ROUND_DOWN, Decimal
 from uuid import UUID, uuid4
@@ -14,6 +15,7 @@ from app.models.nfl_pilot import (
     NflPilotEntryRecord,
     NflPilotPositionEventRecord,
     NflPilotPositionRecord,
+    NflPilotQuoteCheckRecord,
     NflPilotScenarioRecord,
 )
 
@@ -33,6 +35,40 @@ def _official_resolution(
     if resolution.source != "official_provider" or resolution.settled_at > resolution.retrieved_at:
         raise ValueError("NFL pilot settlement resolution is not an official final fact")
     return resolution
+
+
+@dataclass(frozen=True)
+class QuoteAssessment:
+    """Provider-neutral directional quote quality used before a pilot mark."""
+
+    quote_status: str
+    reason: str | None
+    directional_bid: Decimal | None
+    directional_ask: Decimal | None
+    spread: Decimal | None
+    quote_age_seconds: int
+
+
+def _quote_assessment(price: MarketPriceRecord, direction: str, now: datetime) -> QuoteAssessment:
+    bid = price.yes_bid if direction == "yes" else price.no_bid
+    ask = price.yes_ask if direction == "yes" else price.no_ask
+    age_seconds = max(0, int((now - price.retrieved_at).total_seconds()))
+    valid_bid = bid is not None and Decimal("0") < bid < Decimal("1")
+    valid_ask = ask is not None and Decimal("0") < ask < Decimal("1")
+    spread = ask - bid if bid is not None and ask is not None and valid_bid and valid_ask else None
+    if age_seconds > 15 * 60:
+        return QuoteAssessment(
+            "stale", "quote_age_exceeds_15_minutes", bid, ask, spread, age_seconds
+        )
+    if not valid_bid or not valid_ask:
+        return QuoteAssessment(
+            "unusable", "directional_bid_or_ask_missing", bid, ask, spread, age_seconds
+        )
+    if spread is not None and spread < Decimal("0"):
+        return QuoteAssessment(
+            "unusable", "directional_quote_crossed", bid, ask, spread, age_seconds
+        )
+    return QuoteAssessment("fresh", None, bid, ask, spread, age_seconds)
 
 
 class NflPilotLifecycleService:
@@ -276,8 +312,46 @@ class NflPilotLifecycleService:
             "available_bankroll": current_bankroll - open_cost,
         }
 
-    async def monitor(self, scenario_id: UUID) -> tuple[int, int, int]:
-        """Append at most one fresh mark per open position and quote snapshot."""
+    async def _record_quote_check(
+        self,
+        position: NflPilotPositionRecord,
+        price: MarketPriceRecord,
+        assessment: QuoteAssessment,
+        now: datetime,
+    ) -> bool:
+        """Persist one immutable quality result per position and provider snapshot."""
+        existing = await self._session.scalar(
+            select(NflPilotQuoteCheckRecord).where(
+                NflPilotQuoteCheckRecord.position_id == position.id,
+                NflPilotQuoteCheckRecord.market_price_id == price.id,
+            )
+        )
+        if existing is not None:
+            return False
+        self._session.add(
+            NflPilotQuoteCheckRecord(
+                id=uuid4(),
+                position_id=position.id,
+                market_price_id=price.id,
+                quote_status=assessment.quote_status,
+                reason=assessment.reason,
+                directional_bid=assessment.directional_bid,
+                directional_ask=assessment.directional_ask,
+                spread=assessment.spread,
+                liquidity=price.liquidity,
+                quote_retrieved_at=price.retrieved_at,
+                quote_age_seconds=assessment.quote_age_seconds,
+                checked_at=now,
+                execution_mode="paper",
+                live_trading_enabled=False,
+                audit={"direction": position.direction, "market_id": str(position.market_id)},
+            )
+        )
+        await self._session.commit()
+        return True
+
+    async def monitor(self, scenario_id: UUID) -> tuple[int, int, int, int, int, int, int, int]:
+        """Audit every available open-position quote before making a bounded mark."""
         positions = list(
             await self._session.scalars(
                 select(NflPilotPositionRecord).where(
@@ -286,7 +360,12 @@ class NflPilotLifecycleService:
                 )
             )
         )
-        created = 0
+        marks_created = 0
+        quote_checks_created = 0
+        fresh = 0
+        stale = 0
+        unusable = 0
+        missing = 0
         skipped = 0
         for position in positions:
             price = await self._session.scalar(
@@ -296,7 +375,23 @@ class NflPilotLifecycleService:
                 .limit(1)
             )
             if price is None:
+                missing += 1
+                skipped += 1
                 continue
+            now = await self._now()
+            assessment = _quote_assessment(price, position.direction, now)
+            quote_checks_created += int(
+                await self._record_quote_check(position, price, assessment, now)
+            )
+            if assessment.quote_status == "stale":
+                stale += 1
+                skipped += 1
+                continue
+            if assessment.quote_status == "unusable":
+                unusable += 1
+                skipped += 1
+                continue
+            fresh += 1
             try:
                 _, was_created = await self.mark(
                     position.entry_id, f"nfl-pilot-monitor:{position.id}:{price.id}"
@@ -304,5 +399,14 @@ class NflPilotLifecycleService:
             except ValueError:
                 skipped += 1
                 continue
-            created += int(was_created)
-        return len(positions), created, skipped
+            marks_created += int(was_created)
+        return (
+            len(positions),
+            quote_checks_created,
+            fresh,
+            stale,
+            unusable,
+            missing,
+            marks_created,
+            skipped,
+        )
