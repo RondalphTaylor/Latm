@@ -21,6 +21,10 @@ Stale or missing source facts always produce a flagged `hold`. These recommendat
 are available through the bounded attention feed and never mutate a position, submit
 an order, or enable live trading.
 
+New attention-required decisions create one deduplicated paper-only alert-journal record.
+Repeated monitor calls replay the decision and do not create another alert. Alert records do
+not send external messages, submit orders, or grant any execution authority.
+
 The read-only dashboard displays the latest attention-required NFL pilot recommendations
 through `GET /nfl-pilot-monitor/attention`. It contains no monitoring-run, disposition,
 or execution control.

@@ -295,3 +295,27 @@ class NflPilotMonitoringDecisionRecord(Base):
     execution_mode: Mapped[str] = mapped_column(String(10), nullable=False)
     live_trading_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
     audit: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+
+
+class NflPilotAlertRecord(Base):
+    """Deduplicated paper-only notification fact; no external delivery authority."""
+
+    __tablename__ = "nfl_pilot_alerts"
+    __table_args__ = (
+        UniqueConstraint("decision_id", name="uq_nfl_pilot_alerts_decision"),
+        CheckConstraint(
+            "execution_mode = 'paper' AND NOT live_trading_enabled",
+            name="ck_nfl_pilot_alerts_paper",
+        ),
+        Index("ix_nfl_pilot_alerts_created", "created_at"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    decision_id: Mapped[UUID] = mapped_column(
+        ForeignKey("nfl_pilot_monitoring_decisions.id", ondelete="RESTRICT"), nullable=False
+    )
+    severity: Mapped[str] = mapped_column(String(20), nullable=False)
+    message: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    execution_mode: Mapped[str] = mapped_column(String(10), nullable=False)
+    live_trading_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    audit: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)

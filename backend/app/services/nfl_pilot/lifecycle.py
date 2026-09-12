@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.markets import MarketPriceRecord, MarketResolutionRecord
 from app.models.nfl_forecasting import NflPayoutForecastRecord
 from app.models.nfl_pilot import (
+    NflPilotAlertRecord,
     NflPilotEntryRecord,
     NflPilotMonitoringDecisionRecord,
     NflPilotPositionEventRecord,
@@ -393,7 +394,7 @@ class NflPilotLifecycleService:
         price: MarketPriceRecord | None,
         forecast: NflPayoutForecastRecord | None,
         now: datetime,
-    ) -> bool:
+    ) -> tuple[NflPilotMonitoringDecisionRecord, bool]:
         source = f"{position.id}:{price.id if price else 'missing'}:{forecast.id if forecast else 'missing'}"
         key = "nfl-pilot-decision:" + hashlib.sha256(source.encode()).hexdigest()
         existing = await self._session.scalar(
@@ -402,23 +403,45 @@ class NflPilotLifecycleService:
             )
         )
         if existing is not None:
+            return existing, False
+        record = NflPilotMonitoringDecisionRecord(
+            id=uuid4(),
+            idempotency_key=key,
+            position_id=position.id,
+            recommendation=recommendation.recommendation,
+            reason=recommendation.reason,
+            requires_attention=recommendation.requires_attention,
+            remaining_edge=recommendation.remaining_edge,
+            evaluated_at=now,
+            execution_mode="paper",
+            live_trading_enabled=False,
+            audit={
+                "market_price_id": str(price.id) if price else None,
+                "forecast_id": str(forecast.id) if forecast else None,
+            },
+        )
+        self._session.add(record)
+        await self._session.commit()
+        return record, True
+
+    async def _record_alert(self, decision: NflPilotMonitoringDecisionRecord) -> bool:
+        if not decision.requires_attention:
+            return False
+        existing = await self._session.scalar(
+            select(NflPilotAlertRecord).where(NflPilotAlertRecord.decision_id == decision.id)
+        )
+        if existing is not None:
             return False
         self._session.add(
-            NflPilotMonitoringDecisionRecord(
+            NflPilotAlertRecord(
                 id=uuid4(),
-                idempotency_key=key,
-                position_id=position.id,
-                recommendation=recommendation.recommendation,
-                reason=recommendation.reason,
-                requires_attention=recommendation.requires_attention,
-                remaining_edge=recommendation.remaining_edge,
-                evaluated_at=now,
+                decision_id=decision.id,
+                severity="attention",
+                message=f"NFL pilot {decision.recommendation}: {decision.reason}",
+                created_at=decision.evaluated_at,
                 execution_mode="paper",
                 live_trading_enabled=False,
-                audit={
-                    "market_price_id": str(price.id) if price else None,
-                    "forecast_id": str(forecast.id) if forecast else None,
-                },
+                audit={"position_id": str(decision.position_id)},
             )
         )
         await self._session.commit()
@@ -484,13 +507,14 @@ class NflPilotLifecycleService:
                 skipped += 1
                 holds += 1
                 attention_required += 1
-                await self._record_decision(
+                decision, _ = await self._record_decision(
                     position,
                     PilotRecommendation("hold", "quote_missing", True, None),
                     None,
                     None,
                     await self._now(),
                 )
+                await self._record_alert(decision)
                 continue
             now = await self._now()
             assessment = _quote_assessment(price, position.direction, now)
@@ -513,7 +537,10 @@ class NflPilotLifecycleService:
             reduces += int(recommendation.recommendation == "reduce")
             closes += int(recommendation.recommendation == "close")
             attention_required += int(recommendation.requires_attention)
-            await self._record_decision(position, recommendation, price, forecast, now)
+            decision, _ = await self._record_decision(
+                position, recommendation, price, forecast, now
+            )
+            await self._record_alert(decision)
             quote_checks_created += int(
                 await self._record_quote_check(position, price, assessment, now)
             )
