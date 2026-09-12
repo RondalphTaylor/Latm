@@ -256,7 +256,7 @@ export function Dashboard({ data, mode, viewModel }: DashboardProps) {
           ) : viewModel.nflAttention.length === 0 ? (
             <EmptyState title="No NFL pilot attention items">Fresh, qualifying pilot inputs will appear here only when review is needed.</EmptyState>
           ) : (
-            <div className="activity-list">
+            <><div className="activity-list">
               {viewModel.nflAttention.map((item) => (
                 <article key={item.id}>
                   <span className="activity-icon activity-monitoring" aria-hidden="true">!</span>
@@ -264,7 +264,7 @@ export function Dashboard({ data, mode, viewModel }: DashboardProps) {
                   <div className="activity-values"><strong>{formatSignedPercent(item.remaining_edge)}</strong><span>Recommendation only</span></div>
                 </article>
               ))}
-            </div>
+            </div>{data.nflAlerts.ok && data.nflAlerts.data.length > 0 ? <p className="workflow-copy">Alert journal: {data.nflAlerts.data.map((alert) => alert.message).join(" · ")}</p> : null}</>
           )}
         </Section>
 

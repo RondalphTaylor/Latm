@@ -475,6 +475,15 @@ class NflPilotLifecycleService:
             )
         )
 
+    async def alerts(self, limit: int) -> list[NflPilotAlertRecord]:
+        return list(
+            await self._session.scalars(
+                select(NflPilotAlertRecord)
+                .order_by(NflPilotAlertRecord.created_at.desc())
+                .limit(limit)
+            )
+        )
+
     async def monitor(
         self, scenario_id: UUID
     ) -> tuple[int, int, int, int, int, int, int, int, int, int, int, int]:

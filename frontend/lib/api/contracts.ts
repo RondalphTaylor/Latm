@@ -10,6 +10,14 @@ export interface NflPilotMonitoringDecisionResponse {
   readonly evaluated_at: string;
 }
 
+export interface NflPilotAlertResponse {
+  readonly id: string;
+  readonly decision_id: string;
+  readonly severity: string;
+  readonly message: string;
+  readonly created_at: string;
+}
+
 export interface HealthResponse {
   readonly status: string;
 }

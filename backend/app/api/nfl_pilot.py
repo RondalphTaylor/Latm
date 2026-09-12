@@ -114,6 +114,15 @@ class NflPilotMonitoringDecisionResponse(BaseModel):
     evaluated_at: datetime
 
 
+class NflPilotAlertResponse(BaseModel):
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+    id: UUID
+    decision_id: UUID
+    severity: str
+    message: str
+    created_at: datetime
+
+
 @router.post("/nfl-pilot-scenarios/register", response_model=NflPilotScenarioResponse)
 async def register_nfl_pilot_scenario(
     portfolio_id: UUID,
@@ -229,6 +238,15 @@ async def list_nfl_pilot_attention(
 ) -> list[NflPilotMonitoringDecisionResponse]:
     records = await NflPilotLifecycleService(session).attention(limit)
     return [NflPilotMonitoringDecisionResponse.model_validate(record) for record in records]
+
+
+@router.get("/nfl-pilot-alerts", response_model=list[NflPilotAlertResponse])
+async def list_nfl_pilot_alerts(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    limit: Annotated[int, Query(ge=1, le=25)] = 8,
+) -> list[NflPilotAlertResponse]:
+    records = await NflPilotLifecycleService(session).alerts(limit)
+    return [NflPilotAlertResponse.model_validate(record) for record in records]
 
 
 @router.post("/nfl-pilot-monitor/run", response_model=NflPilotMonitorResponse)
