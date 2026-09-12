@@ -77,6 +77,23 @@ class NflPilotPositionEventRunResponse(BaseModel):
     event: NflPilotPositionEventResponse
 
 
+class NflPilotLedgerResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    open_positions: int
+    settled_positions: int
+    committed_capital: Decimal
+    realized_pnl: Decimal
+    current_bankroll: Decimal
+    available_bankroll: Decimal
+
+
+class NflPilotMonitorResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    examined: int
+    marks_created: int
+    skipped: int
+
+
 @router.post("/nfl-pilot-scenarios/register", response_model=NflPilotScenarioResponse)
 async def register_nfl_pilot_scenario(
     portfolio_id: UUID,
@@ -157,3 +174,32 @@ async def settle_nfl_pilot_position(
     return NflPilotPositionEventRunResponse(
         created=created, event=NflPilotPositionEventResponse.model_validate(record)
     )
+
+
+@router.get("/nfl-pilot-scenarios/{scenario_id}/ledger", response_model=NflPilotLedgerResponse)
+async def get_nfl_pilot_ledger(
+    scenario_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> NflPilotLedgerResponse:
+    try:
+        result = await NflPilotLifecycleService(session).summary(scenario_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return NflPilotLedgerResponse.model_validate(result)
+
+
+@router.post("/nfl-pilot-monitor/run", response_model=NflPilotMonitorResponse)
+async def run_nfl_pilot_monitor(
+    scenario_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> NflPilotMonitorResponse:
+    if settings.trading_mode is not TradingMode.PAPER:
+        raise HTTPException(status_code=409, detail="NFL pilot monitoring requires paper mode")
+    try:
+        examined, marks_created, skipped = await NflPilotLifecycleService(session).monitor(
+            scenario_id
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return NflPilotMonitorResponse(examined=examined, marks_created=marks_created, skipped=skipped)

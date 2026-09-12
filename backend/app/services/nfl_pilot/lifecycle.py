@@ -13,6 +13,7 @@ from app.models.nfl_pilot import (
     NflPilotEntryRecord,
     NflPilotPositionEventRecord,
     NflPilotPositionRecord,
+    NflPilotScenarioRecord,
 )
 
 
@@ -86,6 +87,10 @@ class NflPilotLifecycleService:
                 )
             )
             if existing is not None:
+                if existing.event_type != "mark" or existing.audit.get("entry_id") != str(entry_id):
+                    raise ValueError(
+                        "idempotency key belongs to another NFL pilot lifecycle action"
+                    )
                 await self._session.commit()
                 return existing, False
             now = await self._now()
@@ -105,6 +110,15 @@ class NflPilotLifecycleService:
             mark_price = bid if bid is not None and bid > 0 else ask
             if mark_price is None or not Decimal("0") < mark_price < Decimal("1"):
                 raise ValueError("NFL pilot quote has no usable directional mark")
+            prior_mark = await self._session.scalar(
+                select(NflPilotPositionEventRecord).where(
+                    NflPilotPositionEventRecord.position_id == position.id,
+                    NflPilotPositionEventRecord.market_price_id == price.id,
+                )
+            )
+            if prior_mark is not None:
+                await self._session.commit()
+                return prior_mark, False
             market_value = _floor_cent(mark_price * position.quantity)
             unrealized = market_value - position.total_cost_basis
             event = NflPilotPositionEventRecord(
@@ -152,22 +166,38 @@ class NflPilotLifecycleService:
                 )
             )
             if existing is not None:
+                if existing.event_type != "settlement" or existing.audit.get("entry_id") != str(
+                    entry_id
+                ):
+                    raise ValueError(
+                        "idempotency key belongs to another NFL pilot lifecycle action"
+                    )
                 await self._session.commit()
                 return existing, False
             now = await self._now()
             position = await self._position(entry_id, now)
             if position.status != "open":
                 raise ValueError("NFL pilot position is not open")
-            resolution = await self._session.scalar(
-                select(MarketResolutionRecord)
-                .where(MarketResolutionRecord.market_id == position.market_id)
-                .order_by(
-                    MarketResolutionRecord.settled_at.desc(), MarketResolutionRecord.id.desc()
+            resolutions = list(
+                await self._session.scalars(
+                    select(MarketResolutionRecord)
+                    .where(MarketResolutionRecord.market_id == position.market_id)
+                    .order_by(
+                        MarketResolutionRecord.settled_at.desc(), MarketResolutionRecord.id.desc()
+                    )
                 )
-                .limit(1)
             )
-            if resolution is None:
+            if not resolutions:
                 raise ValueError("NFL pilot settlement requires an official market resolution")
+            payout_pairs = {(item.yes_payout, item.no_payout) for item in resolutions}
+            if len(payout_pairs) != 1:
+                raise ValueError("NFL pilot settlement has conflicting official resolutions")
+            resolution = resolutions[0]
+            if (
+                resolution.source != "official_provider"
+                or resolution.settled_at > resolution.retrieved_at
+            ):
+                raise ValueError("NFL pilot settlement resolution is not an official final fact")
             payout = resolution.yes_payout if position.direction == "yes" else resolution.no_payout
             proceeds = _floor_cent(payout * position.quantity)
             realized = proceeds - position.total_cost_basis
@@ -205,3 +235,70 @@ class NflPilotLifecycleService:
         except Exception:
             await self._session.rollback()
             raise
+
+    async def summary(self, scenario_id: UUID) -> dict[str, Decimal | int]:
+        """Return reconciled pilot-only balances without touching the generic portfolio."""
+        rows = list(
+            await self._session.scalars(
+                select(NflPilotPositionRecord).where(
+                    NflPilotPositionRecord.scenario_id == scenario_id
+                )
+            )
+        )
+        if not rows:
+            entry_count = await self._session.scalar(
+                select(func.count())
+                .select_from(NflPilotEntryRecord)
+                .where(NflPilotEntryRecord.scenario_id == scenario_id)
+            )
+            if not entry_count:
+                raise LookupError("NFL pilot scenario has no entries")
+        open_cost = sum(
+            (row.total_cost_basis for row in rows if row.status == "open"), Decimal("0.00")
+        )
+        realized = sum(
+            (row.realized_pnl for row in rows if row.status == "settled"), Decimal("0.00")
+        )
+        scenario = await self._session.get(NflPilotScenarioRecord, scenario_id)
+        if scenario is None:
+            raise LookupError("NFL pilot scenario not found")
+        current_bankroll = scenario.starting_bankroll + realized
+        return {
+            "open_positions": sum(row.status == "open" for row in rows),
+            "settled_positions": sum(row.status == "settled" for row in rows),
+            "committed_capital": open_cost,
+            "realized_pnl": realized,
+            "current_bankroll": current_bankroll,
+            "available_bankroll": current_bankroll - open_cost,
+        }
+
+    async def monitor(self, scenario_id: UUID) -> tuple[int, int, int]:
+        """Append at most one fresh mark per open position and quote snapshot."""
+        positions = list(
+            await self._session.scalars(
+                select(NflPilotPositionRecord).where(
+                    NflPilotPositionRecord.scenario_id == scenario_id,
+                    NflPilotPositionRecord.status == "open",
+                )
+            )
+        )
+        created = 0
+        skipped = 0
+        for position in positions:
+            price = await self._session.scalar(
+                select(MarketPriceRecord)
+                .where(MarketPriceRecord.market_id == position.market_id)
+                .order_by(MarketPriceRecord.retrieved_at.desc(), MarketPriceRecord.id.desc())
+                .limit(1)
+            )
+            if price is None:
+                continue
+            try:
+                _, was_created = await self.mark(
+                    position.entry_id, f"nfl-pilot-monitor:{position.id}:{price.id}"
+                )
+            except ValueError:
+                skipped += 1
+                continue
+            created += int(was_created)
+        return len(positions), created, skipped

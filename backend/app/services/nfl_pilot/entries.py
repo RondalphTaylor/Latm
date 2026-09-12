@@ -5,13 +5,17 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.markets import MarketPriceRecord
 from app.models.nfl_forecasting import NflPayoutForecastRecord
-from app.models.nfl_pilot import NflPilotEntryRecord, NflPilotScenarioRecord
+from app.models.nfl_pilot import (
+    NflPilotEntryRecord,
+    NflPilotPositionRecord,
+    NflPilotScenarioRecord,
+)
 from app.models.nfl_preflights import NflPaperPreflightRecord
 from app.services.nfl_research.shadow_repository import NflShadowForecastRepository
 
@@ -86,9 +90,18 @@ class NflPilotEntryService:
             if latest_price is None or str(latest_price.id) != price_id:
                 raise ValueError("NFL pilot quote is no longer current")
             committed = await self._session.scalar(
-                select(
-                    func.coalesce(func.sum(NflPilotEntryRecord.total_cost), Decimal("0.00"))
-                ).where(NflPilotEntryRecord.scenario_id == scenario.id)
+                select(func.coalesce(func.sum(NflPilotEntryRecord.total_cost), Decimal("0.00")))
+                .outerjoin(
+                    NflPilotPositionRecord,
+                    NflPilotPositionRecord.entry_id == NflPilotEntryRecord.id,
+                )
+                .where(
+                    NflPilotEntryRecord.scenario_id == scenario.id,
+                    or_(
+                        NflPilotPositionRecord.id.is_(None),
+                        NflPilotPositionRecord.status == "open",
+                    ),
+                )
             )
             committed_cost = Decimal(str(committed))
             entry_cap = (scenario.starting_bankroll * scenario.per_entry_exposure).quantize(

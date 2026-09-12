@@ -6,6 +6,11 @@ official market-resolution fact, including a fractional payout. Both actions are
 idempotent, paper-only, and retain their own NFL audit history. Sports scores do
 not settle a pilot contract.
 
+The NFL pilot ledger reports committed capital, realized P&L, current bankroll,
+and available bankroll separately from generic portfolios. Only open positions
+consume aggregate exposure; official settlement releases that capital. The bounded
+monitor creates at most one mark per fresh quote and reports stale quotes as skipped.
+
 Release 0.11.30 adds a separate NFL pilot-entry journal. It accepts only a current,
 cost-qualified NFL preflight attached to a registered paper scenario, revalidates the
 underlying shadow source and market quote, and enforces that scenario's per-entry and

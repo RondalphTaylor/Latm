@@ -11,6 +11,7 @@ from app.core.config import Settings, get_settings
 from app.db.session import get_session
 from app.models.nfl_pilot import NflPilotEntryRecord
 from app.services.nfl_pilot.entries import NflPilotEntryService
+from app.services.nfl_pilot.lifecycle import NflPilotLifecycleService
 
 
 def entry() -> NflPilotEntryRecord:
@@ -95,3 +96,17 @@ def test_pilot_entry_rejects_nonpaper_mode() -> None:
             },
         )
     assert response.status_code == 409
+
+
+def test_pilot_monitor_reports_stale_quote_skip(monkeypatch: MonkeyPatch) -> None:
+    async def monitor_stub(
+        self: NflPilotLifecycleService, scenario_id: UUID
+    ) -> tuple[int, int, int]:
+        assert scenario_id == UUID(int=2)
+        return 1, 0, 1
+
+    monkeypatch.setattr(NflPilotLifecycleService, "monitor", monitor_stub)
+    with TestClient(application()) as client:
+        response = client.post(f"/nfl-pilot-monitor/run?scenario_id={UUID(int=2)}")
+    assert response.status_code == 200
+    assert response.json() == {"examined": 1, "marks_created": 0, "skipped": 1}
