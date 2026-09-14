@@ -252,6 +252,33 @@ def test_audit_verification_summary_is_scenario_scoped_and_read_only(
     assert captured == {"scenario_id": UUID(int=2)}
 
 
+def test_audit_verification_history_accepts_a_bounded_outcome_filter(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    async def history_stub(
+        self: NflPilotLifecycleService,
+        scenario_id: UUID,
+        limit: int,
+        offset: int,
+        matches: bool | None = None,
+    ) -> list[object]:
+        captured.update(
+            scenario_id=scenario_id, limit=limit, offset=offset, matches=matches
+        )
+        return []
+
+    monkeypatch.setattr(NflPilotLifecycleService, "audit_verifications", history_stub)
+    with TestClient(application()) as client:
+        response = client.get(
+            f"/nfl-pilot-monitor/audit/verification-history?scenario_id={UUID(int=2)}&limit=9&offset=8&matches=false"
+        )
+
+    assert response.status_code == 200
+    assert captured == {"scenario_id": UUID(int=2), "limit": 9, "offset": 8, "matches": False}
+
+
 def test_recommendation_audit_summary_and_export_are_bounded_reads(
     monkeypatch: MonkeyPatch,
 ) -> None:

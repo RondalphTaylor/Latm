@@ -153,11 +153,13 @@ export async function fetchNflPilotAuditVerificationHistory(
   config: Readonly<AppConfig>,
   scenarioId: string,
   offset = 0,
+  matches: boolean | null = null,
   fetcher: Fetcher = fetch,
 ): Promise<LoadState<readonly NflPilotAuditVerificationHistoryResponse[]>> {
+  const outcomeQuery = matches === null ? "" : `&matches=${matches}`;
   return load<NflPilotAuditVerificationHistoryResponse[]>(
     config.backendApiUrl,
-    `/nfl-pilot-monitor/audit/verification-history?scenario_id=${encodeURIComponent(scenarioId)}&limit=9&offset=${offset}`,
+    `/nfl-pilot-monitor/audit/verification-history?scenario_id=${encodeURIComponent(scenarioId)}&limit=9&offset=${offset}${outcomeQuery}`,
     [],
     isArray<NflPilotAuditVerificationHistoryResponse>,
     fetcher,

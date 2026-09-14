@@ -738,13 +738,16 @@ class NflPilotLifecycleService:
         return record
 
     async def audit_verifications(
-        self, scenario_id: UUID, limit: int, offset: int
+        self, scenario_id: UUID, limit: int, offset: int, matches: bool | None = None
     ) -> list[NflPilotAuditVerificationRecord]:
+        statement = select(NflPilotAuditVerificationRecord).where(
+            NflPilotAuditVerificationRecord.scenario_id == scenario_id
+        )
+        if matches is not None:
+            statement = statement.where(NflPilotAuditVerificationRecord.matches == matches)
         return list(
             await self._session.scalars(
-                select(NflPilotAuditVerificationRecord)
-                .where(NflPilotAuditVerificationRecord.scenario_id == scenario_id)
-                .order_by(NflPilotAuditVerificationRecord.verified_at.desc())
+                statement.order_by(NflPilotAuditVerificationRecord.verified_at.desc())
                 .limit(limit)
                 .offset(offset)
             )

@@ -15,10 +15,13 @@ const isUuid = (value: string): boolean =>
 
 const isFingerprint = (value: string): boolean => /^[0-9a-f]{64}$/i.test(value);
 
-function historyHref(scenarioId: string, fingerprint: string | null, offset: number): string {
+function historyHref(
+  scenarioId: string, fingerprint: string | null, offset: number, outcome: "match" | "mismatch" | null,
+): string {
   const query = new URLSearchParams({ scenario: scenarioId });
   if (fingerprint !== null) query.set("fingerprint", fingerprint);
   if (offset > 0) query.set("history_offset", String(offset));
+  if (outcome !== null) query.set("history_outcome", outcome);
   return `/audit-verification?${query.toString()}`;
 }
 
@@ -39,6 +42,9 @@ export default async function AuditVerificationDetailPage({
   const historyOffset = Number.isSafeInteger(requestedOffset) && requestedOffset <= 10_000
     ? requestedOffset
     : 0;
+  const historyOutcome = query.history_outcome === "match" || query.history_outcome === "mismatch"
+    ? query.history_outcome
+    : null;
   const detail = await fetchNflPilotAuditVerificationDetail(
     getAppConfig(), scenarioId, verificationId,
   );
@@ -49,7 +55,7 @@ export default async function AuditVerificationDetailPage({
       <p className="eyebrow">NFL pilot · paper only</p>
       <h1>Verification record detail</h1>
       <p>Immutable, user-requested evidence that an audit-export fingerprint was checked. This page cannot record, edit, or remove a verification.</p>
-      <Link href={historyHref(scenarioId, fingerprint, historyOffset)}>← Back to verification history</Link>
+      <Link href={historyHref(scenarioId, fingerprint, historyOffset, historyOutcome)}>← Back to verification history</Link>
       {!detail.ok ? (
         <p className="audit-detail-error">Verification detail is unavailable: {detail.error}</p>
       ) : detail.data === null ? null : (

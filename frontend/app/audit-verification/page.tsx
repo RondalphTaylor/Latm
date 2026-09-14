@@ -20,13 +20,23 @@ const isFingerprint = (value: string): boolean => /^[0-9a-f]{64}$/i.test(value);
 
 const historyPageSize = 8;
 
-function historyHref(scenarioId: string, fingerprint: string | null, offset: number): string {
+type HistoryOutcome = "match" | "mismatch" | null;
+
+function historyHref(
+  scenarioId: string,
+  fingerprint: string | null,
+  offset: number,
+  outcome: HistoryOutcome,
+): string {
   const params = new URLSearchParams({ scenario: scenarioId });
   if (fingerprint !== null) {
     params.set("fingerprint", fingerprint);
   }
   if (offset > 0) {
     params.set("history_offset", String(offset));
+  }
+  if (outcome !== null) {
+    params.set("history_outcome", outcome);
   }
   return `/audit-verification?${params.toString()}`;
 }
@@ -36,6 +46,7 @@ function historyDetailHref(
   verificationId: string,
   fingerprint: string | null,
   offset: number,
+  outcome: HistoryOutcome,
 ): string {
   const params = new URLSearchParams({ scenario: scenarioId });
   if (fingerprint !== null) {
@@ -43,6 +54,9 @@ function historyDetailHref(
   }
   if (offset > 0) {
     params.set("history_offset", String(offset));
+  }
+  if (outcome !== null) {
+    params.set("history_outcome", outcome);
   }
   return `/audit-verification/${encodeURIComponent(verificationId)}?${params.toString()}`;
 }
@@ -62,10 +76,15 @@ export default async function AuditVerificationPage({ searchParams }: AuditVerif
   const historyOffset = Number.isSafeInteger(requestedHistoryOffset) && requestedHistoryOffset <= 10_000
     ? requestedHistoryOffset
     : 0;
+  const historyOutcome: HistoryOutcome = query.history_outcome === "match" || query.history_outcome === "mismatch"
+    ? query.history_outcome
+    : null;
   const verification = fingerprint === null
     ? null
     : await verifyNflPilotRecommendationAuditExport(getAppConfig(), scenarioId, fingerprint);
-  const history = await fetchNflPilotAuditVerificationHistory(getAppConfig(), scenarioId, historyOffset);
+  const history = await fetchNflPilotAuditVerificationHistory(
+    getAppConfig(), scenarioId, historyOffset, historyOutcome === null ? null : historyOutcome === "match",
+  );
   const historySummary = await fetchNflPilotAuditVerificationSummary(getAppConfig(), scenarioId);
   const historyRows = history.data.slice(0, historyPageSize);
   const historyHasNext = history.data.length > historyPageSize;
@@ -116,19 +135,24 @@ export default async function AuditVerificationPage({ searchParams }: AuditVerif
         {!historySummary.ok ? <p className="audit-detail-error">Integrity summary is unavailable: {historySummary.error}</p> : (
           <p>{historySummary.data === null ? "No integrity summary is available." : `${historySummary.data.total} recorded checks · ${historySummary.data.matches} match · ${historySummary.data.mismatches} no match`}</p>
         )}
+        <p className="audit-filter-links" aria-label="Verification history outcome filter">
+          <Link className={historyOutcome === null ? "filter-link-active" : "filter-link"} href={historyHref(scenarioId, fingerprint, 0, null)}>All</Link>
+          {" · "}<Link className={historyOutcome === "match" ? "filter-link-active" : "filter-link"} href={historyHref(scenarioId, fingerprint, 0, "match")}>Matches</Link>
+          {" · "}<Link className={historyOutcome === "mismatch" ? "filter-link-active" : "filter-link"} href={historyHref(scenarioId, fingerprint, 0, "mismatch")}>No matches</Link>
+        </p>
         {!history.ok ? <p className="audit-detail-error">History is unavailable: {history.error}</p> : historyRows.length === 0 ? <p>No verification checks have been explicitly recorded yet.</p> : (
           <ul>
             {historyRows.map((item) => <li key={item.id}>
               <strong>{item.matches ? "Match" : "No match"}</strong> · {formatTimestamp(item.verified_at)} · {item.row_count} rows<br />
-              <small>Provided {item.provided_fingerprint.slice(0, 12)}… · Current {item.current_fingerprint.slice(0, 12)}… · <Link href={historyDetailHref(scenarioId, item.id, fingerprint, historyOffset)}>View detail</Link></small>
+              <small>Provided {item.provided_fingerprint.slice(0, 12)}… · Current {item.current_fingerprint.slice(0, 12)}… · <Link href={historyDetailHref(scenarioId, item.id, fingerprint, historyOffset, historyOutcome)}>View detail</Link></small>
             </li>)}
           </ul>
         )}
         {!history.ok ? null : (
           <nav className="audit-pagination" aria-label="Verification history pages">
-            {historyOffset === 0 ? <span>Previous</span> : <Link href={historyHref(scenarioId, fingerprint, Math.max(0, historyOffset - historyPageSize))}>Previous</Link>}
+            {historyOffset === 0 ? <span>Previous</span> : <Link href={historyHref(scenarioId, fingerprint, Math.max(0, historyOffset - historyPageSize), historyOutcome)}>Previous</Link>}
             <span>{historyRows.length === 0 ? "No rows" : `Rows ${historyOffset + 1}–${historyOffset + historyRows.length}`}</span>
-            {historyHasNext ? <Link href={historyHref(scenarioId, fingerprint, historyOffset + historyPageSize)}>Next</Link> : <span>Next</span>}
+            {historyHasNext ? <Link href={historyHref(scenarioId, fingerprint, historyOffset + historyPageSize, historyOutcome)}>Next</Link> : <span>Next</span>}
           </nav>
         )}
       </section>

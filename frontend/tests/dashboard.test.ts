@@ -202,6 +202,7 @@ test("audit verification history adapter reads a bounded page of the immutable j
     { tradingMode: "paper", backendApiUrl: "http://backend.test" },
     "c8eb0233-8d80-46e3-8ce1-05b0687cf1e1",
     8,
+    null,
     fetcher,
   );
 

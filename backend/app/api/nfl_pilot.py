@@ -568,10 +568,11 @@ async def list_nfl_pilot_recommendation_audit_verifications(
     session: Annotated[AsyncSession, Depends(get_session)],
     limit: Annotated[int, Query(ge=1, le=25)] = 8,
     offset: Annotated[int, Query(ge=0)] = 0,
+    matches: bool | None = None,
 ) -> list[NflPilotAuditVerificationHistoryResponse]:
     """List append-only user-requested verification facts for one paper scenario."""
     records = await NflPilotLifecycleService(session).audit_verifications(
-        scenario_id, limit, offset
+        scenario_id, limit, offset, matches
     )
     return [NflPilotAuditVerificationHistoryResponse.model_validate(record) for record in records]
 

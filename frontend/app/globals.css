@@ -930,6 +930,7 @@ td small {
 .audit-verification-history ul { padding-left: 1.2rem; }
 .audit-verification-history li { margin: 0.8rem 0; }
 .audit-verification-history small { color: var(--muted); overflow-wrap: anywhere; }
+.audit-filter-links { font-size: 0.85rem; }
 
 .mlb-result-list {
   margin-top: 0.8rem;
