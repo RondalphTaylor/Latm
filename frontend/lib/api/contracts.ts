@@ -99,6 +99,16 @@ export interface NflPilotRecommendationAuditVerificationResponse {
   readonly retention_policy_version: string;
 }
 
+export interface NflPilotAuditVerificationHistoryResponse {
+  readonly id: string;
+  readonly scenario_id: string;
+  readonly provided_fingerprint: string;
+  readonly current_fingerprint: string;
+  readonly matches: boolean;
+  readonly row_count: number;
+  readonly verified_at: string;
+}
+
 export interface HealthResponse {
   readonly status: string;
 }

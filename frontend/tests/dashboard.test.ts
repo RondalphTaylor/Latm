@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   fetchDashboardData,
   fetchNflPilotRecommendationAuditDetail,
+  fetchNflPilotAuditVerificationHistory,
   verifyNflPilotRecommendationAuditExport,
 } from "@/lib/api/client";
 import { getAppConfig } from "@/lib/config";
@@ -177,5 +178,32 @@ test("audit verification adapter uses a bounded GET without execution routes", a
 
   assert.equal(result.data?.matches, true);
   assert.ok(calls[0]?.includes("/nfl-pilot-monitor/audit/verify?"));
+  assert.ok(calls.every((url) => !url.includes("paper-execution")));
+});
+
+test("audit verification history adapter reads the bounded immutable journal", async () => {
+  const calls: string[] = [];
+  const fetcher = (async (input: string | URL | Request) => {
+    calls.push(String(input));
+    return new Response(JSON.stringify([{
+      id: "history-1",
+      scenario_id: "c8eb0233-8d80-46e3-8ce1-05b0687cf1e1",
+      provided_fingerprint: "a".repeat(64),
+      current_fingerprint: "b".repeat(64),
+      matches: false,
+      row_count: 2,
+      verified_at: "2026-09-14T15:00:00Z",
+    }]), { status: 200 });
+  }) as typeof fetch;
+
+  const result = await fetchNflPilotAuditVerificationHistory(
+    { tradingMode: "paper", backendApiUrl: "http://backend.test" },
+    "c8eb0233-8d80-46e3-8ce1-05b0687cf1e1",
+    fetcher,
+  );
+
+  assert.equal(result.data?.[0]?.matches, false);
+  assert.ok(calls[0]?.includes("/nfl-pilot-monitor/audit/verification-history?"));
+  assert.ok(calls[0]?.includes("limit=8&offset=0"));
   assert.ok(calls.every((url) => !url.includes("paper-execution")));
 });

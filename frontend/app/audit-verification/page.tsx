@@ -1,8 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { verifyNflPilotRecommendationAuditExport } from "@/lib/api/client";
+import {
+  fetchNflPilotAuditVerificationHistory,
+  verifyNflPilotRecommendationAuditExport,
+} from "@/lib/api/client";
 import { getAppConfig } from "@/lib/config";
+import { formatTimestamp } from "@/lib/format";
 
 interface AuditVerificationPageProps {
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -25,6 +29,7 @@ export default async function AuditVerificationPage({ searchParams }: AuditVerif
   const verification = fingerprint === null
     ? null
     : await verifyNflPilotRecommendationAuditExport(getAppConfig(), scenarioId, fingerprint);
+  const history = await fetchNflPilotAuditVerificationHistory(getAppConfig(), scenarioId);
 
   return (
     <main className="audit-detail-page">
@@ -67,6 +72,17 @@ export default async function AuditVerificationPage({ searchParams }: AuditVerif
           </form>
         </section>
       )}
+      <section className="audit-verification-history" aria-labelledby="verification-history-title">
+        <h2 id="verification-history-title">Recorded verification history</h2>
+        {!history.ok ? <p className="audit-detail-error">History is unavailable: {history.error}</p> : history.data.length === 0 ? <p>No verification checks have been explicitly recorded yet.</p> : (
+          <ul>
+            {history.data.map((item) => <li key={item.id}>
+              <strong>{item.matches ? "Match" : "No match"}</strong> · {formatTimestamp(item.verified_at)} · {item.row_count} rows<br />
+              <small>Provided {item.provided_fingerprint.slice(0, 12)}… · Current {item.current_fingerprint.slice(0, 12)}…</small>
+            </li>)}
+          </ul>
+        )}
+      </section>
     </main>
   );
 }
