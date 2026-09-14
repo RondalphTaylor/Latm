@@ -45,6 +45,9 @@ function dashboardData(portfolios: readonly PortfolioResponse[] = []): Dashboard
     }),
     mlbBackfillCheckpoint: ok(null),
     mlbBackfillBatches: ok([]),
+    nflAttention: ok([]),
+    nflAlerts: ok([]),
+    nflDispositions: ok([]),
   };
 }
 
@@ -61,6 +64,7 @@ test("dashboard renders all read-only monitoring sections and a permanent paper 
     "NBA market records",
     "MLB dataset readiness",
     "Recent paper activity",
+    "Paper disposition history",
     "Performance &amp; calibration",
   ]) {
     assert.ok(html.includes(heading));
@@ -71,6 +75,38 @@ test("dashboard renders all read-only monitoring sections and a permanent paper 
   assert.ok(!html.includes("<form"));
   assert.ok(html.includes("14<span> / 150"));
   assert.ok(html.includes("Model fitting: disabled"));
+});
+
+test("dashboard renders immutable NFL pilot disposition facts without controls", () => {
+  const original = dashboardData();
+  const data: DashboardData = {
+    ...original,
+    nflDispositions: ok([
+      {
+        id: "disposition-1",
+        decision_id: "decision-1",
+        position_id: "position-12345678",
+        action: "reduce",
+        quantity: 2,
+        execution_price: "0.410000",
+        gross_proceeds: "0.82",
+        allocated_cost_basis: "0.90",
+        realized_pnl_increment: "-0.08",
+        recorded_at: "2026-09-13T20:00:00Z",
+        execution_mode: "paper",
+        live_trading_enabled: false,
+      },
+    ]),
+  };
+  const html = renderToStaticMarkup(
+    <Dashboard data={data} mode="paper" viewModel={buildDashboardViewModel(data)} />,
+  );
+
+  assert.ok(html.includes("Latest immutable simulated NFL exits"));
+  assert.ok(html.includes("position"));
+  assert.ok(html.includes("−$0.08"));
+  assert.ok(!html.includes("<button"));
+  assert.ok(!html.includes("<form"));
 });
 
 test("MLB workflow observability renders checkpoint and latest immutable batch", () => {

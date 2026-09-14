@@ -73,11 +73,12 @@ test("dashboard adapter uses only bounded GET reads and skips portfolio routes w
   assert.deepEqual(result.positions.data, []);
   assert.equal(result.mlbBackfillCheckpoint.ok, true);
   assert.equal(result.mlbBackfillCheckpoint.data, null);
-  assert.equal(calls.length, 10);
+  assert.equal(calls.length, 13);
   assert.ok(calls.every((call) => call.init?.method === undefined));
   assert.ok(calls.every((call) => call.init?.cache === "no-store"));
   assert.ok(calls.every((call) => !call.url.includes("paper-execution")));
   assert.ok(calls.every((call) => !call.url.includes("position-monitoring/run")));
+  assert.ok(calls.some((call) => call.url.includes("/nfl-pilot-dispositions?")));
 });
 
 test("one malformed resource degrades only that dashboard section", async () => {

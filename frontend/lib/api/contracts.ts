@@ -18,6 +18,21 @@ export interface NflPilotAlertResponse {
   readonly created_at: string;
 }
 
+export interface NflPilotDispositionEventResponse {
+  readonly id: string;
+  readonly decision_id: string;
+  readonly position_id: string;
+  readonly action: "reduce" | "close";
+  readonly quantity: number;
+  readonly execution_price: DecimalValue;
+  readonly gross_proceeds: DecimalValue;
+  readonly allocated_cost_basis: DecimalValue;
+  readonly realized_pnl_increment: DecimalValue;
+  readonly recorded_at: string;
+  readonly execution_mode: "paper";
+  readonly live_trading_enabled: false;
+}
+
 export interface HealthResponse {
   readonly status: string;
 }

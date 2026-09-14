@@ -145,6 +145,7 @@ export function Dashboard({ data, mode, viewModel }: DashboardProps) {
         <nav className="section-nav" aria-label="Dashboard sections">
           <a href="#positions">Positions</a>
           <a href="#attention">Attention</a>
+          <a href="#pilot-history">Pilot history</a>
           <a href="#forecasts">Forecasts</a>
           <a href="#opportunities">Edges</a>
           <a href="#markets">Markets</a>
@@ -265,6 +266,48 @@ export function Dashboard({ data, mode, viewModel }: DashboardProps) {
                 </article>
               ))}
             </div>{data.nflAlerts.ok && data.nflAlerts.data.length > 0 ? <p className="workflow-copy">Alert journal: {data.nflAlerts.data.map((alert) => alert.message).join(" · ")}</p> : null}</>
+          )}
+        </Section>
+
+        <Section
+          id="pilot-history"
+          eyebrow="NFL pilot"
+          title="Paper disposition history"
+          description="Immutable simulated reductions and closes. This view is observational and cannot submit an order."
+          note="Latest 8 simulated exits"
+        >
+          {!data.nflDispositions.ok ? (
+            <EmptyState title="Pilot disposition history is unavailable">{data.nflDispositions.error}</EmptyState>
+          ) : data.nflDispositions.data.length === 0 ? (
+            <EmptyState title="No NFL pilot dispositions">A revalidated paper reduce or close will appear here after it is recorded.</EmptyState>
+          ) : (
+            <TableRegion label="NFL pilot paper disposition history">
+              <table>
+                <caption>Latest immutable simulated NFL exits</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Action</th><th scope="col">Position</th><th scope="col" className="numeric">Qty</th>
+                    <th scope="col" className="numeric">Bid</th><th scope="col" className="numeric">Proceeds</th>
+                    <th scope="col" className="numeric">Realized</th><th scope="col">Recorded</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.nflDispositions.data.map((item) => (
+                    <tr key={item.id}>
+                      <td><StatusPill value={item.action} /></td>
+                      <td><strong>{item.position_id.slice(0, 8)}</strong><small>Paper only</small></td>
+                      <td className="numeric">{item.quantity}</td>
+                      <td className="numeric">{formatPrice(item.execution_price)}</td>
+                      <td className="numeric">{formatMoney(item.gross_proceeds)}</td>
+                      <td className={`numeric tone-${decimalSign(item.realized_pnl_increment)}`}>
+                        {formatSignedMoney(item.realized_pnl_increment)}
+                      </td>
+                      <td>{formatTimestamp(item.recorded_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableRegion>
           )}
         </Section>
 

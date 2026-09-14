@@ -6,6 +6,7 @@ import type {
   MarketResponse,
   NflPilotMonitoringDecisionResponse,
   NflPilotAlertResponse,
+  NflPilotDispositionEventResponse,
   MlbApprovedDatasetReadinessResponse,
   MlbBackfillBatchResponse,
   MlbBackfillCheckpointResponse,
@@ -42,6 +43,7 @@ export interface DashboardData {
   readonly mlbBackfillBatches: LoadState<readonly MlbBackfillBatchResponse[]>;
   readonly nflAttention: LoadState<readonly NflPilotMonitoringDecisionResponse[]>;
   readonly nflAlerts: LoadState<readonly NflPilotAlertResponse[]>;
+  readonly nflDispositions: LoadState<readonly NflPilotDispositionEventResponse[]>;
 }
 
 type Validator<T> = (value: unknown) => value is T;
@@ -109,6 +111,7 @@ export async function fetchDashboardData(
     mlbBackfillBatches,
     nflAttention,
     nflAlerts,
+    nflDispositions,
   ] =
     await Promise.all([
       load<HealthResponse | null>(
@@ -196,6 +199,13 @@ export async function fetchDashboardData(
         isArray<NflPilotAlertResponse>,
         fetcher,
       ),
+      load<NflPilotDispositionEventResponse[]>(
+        config.backendApiUrl,
+        "/nfl-pilot-dispositions?limit=8&offset=0",
+        [],
+        isArray<NflPilotDispositionEventResponse>,
+        fetcher,
+      ),
     ]);
 
   const primaryPortfolio =
@@ -259,5 +269,6 @@ export async function fetchDashboardData(
     mlbBackfillBatches,
     nflAttention,
     nflAlerts,
+    nflDispositions,
   };
 }

@@ -298,6 +298,17 @@ async def list_nfl_pilot_alerts(
     return [NflPilotAlertResponse.model_validate(record) for record in records]
 
 
+@router.get("/nfl-pilot-dispositions", response_model=list[NflPilotDispositionEventResponse])
+async def list_nfl_pilot_dispositions(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    limit: Annotated[int, Query(ge=1, le=25)] = 8,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[NflPilotDispositionEventResponse]:
+    """Expose immutable simulated exits for observational dashboard use only."""
+    records = await NflPilotLifecycleService(session).dispositions(limit, offset)
+    return [NflPilotDispositionEventResponse.model_validate(record) for record in records]
+
+
 @router.post("/nfl-pilot-monitor/run", response_model=NflPilotMonitorResponse)
 async def run_nfl_pilot_monitor(
     scenario_id: UUID,

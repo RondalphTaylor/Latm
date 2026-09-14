@@ -645,6 +645,17 @@ class NflPilotLifecycleService:
             )
         )
 
+    async def dispositions(self, limit: int, offset: int) -> list[NflPilotDispositionEventRecord]:
+        """Return bounded immutable paper disposition facts; this method never changes state."""
+        return list(
+            await self._session.scalars(
+                select(NflPilotDispositionEventRecord)
+                .order_by(NflPilotDispositionEventRecord.recorded_at.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+        )
+
     async def monitor(
         self, scenario_id: UUID
     ) -> tuple[int, int, int, int, int, int, int, int, int, int, int, int]:
