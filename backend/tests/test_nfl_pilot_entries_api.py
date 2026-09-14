@@ -125,6 +125,45 @@ def test_pilot_monitor_reports_stale_quote_skip(monkeypatch: MonkeyPatch) -> Non
     }
 
 
+def test_recommendation_audit_accepts_only_bounded_recommendation_filters(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    async def audit_stub(
+        self: NflPilotLifecycleService,
+        scenario_id: UUID,
+        recommendation: str | None,
+        limit: int,
+        offset: int,
+    ) -> list[dict[str, object]]:
+        captured.update(
+            scenario_id=scenario_id,
+            recommendation=recommendation,
+            limit=limit,
+            offset=offset,
+        )
+        return []
+
+    monkeypatch.setattr(NflPilotLifecycleService, "recommendation_audit", audit_stub)
+    with TestClient(application()) as client:
+        response = client.get(
+            f"/nfl-pilot-monitor/audit?scenario_id={UUID(int=2)}&recommendation=reduce"
+        )
+        invalid_response = client.get(
+            f"/nfl-pilot-monitor/audit?scenario_id={UUID(int=2)}&recommendation=buy"
+        )
+
+    assert response.status_code == 200
+    assert captured == {
+        "scenario_id": UUID(int=2),
+        "recommendation": "reduce",
+        "limit": 8,
+        "offset": 0,
+    }
+    assert invalid_response.status_code == 422
+
+
 def test_pilot_disposition_rejects_nonpaper_mode() -> None:
     app = application()
     app.dependency_overrides[get_settings] = lambda: Settings(

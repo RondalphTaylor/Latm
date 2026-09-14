@@ -105,3 +105,29 @@ test("one malformed resource degrades only that dashboard section", async () => 
   assert.equal(result.forecasts.ok, true);
   assert.deepEqual(result.forecasts.data, []);
 });
+
+test("dashboard forwards only the selected recommendation audit filter", async () => {
+  const calls: string[] = [];
+  const fetcher = (async (input: string | URL | Request) => {
+    const url = String(input);
+    calls.push(url);
+    const payload = url.endsWith("/health/ready") || url.endsWith("/mlb-approved-dataset-readiness")
+      ? { status: "ready" }
+      : [];
+    return new Response(JSON.stringify(payload), { status: 200 });
+  }) as typeof fetch;
+
+  await fetchDashboardData(
+    { tradingMode: "paper", backendApiUrl: "http://backend.test" },
+    fetcher,
+    {
+      pilotAuditScenarioId: "c8eb0233-8d80-46e3-8ce1-05b0687cf1e1",
+      pilotAuditRecommendation: "reduce",
+    },
+  );
+
+  assert.ok(calls.some((url) => url.includes(
+    "/nfl-pilot-monitor/audit?scenario_id=c8eb0233-8d80-46e3-8ce1-05b0687cf1e1&limit=8&offset=0&recommendation=reduce",
+  )));
+  assert.ok(calls.every((url) => !url.includes("paper-execution")));
+});

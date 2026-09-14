@@ -80,6 +80,14 @@ function Metric({ label, value, detail, tone = "flat" }: MetricProps) {
   );
 }
 
+function auditHref(scenarioId: string, recommendation: string | null): string {
+  const params = new URLSearchParams({ scenario: scenarioId });
+  if (recommendation !== null) {
+    params.set("recommendation", recommendation);
+  }
+  return `/?${params.toString()}#pilot-audit`;
+}
+
 function TableRegion({ label, children }: { readonly label: string; readonly children: ReactNode }) {
   return (
     <div className="table-region" role="region" aria-label={label} tabIndex={0}>
@@ -128,6 +136,13 @@ export function Dashboard({ data, mode, viewModel }: DashboardProps) {
   const snapshot = primaryPortfolio?.latest_snapshot;
   const isReady = data.health.ok && data.health.data?.status === "ready";
   const primaryModel = viewModel.modelPerformance[0];
+  const selectedAuditScenarioId = data.pilotAuditScenarioId;
+  const auditScenarioIds = Array.from(
+    new Set([
+      ...(selectedAuditScenarioId === null ? [] : [selectedAuditScenarioId]),
+      ...data.nflPilotPositions.data.map((position) => position.scenario_id),
+    ]),
+  );
 
   return (
     <div className="app-shell">
@@ -274,8 +289,30 @@ export function Dashboard({ data, mode, viewModel }: DashboardProps) {
           eyebrow="NFL pilot"
           title="Recommendation audit"
           description="Immutable monitoring recommendations with the exact quote and forecast lineage used at evaluation. A linked disposition is a recorded paper outcome, never a live order."
-          note="Latest 8 decisions"
+          note={data.pilotAuditRecommendation === null ? "Latest 8 decisions" : `${humanize(data.pilotAuditRecommendation)} decisions · latest 8`}
         >
+          {selectedAuditScenarioId === null ? null : (
+            <div className="workflow-copy audit-filters">
+              <p>Decision: {([null, "hold", "reduce", "close"] as const).map((recommendation) => (
+                <Link
+                  className={recommendation === data.pilotAuditRecommendation ? "filter-link filter-link-active" : "filter-link"}
+                  href={auditHref(selectedAuditScenarioId, recommendation)}
+                  key={recommendation ?? "all"}
+                >
+                  {recommendation === null ? "All" : humanize(recommendation)}
+                </Link>
+              ))}</p>
+              {auditScenarioIds.length < 2 ? null : <p>Scenario: {auditScenarioIds.map((scenarioId) => (
+                <Link
+                  className={scenarioId === selectedAuditScenarioId ? "filter-link filter-link-active" : "filter-link"}
+                  href={auditHref(scenarioId, data.pilotAuditRecommendation)}
+                  key={scenarioId}
+                >
+                  {scenarioId.slice(0, 8)}
+                </Link>
+              ))}</p>}
+            </div>
+          )}
           {!data.nflRecommendationAudit.ok ? (
             <EmptyState title="Recommendation audit is unavailable">{data.nflRecommendationAudit.error}</EmptyState>
           ) : data.nflRecommendationAudit.data.length === 0 ? (

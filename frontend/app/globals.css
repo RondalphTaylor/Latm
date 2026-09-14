@@ -791,6 +791,33 @@ td small {
   line-height: 1.6;
 }
 
+.audit-filters {
+  display: grid;
+  gap: 0.2rem;
+  margin-bottom: 0.9rem;
+}
+
+.audit-filters p {
+  margin: 0;
+}
+
+.filter-link {
+  display: inline-block;
+  margin-left: 0.45rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.filter-link:hover,
+.filter-link:focus-visible,
+.filter-link-active {
+  color: var(--foreground);
+  text-decoration: underline;
+  text-underline-offset: 0.22em;
+}
+
 .mlb-result-list {
   margin-top: 0.8rem;
 }

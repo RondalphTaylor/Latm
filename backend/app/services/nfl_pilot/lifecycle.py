@@ -609,7 +609,12 @@ class NflPilotLifecycleService:
         return True
 
     async def decisions(
-        self, scenario_id: UUID, attention_only: bool, limit: int, offset: int
+        self,
+        scenario_id: UUID,
+        attention_only: bool,
+        limit: int,
+        offset: int,
+        recommendation: str | None = None,
     ) -> list[NflPilotMonitoringDecisionRecord]:
         statement = (
             select(NflPilotMonitoringDecisionRecord)
@@ -618,6 +623,10 @@ class NflPilotLifecycleService:
         )
         if attention_only:
             statement = statement.where(NflPilotMonitoringDecisionRecord.requires_attention)
+        if recommendation is not None:
+            statement = statement.where(
+                NflPilotMonitoringDecisionRecord.recommendation == recommendation
+            )
         return list(
             await self._session.scalars(
                 statement.order_by(NflPilotMonitoringDecisionRecord.evaluated_at.desc())
@@ -627,10 +636,12 @@ class NflPilotLifecycleService:
         )
 
     async def recommendation_audit(
-        self, scenario_id: UUID, limit: int, offset: int
+        self, scenario_id: UUID, recommendation: str | None, limit: int, offset: int
     ) -> list[dict[str, object]]:
         """Assemble bounded immutable monitoring lineage for observational audit use."""
-        decisions = await self.decisions(scenario_id, False, limit, offset)
+        decisions = await self.decisions(
+            scenario_id, False, limit, offset, recommendation=recommendation
+        )
         rows: list[dict[str, object]] = []
         for decision in decisions:
             price_id = decision.audit.get("market_price_id")

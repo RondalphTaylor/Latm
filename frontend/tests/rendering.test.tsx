@@ -51,6 +51,8 @@ function dashboardData(portfolios: readonly PortfolioResponse[] = []): Dashboard
     nflPilotPositions: ok([]),
     nflPilotLedger: ok(null),
     nflRecommendationAudit: ok([]),
+    pilotAuditScenarioId: null,
+    pilotAuditRecommendation: null,
   };
 }
 
@@ -152,6 +154,8 @@ test("dashboard renders immutable NFL pilot disposition facts without controls",
         disposition_recorded_at: "2026-09-13T20:00:00Z",
       },
     ]),
+    pilotAuditScenarioId: "scenario-1",
+    pilotAuditRecommendation: "reduce",
   };
   const html = renderToStaticMarkup(
     <Dashboard data={data} mode="paper" viewModel={buildDashboardViewModel(data)} />,
@@ -163,6 +167,8 @@ test("dashboard renders immutable NFL pilot disposition facts without controls",
   assert.ok(html.includes("1 linked exit"));
   assert.ok(html.includes("$99.02"));
   assert.ok(html.includes("30s old"));
+  assert.ok(html.includes("Decision:"));
+  assert.ok(html.includes("recommendation=reduce"));
   assert.ok(!html.includes("<button"));
   assert.ok(!html.includes("<form"));
 });

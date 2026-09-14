@@ -325,12 +325,13 @@ async def list_nfl_pilot_monitoring_decisions(
 async def list_nfl_pilot_recommendation_audit(
     scenario_id: UUID,
     session: Annotated[AsyncSession, Depends(get_session)],
+    recommendation: Annotated[Literal["hold", "reduce", "close"] | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=25)] = 8,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[NflPilotRecommendationAuditResponse]:
     """Read immutable recommendation evidence and any linked paper disposition."""
     records = await NflPilotLifecycleService(session).recommendation_audit(
-        scenario_id, limit, offset
+        scenario_id, recommendation, limit, offset
     )
     return [NflPilotRecommendationAuditResponse.model_validate(record) for record in records]
 

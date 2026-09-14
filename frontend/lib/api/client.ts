@@ -50,6 +50,13 @@ export interface DashboardData {
   readonly nflPilotPositions: LoadState<readonly NflPilotPositionResponse[]>;
   readonly nflPilotLedger: LoadState<NflPilotLedgerResponse | null>;
   readonly nflRecommendationAudit: LoadState<readonly NflPilotRecommendationAuditResponse[]>;
+  readonly pilotAuditScenarioId: string | null;
+  readonly pilotAuditRecommendation: NflPilotRecommendationAuditResponse["recommendation"] | null;
+}
+
+export interface DashboardFilters {
+  readonly pilotAuditScenarioId?: string;
+  readonly pilotAuditRecommendation?: NflPilotRecommendationAuditResponse["recommendation"];
 }
 
 type Validator<T> = (value: unknown) => value is T;
@@ -103,6 +110,7 @@ const availableEmpty = <T>(data: T): LoadState<T> => ({ data, ok: true, error: n
 export async function fetchDashboardData(
   config: Readonly<AppConfig>,
   fetcher: Fetcher = fetch,
+  filters: Readonly<DashboardFilters> = {},
 ): Promise<DashboardData> {
   const [
     health,
@@ -267,9 +275,12 @@ export async function fetchDashboardData(
     ]);
   }
 
-  const pilotScenarioId = nflPilotPositions.data[0]?.scenario_id;
+  const pilotScenarioId = filters.pilotAuditScenarioId ?? nflPilotPositions.data[0]?.scenario_id;
   if (pilotScenarioId !== undefined) {
     const scenarioId = encodeURIComponent(pilotScenarioId);
+    const recommendationQuery = filters.pilotAuditRecommendation === undefined
+      ? ""
+      : `&recommendation=${encodeURIComponent(filters.pilotAuditRecommendation)}`;
     [nflPilotLedger, nflRecommendationAudit] = await Promise.all([
       load<NflPilotLedgerResponse | null>(
         config.backendApiUrl,
@@ -280,7 +291,7 @@ export async function fetchDashboardData(
       ),
       load<NflPilotRecommendationAuditResponse[]>(
         config.backendApiUrl,
-        `/nfl-pilot-monitor/audit?scenario_id=${scenarioId}&limit=8&offset=0`,
+        `/nfl-pilot-monitor/audit?scenario_id=${scenarioId}&limit=8&offset=0${recommendationQuery}`,
         [],
         isArray<NflPilotRecommendationAuditResponse>,
         fetcher,
@@ -310,5 +321,7 @@ export async function fetchDashboardData(
     nflPilotPositions,
     nflPilotLedger,
     nflRecommendationAudit,
+    pilotAuditScenarioId: pilotScenarioId ?? null,
+    pilotAuditRecommendation: filters.pilotAuditRecommendation ?? null,
   };
 }
