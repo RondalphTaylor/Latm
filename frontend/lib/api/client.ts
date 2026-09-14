@@ -52,11 +52,14 @@ export interface DashboardData {
   readonly nflRecommendationAudit: LoadState<readonly NflPilotRecommendationAuditResponse[]>;
   readonly pilotAuditScenarioId: string | null;
   readonly pilotAuditRecommendation: NflPilotRecommendationAuditResponse["recommendation"] | null;
+  readonly pilotAuditOffset: number;
+  readonly pilotAuditHasNext: boolean;
 }
 
 export interface DashboardFilters {
   readonly pilotAuditScenarioId?: string;
   readonly pilotAuditRecommendation?: NflPilotRecommendationAuditResponse["recommendation"];
+  readonly pilotAuditOffset?: number;
 }
 
 type Validator<T> = (value: unknown) => value is T;
@@ -106,6 +109,23 @@ async function load<T>(
 }
 
 const availableEmpty = <T>(data: T): LoadState<T> => ({ data, ok: true, error: null });
+const auditPageSize = 8;
+
+export async function fetchNflPilotRecommendationAuditDetail(
+  config: Readonly<AppConfig>,
+  scenarioId: string,
+  decisionId: string,
+  fetcher: Fetcher = fetch,
+): Promise<LoadState<NflPilotRecommendationAuditResponse | null>> {
+  return load<NflPilotRecommendationAuditResponse | null>(
+    config.backendApiUrl,
+    `/nfl-pilot-monitor/audit/${encodeURIComponent(decisionId)}?scenario_id=${encodeURIComponent(scenarioId)}`,
+    null,
+    (value: unknown): value is NflPilotRecommendationAuditResponse => isObject(value),
+    fetcher,
+    true,
+  );
+}
 
 export async function fetchDashboardData(
   config: Readonly<AppConfig>,
@@ -240,6 +260,8 @@ export async function fetchDashboardData(
   let tradingPerformance: LoadState<TradingPerformanceResponse | null> = availableEmpty(null);
   let nflPilotLedger: LoadState<NflPilotLedgerResponse | null> = availableEmpty(null);
   let nflRecommendationAudit: LoadState<readonly NflPilotRecommendationAuditResponse[]> = availableEmpty([]);
+  let pilotAuditHasNext = false;
+  const pilotAuditOffset = filters.pilotAuditOffset ?? 0;
 
   if (primaryPortfolio !== undefined) {
     const portfolioId = encodeURIComponent(primaryPortfolio.id);
@@ -281,7 +303,7 @@ export async function fetchDashboardData(
     const recommendationQuery = filters.pilotAuditRecommendation === undefined
       ? ""
       : `&recommendation=${encodeURIComponent(filters.pilotAuditRecommendation)}`;
-    [nflPilotLedger, nflRecommendationAudit] = await Promise.all([
+    const [ledger, audit] = await Promise.all([
       load<NflPilotLedgerResponse | null>(
         config.backendApiUrl,
         `/nfl-pilot-scenarios/${scenarioId}/ledger`,
@@ -291,12 +313,15 @@ export async function fetchDashboardData(
       ),
       load<NflPilotRecommendationAuditResponse[]>(
         config.backendApiUrl,
-        `/nfl-pilot-monitor/audit?scenario_id=${scenarioId}&limit=8&offset=0${recommendationQuery}`,
+        `/nfl-pilot-monitor/audit?scenario_id=${scenarioId}&limit=${auditPageSize + 1}&offset=${pilotAuditOffset}${recommendationQuery}`,
         [],
         isArray<NflPilotRecommendationAuditResponse>,
         fetcher,
       ),
     ]);
+    nflPilotLedger = ledger;
+    pilotAuditHasNext = audit.ok && audit.data.length > auditPageSize;
+    nflRecommendationAudit = { ...audit, data: audit.data.slice(0, auditPageSize) };
   }
 
   return {
@@ -323,5 +348,7 @@ export async function fetchDashboardData(
     nflRecommendationAudit,
     pilotAuditScenarioId: pilotScenarioId ?? null,
     pilotAuditRecommendation: filters.pilotAuditRecommendation ?? null,
+    pilotAuditOffset,
+    pilotAuditHasNext,
   };
 }

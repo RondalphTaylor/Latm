@@ -818,6 +818,69 @@ td small {
   text-underline-offset: 0.22em;
 }
 
+.audit-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.8rem;
+  margin-top: 0.8rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.audit-pagination a,
+.audit-detail-page > a {
+  color: var(--foreground);
+  text-underline-offset: 0.22em;
+}
+
+.audit-detail-page {
+  width: min(880px, calc(100% - 2rem));
+  margin: 4rem auto;
+}
+
+.audit-detail-page > h1 {
+  margin: 0.25rem 0 0.8rem;
+  font-family: Georgia, serif;
+  font-size: clamp(2rem, 5vw, 3.4rem);
+}
+
+.audit-detail-page > p:not(.eyebrow) {
+  max-width: 48rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.audit-detail-list {
+  display: grid;
+  grid-template-columns: minmax(9rem, 0.3fr) 1fr;
+  gap: 0;
+  margin-top: 2rem;
+  border-top: 1px solid var(--border);
+}
+
+.audit-detail-list dt,
+.audit-detail-list dd {
+  margin: 0;
+  padding: 0.9rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.audit-detail-list dt {
+  color: var(--muted);
+  font-weight: 750;
+}
+
+.audit-detail-list dd {
+  overflow-wrap: anywhere;
+}
+
+.audit-detail-error {
+  margin-top: 1.5rem;
+  color: #ffadad;
+}
+
 .mlb-result-list {
   margin-top: 0.8rem;
 }

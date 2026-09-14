@@ -80,12 +80,31 @@ function Metric({ label, value, detail, tone = "flat" }: MetricProps) {
   );
 }
 
-function auditHref(scenarioId: string, recommendation: string | null): string {
+function auditHref(scenarioId: string, recommendation: string | null, offset = 0): string {
   const params = new URLSearchParams({ scenario: scenarioId });
   if (recommendation !== null) {
     params.set("recommendation", recommendation);
   }
+  if (offset > 0) {
+    params.set("offset", String(offset));
+  }
   return `/?${params.toString()}#pilot-audit`;
+}
+
+function auditDetailHref(
+  scenarioId: string,
+  decisionId: string,
+  recommendation: string | null,
+  offset: number,
+): string {
+  const params = new URLSearchParams({ scenario: scenarioId });
+  if (recommendation !== null) {
+    params.set("recommendation", recommendation);
+  }
+  if (offset > 0) {
+    params.set("offset", String(offset));
+  }
+  return `/audit/${encodeURIComponent(decisionId)}?${params.toString()}`;
 }
 
 function TableRegion({ label, children }: { readonly label: string; readonly children: ReactNode }) {
@@ -330,7 +349,7 @@ export function Dashboard({ data, mode, viewModel }: DashboardProps) {
                 <tbody>
                   {data.nflRecommendationAudit.data.map((item) => (
                     <tr key={item.decision_id}>
-                      <td><StatusPill value={item.recommendation} /><small>{humanize(item.reason)} · {formatTimestamp(item.evaluated_at)}</small></td>
+                      <td><StatusPill value={item.recommendation} /><small><Link href={auditDetailHref(selectedAuditScenarioId as string, item.decision_id, data.pilotAuditRecommendation, data.pilotAuditOffset)}>View detail</Link> · {humanize(item.reason)} · {formatTimestamp(item.evaluated_at)}</small></td>
                       <td><strong>{item.position_id.slice(0, 8)}</strong><small>{item.requires_attention ? "Attention required" : "Routine monitoring"}</small></td>
                       <td><StatusPill value={item.quote_status ?? "missing"} /><small>{item.quote_age_seconds === null ? "No quote audit" : `${item.quote_age_seconds}s old`}</small></td>
                       <td><StatusPill value={item.forecast_valid_at_decision === true ? "valid" : item.forecast_valid_at_decision === false ? "stale" : "missing"} /><small>{item.forecast_valid_until === null ? "No forecast" : `Valid until ${formatTimestamp(item.forecast_valid_until)}`}</small></td>
@@ -341,6 +360,13 @@ export function Dashboard({ data, mode, viewModel }: DashboardProps) {
                 </tbody>
               </table>
             </TableRegion>
+          )}
+          {selectedAuditScenarioId === null ? null : (
+            <nav className="audit-pagination" aria-label="Recommendation audit pages">
+              {data.pilotAuditOffset === 0 ? <span>Previous</span> : <Link href={auditHref(selectedAuditScenarioId, data.pilotAuditRecommendation, Math.max(0, data.pilotAuditOffset - 8))}>Previous</Link>}
+              <span>{data.nflRecommendationAudit.data.length === 0 ? "No rows" : `Rows ${data.pilotAuditOffset + 1}–${data.pilotAuditOffset + data.nflRecommendationAudit.data.length}`}</span>
+              {data.pilotAuditHasNext ? <Link href={auditHref(selectedAuditScenarioId, data.pilotAuditRecommendation, data.pilotAuditOffset + 8)}>Next</Link> : <span>Next</span>}
+            </nav>
           )}
         </Section>
 

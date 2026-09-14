@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { fetchDashboardData } from "@/lib/api/client";
+import { fetchDashboardData, fetchNflPilotRecommendationAuditDetail } from "@/lib/api/client";
 import { getAppConfig } from "@/lib/config";
 import {
   decimalSign,
@@ -127,7 +127,28 @@ test("dashboard forwards only the selected recommendation audit filter", async (
   );
 
   assert.ok(calls.some((url) => url.includes(
-    "/nfl-pilot-monitor/audit?scenario_id=c8eb0233-8d80-46e3-8ce1-05b0687cf1e1&limit=8&offset=0&recommendation=reduce",
+    "/nfl-pilot-monitor/audit?scenario_id=c8eb0233-8d80-46e3-8ce1-05b0687cf1e1&limit=9&offset=0&recommendation=reduce",
   )));
   assert.ok(calls.every((url) => !url.includes("paper-execution")));
+});
+
+test("decision-detail adapter makes one bounded read and treats a missing record as absent", async () => {
+  const calls: string[] = [];
+  const fetcher = (async (input: string | URL | Request) => {
+    calls.push(String(input));
+    return new Response(JSON.stringify({ detail: "not found" }), { status: 404 });
+  }) as typeof fetch;
+
+  const result = await fetchNflPilotRecommendationAuditDetail(
+    { tradingMode: "paper", backendApiUrl: "http://backend.test" },
+    "c8eb0233-8d80-46e3-8ce1-05b0687cf1e1",
+    "b8eb0233-8d80-46e3-8ce1-05b0687cf1e1",
+    fetcher,
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.data, null);
+  assert.deepEqual(calls, [
+    "http://backend.test/nfl-pilot-monitor/audit/b8eb0233-8d80-46e3-8ce1-05b0687cf1e1?scenario_id=c8eb0233-8d80-46e3-8ce1-05b0687cf1e1",
+  ]);
 });

@@ -20,7 +20,17 @@ function auditFilters(params: Record<string, string | string[] | undefined>): Da
   const allowedRecommendation = recommendation === "hold" || recommendation === "reduce" || recommendation === "close"
     ? recommendation
     : undefined;
-  return { pilotAuditScenarioId: scenario, pilotAuditRecommendation: allowedRecommendation };
+  const offset = typeof params.offset === "string" && /^\d+$/.test(params.offset)
+    ? Number(params.offset)
+    : undefined;
+  const boundedOffset = offset !== undefined && Number.isSafeInteger(offset) && offset <= 10_000
+    ? offset
+    : undefined;
+  return {
+    pilotAuditScenarioId: scenario,
+    pilotAuditRecommendation: allowedRecommendation,
+    pilotAuditOffset: boundedOffset,
+  };
 }
 
 export default async function HomePage({ searchParams }: PageProps) {

@@ -164,6 +164,25 @@ def test_recommendation_audit_accepts_only_bounded_recommendation_filters(
     assert invalid_response.status_code == 422
 
 
+def test_recommendation_audit_detail_is_scenario_scoped_and_read_only(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    captured: dict[str, UUID] = {}
+
+    async def detail_stub(
+        self: NflPilotLifecycleService, scenario_id: UUID, decision_id: UUID
+    ) -> None:
+        captured.update(scenario_id=scenario_id, decision_id=decision_id)
+        return None
+
+    monkeypatch.setattr(NflPilotLifecycleService, "recommendation_audit_detail", detail_stub)
+    with TestClient(application()) as client:
+        response = client.get(f"/nfl-pilot-monitor/audit/{UUID(int=3)}?scenario_id={UUID(int=2)}")
+
+    assert response.status_code == 404
+    assert captured == {"scenario_id": UUID(int=2), "decision_id": UUID(int=3)}
+
+
 def test_pilot_disposition_rejects_nonpaper_mode() -> None:
     app = application()
     app.dependency_overrides[get_settings] = lambda: Settings(

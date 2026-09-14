@@ -642,56 +642,71 @@ class NflPilotLifecycleService:
         decisions = await self.decisions(
             scenario_id, False, limit, offset, recommendation=recommendation
         )
-        rows: list[dict[str, object]] = []
-        for decision in decisions:
-            price_id = decision.audit.get("market_price_id")
-            forecast_id = decision.audit.get("forecast_id")
-            quote = None
-            forecast = None
-            if isinstance(price_id, str):
-                try:
-                    quote = await self._session.scalar(
-                        select(NflPilotQuoteCheckRecord).where(
-                            NflPilotQuoteCheckRecord.position_id == decision.position_id,
-                            NflPilotQuoteCheckRecord.market_price_id == UUID(price_id),
-                        )
+        return [await self._recommendation_audit_row(decision) for decision in decisions]
+
+    async def recommendation_audit_detail(
+        self, scenario_id: UUID, decision_id: UUID
+    ) -> dict[str, object] | None:
+        """Return one immutable audit row only when it belongs to the selected scenario."""
+        decision = await self._session.scalar(
+            select(NflPilotMonitoringDecisionRecord)
+            .join(NflPilotPositionRecord)
+            .where(
+                NflPilotPositionRecord.scenario_id == scenario_id,
+                NflPilotMonitoringDecisionRecord.id == decision_id,
+            )
+        )
+        return None if decision is None else await self._recommendation_audit_row(decision)
+
+    async def _recommendation_audit_row(
+        self, decision: NflPilotMonitoringDecisionRecord
+    ) -> dict[str, object]:
+        """Preserve the exact quote, forecast, and disposition lineage for one decision."""
+        price_id = decision.audit.get("market_price_id")
+        forecast_id = decision.audit.get("forecast_id")
+        quote = None
+        forecast = None
+        if isinstance(price_id, str):
+            try:
+                quote = await self._session.scalar(
+                    select(NflPilotQuoteCheckRecord).where(
+                        NflPilotQuoteCheckRecord.position_id == decision.position_id,
+                        NflPilotQuoteCheckRecord.market_price_id == UUID(price_id),
                     )
-                except ValueError:
-                    quote = None
-            if isinstance(forecast_id, str):
-                try:
-                    forecast = await self._session.get(NflPayoutForecastRecord, UUID(forecast_id))
-                except ValueError:
-                    forecast = None
-            disposition = await self._session.scalar(
-                select(NflPilotDispositionEventRecord).where(
-                    NflPilotDispositionEventRecord.decision_id == decision.id
                 )
+            except ValueError:
+                quote = None
+        if isinstance(forecast_id, str):
+            try:
+                forecast = await self._session.get(NflPayoutForecastRecord, UUID(forecast_id))
+            except ValueError:
+                forecast = None
+        disposition = await self._session.scalar(
+            select(NflPilotDispositionEventRecord).where(
+                NflPilotDispositionEventRecord.decision_id == decision.id
             )
-            rows.append(
-                {
-                    "decision_id": decision.id,
-                    "position_id": decision.position_id,
-                    "recommendation": decision.recommendation,
-                    "reason": decision.reason,
-                    "requires_attention": decision.requires_attention,
-                    "remaining_edge": decision.remaining_edge,
-                    "evaluated_at": decision.evaluated_at,
-                    "quote_status": quote.quote_status if quote else None,
-                    "quote_age_seconds": quote.quote_age_seconds if quote else None,
-                    "quote_retrieved_at": quote.quote_retrieved_at if quote else None,
-                    "forecast_id": forecast.id if forecast else None,
-                    "forecast_valid_until": forecast.valid_until if forecast else None,
-                    "forecast_valid_at_decision": (
-                        forecast.generated_at <= decision.evaluated_at < forecast.valid_until
-                        if forecast
-                        else None
-                    ),
-                    "disposition_action": disposition.action if disposition else None,
-                    "disposition_recorded_at": disposition.recorded_at if disposition else None,
-                }
-            )
-        return rows
+        )
+        return {
+            "decision_id": decision.id,
+            "position_id": decision.position_id,
+            "recommendation": decision.recommendation,
+            "reason": decision.reason,
+            "requires_attention": decision.requires_attention,
+            "remaining_edge": decision.remaining_edge,
+            "evaluated_at": decision.evaluated_at,
+            "quote_status": quote.quote_status if quote else None,
+            "quote_age_seconds": quote.quote_age_seconds if quote else None,
+            "quote_retrieved_at": quote.quote_retrieved_at if quote else None,
+            "forecast_id": forecast.id if forecast else None,
+            "forecast_valid_until": forecast.valid_until if forecast else None,
+            "forecast_valid_at_decision": (
+                forecast.generated_at <= decision.evaluated_at < forecast.valid_until
+                if forecast
+                else None
+            ),
+            "disposition_action": disposition.action if disposition else None,
+            "disposition_recorded_at": disposition.recorded_at if disposition else None,
+        }
 
     async def attention(self, limit: int) -> list[NflPilotMonitoringDecisionRecord]:
         return list(

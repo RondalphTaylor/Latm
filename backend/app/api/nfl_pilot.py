@@ -336,6 +336,26 @@ async def list_nfl_pilot_recommendation_audit(
     return [NflPilotRecommendationAuditResponse.model_validate(record) for record in records]
 
 
+@router.get(
+    "/nfl-pilot-monitor/audit/{decision_id}",
+    response_model=NflPilotRecommendationAuditResponse,
+)
+async def get_nfl_pilot_recommendation_audit_detail(
+    decision_id: UUID,
+    scenario_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> NflPilotRecommendationAuditResponse:
+    """Read one immutable decision lineage; this endpoint has no execution behavior."""
+    record = await NflPilotLifecycleService(session).recommendation_audit_detail(
+        scenario_id, decision_id
+    )
+    if record is None:
+        raise HTTPException(
+            status_code=404, detail="NFL pilot audit decision not found in scenario"
+        )
+    return NflPilotRecommendationAuditResponse.model_validate(record)
+
+
 @router.get("/nfl-pilot-monitor/attention", response_model=list[NflPilotMonitoringDecisionResponse])
 async def list_nfl_pilot_attention(
     session: Annotated[AsyncSession, Depends(get_session)],
