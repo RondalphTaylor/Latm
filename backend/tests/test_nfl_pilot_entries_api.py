@@ -123,3 +123,16 @@ def test_pilot_monitor_reports_stale_quote_skip(monkeypatch: MonkeyPatch) -> Non
         "closes": 0,
         "attention_required": 1,
     }
+
+
+def test_pilot_disposition_rejects_nonpaper_mode() -> None:
+    app = application()
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        database_url="postgresql+asyncpg://test:test@localhost/test", _env_file=None
+    ).model_copy(update={"trading_mode": "live"})
+    with TestClient(app) as client:
+        response = client.post(
+            "/nfl-pilot-dispositions/run",
+            params={"decision_id": str(UUID(int=7)), "idempotency_key": "pilot:dispose"},
+        )
+    assert response.status_code == 409

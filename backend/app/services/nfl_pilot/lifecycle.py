@@ -5,7 +5,7 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from decimal import ROUND_DOWN, Decimal
+from decimal import ROUND_DOWN, ROUND_UP, Decimal
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select, text
@@ -15,6 +15,7 @@ from app.models.markets import MarketPriceRecord, MarketResolutionRecord
 from app.models.nfl_forecasting import NflPayoutForecastRecord
 from app.models.nfl_pilot import (
     NflPilotAlertRecord,
+    NflPilotDispositionEventRecord,
     NflPilotEntryRecord,
     NflPilotMonitoringDecisionRecord,
     NflPilotPositionEventRecord,
@@ -59,6 +60,33 @@ class PilotRecommendation:
     reason: str
     requires_attention: bool
     remaining_edge: Decimal | None
+
+
+@dataclass(frozen=True)
+class DispositionPlan:
+    """Deterministic paper-only quantity and cost allocation for one disposition."""
+
+    action: str
+    quantity: int
+    allocated_cost_basis: Decimal
+
+
+def _disposition_plan(position: NflPilotPositionRecord, action: str) -> DispositionPlan:
+    if position.status != "open" or position.remaining_quantity <= 0:
+        raise ValueError("NFL pilot position is not open")
+    if action == "close":
+        return DispositionPlan("close", position.remaining_quantity, position.remaining_cost_basis)
+    if action != "reduce":
+        raise ValueError("NFL pilot disposition requires a reduce or close recommendation")
+    if position.remaining_quantity == 1:
+        return DispositionPlan("close", 1, position.remaining_cost_basis)
+    quantity = int(
+        (Decimal(position.remaining_quantity) / Decimal("2")).to_integral_value(rounding=ROUND_UP)
+    )
+    allocated = _floor_cent(
+        position.remaining_cost_basis * Decimal(quantity) / Decimal(position.remaining_quantity)
+    )
+    return DispositionPlan("reduce", quantity, allocated)
 
 
 def _quote_assessment(price: MarketPriceRecord, direction: str, now: datetime) -> QuoteAssessment:
@@ -137,6 +165,9 @@ class NflPilotLifecycleService:
             direction=entry.direction,
             quantity=entry.quantity,
             total_cost_basis=entry.total_cost,
+            remaining_quantity=entry.quantity,
+            disposed_quantity=0,
+            remaining_cost_basis=entry.total_cost,
             status="open",
             mark_price=None,
             market_value=Decimal("0.00"),
@@ -206,8 +237,8 @@ class NflPilotLifecycleService:
             if prior_mark is not None:
                 await self._session.commit()
                 return prior_mark, False
-            market_value = _floor_cent(mark_price * position.quantity)
-            unrealized = market_value - position.total_cost_basis
+            market_value = _floor_cent(mark_price * position.remaining_quantity)
+            unrealized = market_value - position.remaining_cost_basis
             event = NflPilotPositionEventRecord(
                 id=uuid4(),
                 idempotency_key=idempotency_key,
@@ -276,8 +307,9 @@ class NflPilotLifecycleService:
             )
             resolution = _official_resolution(resolutions)
             payout = resolution.yes_payout if position.direction == "yes" else resolution.no_payout
-            proceeds = _floor_cent(payout * position.quantity)
-            realized = proceeds - position.total_cost_basis
+            proceeds = _floor_cent(payout * position.remaining_quantity)
+            realized_increment = proceeds - position.remaining_cost_basis
+            realized = position.realized_pnl + realized_increment
             event = NflPilotPositionEventRecord(
                 id=uuid4(),
                 idempotency_key=idempotency_key,
@@ -297,15 +329,146 @@ class NflPilotLifecycleService:
                     "resolution_type": resolution.resolution_type,
                     "held_payout": str(payout),
                     "gross_proceeds": str(proceeds),
+                    "allocated_cost_basis": str(position.remaining_cost_basis),
                 },
             )
             self._session.add(event)
             position.status = "settled"
+            position.disposed_quantity += position.remaining_quantity
+            position.remaining_quantity = 0
+            position.remaining_cost_basis = Decimal("0.00")
             position.market_value = Decimal("0.00")
             position.unrealized_pnl = Decimal("0.00")
             position.realized_pnl = realized
             position.settled_at = resolution.settled_at
             position.official_resolution_id = resolution.id
+            position.updated_at = now
+            await self._session.commit()
+            return event, True
+        except Exception:
+            await self._session.rollback()
+            raise
+
+    async def dispose(
+        self, decision_id: UUID, idempotency_key: str
+    ) -> tuple[NflPilotDispositionEventRecord, bool]:
+        """Record one simulated exit only when the original recommendation is still executable.
+
+        This method has no provider-order dependency: it writes an auditable paper ledger fact
+        at the fresh directional bid and refuses changed, stale, or non-actionable evidence.
+        """
+        self._check_key(idempotency_key)
+        try:
+            decision = await self._session.get(NflPilotMonitoringDecisionRecord, decision_id)
+            if decision is None:
+                raise LookupError("NFL pilot monitoring decision not found")
+            await self._session.execute(
+                text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+                {"key": f"nfl-pilot-disposition:{decision.position_id}"},
+            )
+            existing = await self._session.scalar(
+                select(NflPilotDispositionEventRecord).where(
+                    NflPilotDispositionEventRecord.idempotency_key == idempotency_key
+                )
+            )
+            if existing is not None:
+                if existing.decision_id != decision_id:
+                    raise ValueError("idempotency key belongs to another NFL pilot disposition")
+                await self._session.commit()
+                return existing, False
+            already_disposed = await self._session.scalar(
+                select(NflPilotDispositionEventRecord).where(
+                    NflPilotDispositionEventRecord.decision_id == decision_id
+                )
+            )
+            if already_disposed is not None:
+                raise ValueError("NFL pilot monitoring decision was already disposed")
+            if decision.recommendation not in ("reduce", "close"):
+                raise ValueError("NFL pilot disposition requires a reduce or close recommendation")
+            position = await self._session.get(NflPilotPositionRecord, decision.position_id)
+            if position is None:
+                raise LookupError("NFL pilot position not found")
+            plan = _disposition_plan(position, decision.recommendation)
+            price_id = decision.audit.get("market_price_id")
+            forecast_id = decision.audit.get("forecast_id")
+            if not isinstance(price_id, str) or not isinstance(forecast_id, str):
+                raise ValueError(
+                    "NFL pilot disposition decision lacks immutable quote and forecast"
+                )
+            try:
+                source_price_id = UUID(price_id)
+                source_forecast_id = UUID(forecast_id)
+            except ValueError as exc:
+                raise ValueError(
+                    "NFL pilot disposition decision has invalid source identifiers"
+                ) from exc
+            now = await self._now()
+            price = await self._session.scalar(
+                select(MarketPriceRecord)
+                .where(MarketPriceRecord.market_id == position.market_id)
+                .order_by(MarketPriceRecord.retrieved_at.desc(), MarketPriceRecord.id.desc())
+                .limit(1)
+            )
+            if price is None or price.id != source_price_id:
+                raise ValueError(
+                    "NFL pilot disposition requires the recommendation's current quote"
+                )
+            assessment = _quote_assessment(price, position.direction, now)
+            forecast = await self._session.get(NflPayoutForecastRecord, source_forecast_id)
+            refreshed = _recommendation(
+                assessment.quote_status,
+                forecast,
+                position.direction,
+                assessment.directional_bid,
+                now,
+            )
+            if (
+                refreshed.recommendation != decision.recommendation
+                or refreshed.reason != decision.reason
+            ):
+                raise ValueError("NFL pilot disposition recommendation is no longer current")
+            if assessment.directional_bid is None:
+                raise ValueError("NFL pilot disposition requires a fresh directional bid")
+            gross_proceeds = _floor_cent(assessment.directional_bid * plan.quantity)
+            realized_increment = gross_proceeds - plan.allocated_cost_basis
+            event = NflPilotDispositionEventRecord(
+                id=uuid4(),
+                idempotency_key=idempotency_key,
+                decision_id=decision.id,
+                position_id=position.id,
+                market_price_id=price.id,
+                action=plan.action,
+                quantity=plan.quantity,
+                execution_price=assessment.directional_bid,
+                gross_proceeds=gross_proceeds,
+                allocated_cost_basis=plan.allocated_cost_basis,
+                realized_pnl_increment=realized_increment,
+                recorded_at=now,
+                execution_mode="paper",
+                live_trading_enabled=False,
+                audit={
+                    "decision_recommendation": decision.recommendation,
+                    "decision_reason": decision.reason,
+                    "execution_basis": "fresh_directional_bid",
+                    "exit_fee": "0.00",
+                    "policy_version": "nfl-paper-pilot-disposition-v1",
+                },
+            )
+            self._session.add(event)
+            position.disposed_quantity += plan.quantity
+            position.remaining_quantity -= plan.quantity
+            position.remaining_cost_basis -= plan.allocated_cost_basis
+            position.realized_pnl += realized_increment
+            position.mark_price = assessment.directional_bid
+            position.market_value = _floor_cent(
+                assessment.directional_bid * position.remaining_quantity
+            )
+            position.unrealized_pnl = position.market_value - position.remaining_cost_basis
+            if position.remaining_quantity == 0:
+                position.status = "closed"
+                position.remaining_cost_basis = Decimal("0.00")
+                position.market_value = Decimal("0.00")
+                position.unrealized_pnl = Decimal("0.00")
             position.updated_at = now
             await self._session.commit()
             return event, True
@@ -331,18 +494,16 @@ class NflPilotLifecycleService:
             if not entry_count:
                 raise LookupError("NFL pilot scenario has no entries")
         open_cost = sum(
-            (row.total_cost_basis for row in rows if row.status == "open"), Decimal("0.00")
+            (row.remaining_cost_basis for row in rows if row.status == "open"), Decimal("0.00")
         )
-        realized = sum(
-            (row.realized_pnl for row in rows if row.status == "settled"), Decimal("0.00")
-        )
+        realized = sum((row.realized_pnl for row in rows), Decimal("0.00"))
         scenario = await self._session.get(NflPilotScenarioRecord, scenario_id)
         if scenario is None:
             raise LookupError("NFL pilot scenario not found")
         current_bankroll = scenario.starting_bankroll + realized
         return {
             "open_positions": sum(row.status == "open" for row in rows),
-            "settled_positions": sum(row.status == "settled" for row in rows),
+            "settled_positions": sum(row.status in ("settled", "closed") for row in rows),
             "committed_capital": open_cost,
             "realized_pnl": realized,
             "current_bankroll": current_bankroll,

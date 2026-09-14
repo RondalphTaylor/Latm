@@ -7,12 +7,42 @@ import pytest
 
 from app.models.markets import MarketPriceRecord, MarketResolutionRecord
 from app.models.nfl_forecasting import NflPayoutForecastRecord
+from app.models.nfl_pilot import NflPilotPositionRecord
 from app.services.nfl_pilot.lifecycle import (
+    _disposition_plan,
     _floor_cent,
     _official_resolution,
     _quote_assessment,
     _recommendation,
 )
+
+
+def test_reduce_disposition_uses_a_deterministic_majority_half_and_preserves_cost() -> None:
+    position = SimpleNamespace(
+        status="open",
+        remaining_quantity=3,
+        remaining_cost_basis=Decimal("1.00"),
+    )
+    plan = _disposition_plan(cast(NflPilotPositionRecord, position), "reduce")
+    assert (plan.action, plan.quantity, plan.allocated_cost_basis) == (
+        "reduce",
+        2,
+        Decimal("0.66"),
+    )
+
+
+def test_reduce_of_one_contract_becomes_a_full_paper_close() -> None:
+    position = SimpleNamespace(
+        status="open",
+        remaining_quantity=1,
+        remaining_cost_basis=Decimal("0.51"),
+    )
+    plan = _disposition_plan(cast(NflPilotPositionRecord, position), "reduce")
+    assert (plan.action, plan.quantity, plan.allocated_cost_basis) == (
+        "close",
+        1,
+        Decimal("0.51"),
+    )
 
 
 def test_nfl_pilot_lifecycle_floors_fractional_contract_payouts_to_cents() -> None:

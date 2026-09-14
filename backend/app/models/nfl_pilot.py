@@ -136,15 +136,17 @@ class NflPilotPositionRecord(Base):
     __table_args__ = (
         UniqueConstraint("entry_id", name="uq_nfl_pilot_positions_entry"),
         CheckConstraint(
-            "execution_mode = 'paper' AND NOT live_trading_enabled AND status IN ('open', 'settled')",
+            "execution_mode = 'paper' AND NOT live_trading_enabled AND status IN ('open', 'closed', 'settled')",
             name="ck_nfl_pilot_positions_paper",
         ),
         CheckConstraint(
             "direction IN ('yes', 'no') AND quantity > 0", name="ck_nfl_pilot_positions_side"
         ),
         CheckConstraint(
-            "total_cost_basis > 0 AND market_value >= 0 AND status = 'open' OR "
-            "total_cost_basis > 0 AND market_value = 0 AND status = 'settled'",
+            "total_cost_basis > 0 AND remaining_quantity >= 0 AND disposed_quantity >= 0 AND "
+            "remaining_quantity + disposed_quantity = quantity AND remaining_cost_basis >= 0 AND "
+            "market_value >= 0 AND (status = 'open' OR (status IN ('closed', 'settled') AND "
+            "remaining_quantity = 0 AND remaining_cost_basis = 0 AND market_value = 0))",
             name="ck_nfl_pilot_positions_values",
         ),
         CheckConstraint("jsonb_typeof(audit) = 'object'", name="ck_nfl_pilot_positions_audit"),
@@ -162,6 +164,9 @@ class NflPilotPositionRecord(Base):
     direction: Mapped[str] = mapped_column(String(3), nullable=False)
     quantity: Mapped[int] = mapped_column(nullable=False)
     total_cost_basis: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    remaining_quantity: Mapped[int] = mapped_column(nullable=False)
+    disposed_quantity: Mapped[int] = mapped_column(nullable=False)
+    remaining_cost_basis: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     mark_price: Mapped[Decimal | None] = mapped_column(Numeric(8, 6))
     market_value: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
@@ -316,6 +321,48 @@ class NflPilotAlertRecord(Base):
     severity: Mapped[str] = mapped_column(String(20), nullable=False)
     message: Mapped[str] = mapped_column(String(200), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    execution_mode: Mapped[str] = mapped_column(String(10), nullable=False)
+    live_trading_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    audit: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+
+
+class NflPilotDispositionEventRecord(Base):
+    """Append-only, recommendation-gated simulated reduce/close execution fact."""
+
+    __tablename__ = "nfl_pilot_disposition_events"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_nfl_pilot_disposition_events_key"),
+        UniqueConstraint("decision_id", name="uq_nfl_pilot_disposition_events_decision"),
+        CheckConstraint("action IN ('reduce', 'close')", name="ck_nfl_pilot_disposition_action"),
+        CheckConstraint(
+            "quantity > 0 AND gross_proceeds >= 0 AND allocated_cost_basis >= 0",
+            name="ck_nfl_pilot_disposition_values",
+        ),
+        CheckConstraint(
+            "execution_mode = 'paper' AND NOT live_trading_enabled",
+            name="ck_nfl_pilot_disposition_paper",
+        ),
+        CheckConstraint("jsonb_typeof(audit) = 'object'", name="ck_nfl_pilot_disposition_audit"),
+        Index("ix_nfl_pilot_disposition_position_recorded", "position_id", "recorded_at"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    idempotency_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    decision_id: Mapped[UUID] = mapped_column(
+        ForeignKey("nfl_pilot_monitoring_decisions.id", ondelete="RESTRICT"), nullable=False
+    )
+    position_id: Mapped[UUID] = mapped_column(
+        ForeignKey("nfl_pilot_positions.id", ondelete="RESTRICT"), nullable=False
+    )
+    market_price_id: Mapped[UUID] = mapped_column(
+        ForeignKey("market_prices.id", ondelete="RESTRICT"), nullable=False
+    )
+    action: Mapped[str] = mapped_column(String(20), nullable=False)
+    quantity: Mapped[int] = mapped_column(nullable=False)
+    execution_price: Mapped[Decimal] = mapped_column(Numeric(8, 6), nullable=False)
+    gross_proceeds: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    allocated_cost_basis: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    realized_pnl_increment: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     execution_mode: Mapped[str] = mapped_column(String(10), nullable=False)
     live_trading_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
     audit: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)

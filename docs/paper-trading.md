@@ -1795,3 +1795,19 @@ PREDICT THE RIGHT WINNER?
 ```
 
 A useful paper-trading system must evaluate both prediction quality and execution reality.
+
+## NFL pilot paper-only dispositions
+
+The NFL pilot may now reduce or close a simulated position only through a persisted immutable
+`reduce` or `close` monitoring decision. The disposition endpoint rechecks that the exact
+decision's quote is still the newest fresh two-sided directional quote and that its forecast is
+still valid and yields the same action. It refuses HOLD decisions, changed evidence, stale quotes,
+duplicate decision use, and every non-paper configuration. It never submits an order to a market
+provider.
+
+Version 1 executes the simulated exit at the fresh directional bid with no invented exit fee. A
+reduce sells the ceiling half of the remaining whole contracts; a one-contract reduce becomes a
+full close. It allocates remaining cost basis proportionally with cent-flooring, records the
+proceeds and realized increment in an append-only disposition event, and leaves the residual
+position open for later marking or official settlement. This is a deliberately bounded ledger
+experiment, not an assertion that provider fills or fees have been modeled.

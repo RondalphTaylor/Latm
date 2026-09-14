@@ -77,6 +77,32 @@ class NflPilotPositionEventRunResponse(BaseModel):
     event: NflPilotPositionEventResponse
 
 
+class NflPilotDispositionEventResponse(BaseModel):
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+    id: UUID
+    decision_id: UUID
+    position_id: UUID
+    action: str
+    quantity: int
+    execution_price: Decimal
+    gross_proceeds: Decimal
+    allocated_cost_basis: Decimal
+    realized_pnl_increment: Decimal
+    recorded_at: datetime
+    execution_mode: str
+    live_trading_enabled: bool
+    warnings: tuple[str, ...] = (
+        "This is a simulated NFL paper disposition, not a provider order or live position.",
+        "The action was revalidated against the same fresh immutable recommendation evidence.",
+    )
+
+
+class NflPilotDispositionRunResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    created: bool
+    disposition: NflPilotDispositionEventResponse
+
+
 class NflPilotLedgerResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
     open_positions: int
@@ -202,6 +228,29 @@ async def settle_nfl_pilot_position(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return NflPilotPositionEventRunResponse(
         created=created, event=NflPilotPositionEventResponse.model_validate(record)
+    )
+
+
+@router.post("/nfl-pilot-dispositions/run", response_model=NflPilotDispositionRunResponse)
+async def run_nfl_pilot_disposition(
+    decision_id: UUID,
+    idempotency_key: Annotated[str, Query(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$")],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> NflPilotDispositionRunResponse:
+    """Apply a still-current immutable REDUCE/CLOSE recommendation to the paper ledger only."""
+    if settings.trading_mode is not TradingMode.PAPER:
+        raise HTTPException(status_code=409, detail="NFL pilot dispositions require paper mode")
+    try:
+        record, created = await NflPilotLifecycleService(session).dispose(
+            decision_id, idempotency_key
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return NflPilotDispositionRunResponse(
+        created=created, disposition=NflPilotDispositionEventResponse.model_validate(record)
     )
 
 

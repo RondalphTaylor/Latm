@@ -25,6 +25,7 @@ from app.models.nfl_forecasting import NflPayoutForecastRecord
 from app.models.nfl_opportunities import NflPaperOpportunityRecord
 from app.models.nfl_pilot import (
     NflPilotAlertRecord,
+    NflPilotDispositionEventRecord,
     NflPilotEntryRecord,
     NflPilotMonitoringDecisionRecord,
     NflPilotPositionEventRecord,
@@ -74,6 +75,7 @@ __all__ = [
     "NflPilotScenarioRecord",
     "NflPilotEntryRecord",
     "NflPilotAlertRecord",
+    "NflPilotDispositionEventRecord",
     "NflPilotMonitoringDecisionRecord",
     "NflPilotPositionRecord",
     "NflPilotPositionEventRecord",
