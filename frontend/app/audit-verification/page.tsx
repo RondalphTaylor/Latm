@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import {
   fetchNflPilotAuditVerificationHistory,
+  fetchNflPilotAuditVerificationSummary,
   verifyNflPilotRecommendationAuditExport,
 } from "@/lib/api/client";
 import { getAppConfig } from "@/lib/config";
@@ -65,6 +66,7 @@ export default async function AuditVerificationPage({ searchParams }: AuditVerif
     ? null
     : await verifyNflPilotRecommendationAuditExport(getAppConfig(), scenarioId, fingerprint);
   const history = await fetchNflPilotAuditVerificationHistory(getAppConfig(), scenarioId, historyOffset);
+  const historySummary = await fetchNflPilotAuditVerificationSummary(getAppConfig(), scenarioId);
   const historyRows = history.data.slice(0, historyPageSize);
   const historyHasNext = history.data.length > historyPageSize;
 
@@ -111,6 +113,9 @@ export default async function AuditVerificationPage({ searchParams }: AuditVerif
       )}
       <section className="audit-verification-history" aria-labelledby="verification-history-title">
         <h2 id="verification-history-title">Recorded verification history</h2>
+        {!historySummary.ok ? <p className="audit-detail-error">Integrity summary is unavailable: {historySummary.error}</p> : (
+          <p>{historySummary.data === null ? "No integrity summary is available." : `${historySummary.data.total} recorded checks · ${historySummary.data.matches} match · ${historySummary.data.mismatches} no match`}</p>
+        )}
         {!history.ok ? <p className="audit-detail-error">History is unavailable: {history.error}</p> : historyRows.length === 0 ? <p>No verification checks have been explicitly recorded yet.</p> : (
           <ul>
             {historyRows.map((item) => <li key={item.id}>

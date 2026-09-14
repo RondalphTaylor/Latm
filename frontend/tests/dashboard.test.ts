@@ -6,6 +6,7 @@ import {
   fetchNflPilotAuditVerificationDetail,
   fetchNflPilotRecommendationAuditDetail,
   fetchNflPilotAuditVerificationHistory,
+  fetchNflPilotAuditVerificationSummary,
   verifyNflPilotRecommendationAuditExport,
 } from "@/lib/api/client";
 import { getAppConfig } from "@/lib/config";
@@ -229,4 +230,22 @@ test("audit verification detail adapter makes one scenario-scoped read", async (
   assert.deepEqual(calls, [
     "http://backend.test/nfl-pilot-monitor/audit/verification-history/b8eb0233-8d80-46e3-8ce1-05b0687cf1e1?scenario_id=c8eb0233-8d80-46e3-8ce1-05b0687cf1e1",
   ]);
+});
+
+test("audit verification summary adapter makes one read without execution routes", async () => {
+  const calls: string[] = [];
+  const fetcher = (async (input: string | URL | Request) => {
+    calls.push(String(input));
+    return new Response(JSON.stringify({ total: 3, matches: 2, mismatches: 1 }), { status: 200 });
+  }) as typeof fetch;
+
+  const result = await fetchNflPilotAuditVerificationSummary(
+    { tradingMode: "paper", backendApiUrl: "http://backend.test" },
+    "c8eb0233-8d80-46e3-8ce1-05b0687cf1e1",
+    fetcher,
+  );
+
+  assert.deepEqual(result.data, { total: 3, matches: 2, mismatches: 1 });
+  assert.ok(calls[0]?.includes("/nfl-pilot-monitor/audit/verification-history/summary?"));
+  assert.ok(calls.every((url) => !url.includes("paper-execution")));
 });

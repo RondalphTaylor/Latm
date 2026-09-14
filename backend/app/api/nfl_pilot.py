@@ -237,6 +237,13 @@ class NflPilotAuditVerificationDetailResponse(NflPilotAuditVerificationHistoryRe
     retention_policy_version: str
 
 
+class NflPilotAuditVerificationSummaryResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    total: int
+    matches: int
+    mismatches: int
+
+
 def _audit_export_fingerprint(
     metadata: dict[str, object], payload: list[NflPilotRecommendationAuditResponse]
 ) -> str:
@@ -567,6 +574,19 @@ async def list_nfl_pilot_recommendation_audit_verifications(
         scenario_id, limit, offset
     )
     return [NflPilotAuditVerificationHistoryResponse.model_validate(record) for record in records]
+
+
+@router.get(
+    "/nfl-pilot-monitor/audit/verification-history/summary",
+    response_model=NflPilotAuditVerificationSummaryResponse,
+)
+async def get_nfl_pilot_recommendation_audit_verification_summary(
+    scenario_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> NflPilotAuditVerificationSummaryResponse:
+    """Summarize immutable verification outcomes for one paper scenario."""
+    summary = await NflPilotLifecycleService(session).audit_verification_summary(scenario_id)
+    return NflPilotAuditVerificationSummaryResponse.model_validate(summary)
 
 
 @router.get(

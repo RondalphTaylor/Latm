@@ -761,6 +761,25 @@ class NflPilotLifecycleService:
             )
         )
 
+    async def audit_verification_summary(self, scenario_id: UUID) -> dict[str, int]:
+        """Count immutable verification outcomes without changing the journal."""
+        rows = await self._session.execute(
+            select(
+                NflPilotAuditVerificationRecord.matches,
+                func.count(NflPilotAuditVerificationRecord.id),
+            )
+            .where(NflPilotAuditVerificationRecord.scenario_id == scenario_id)
+            .group_by(NflPilotAuditVerificationRecord.matches)
+        )
+        counts = {matches: count for matches, count in rows}
+        match_count = counts.get(True, 0)
+        mismatch_count = counts.get(False, 0)
+        return {
+            "total": match_count + mismatch_count,
+            "matches": match_count,
+            "mismatches": mismatch_count,
+        }
+
     async def _recommendation_audit_row(
         self, decision: NflPilotMonitoringDecisionRecord
     ) -> dict[str, object]:

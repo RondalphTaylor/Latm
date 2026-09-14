@@ -115,6 +115,12 @@ export interface NflPilotAuditVerificationDetailResponse extends NflPilotAuditVe
   readonly retention_policy_version: string;
 }
 
+export interface NflPilotAuditVerificationSummaryResponse {
+  readonly total: number;
+  readonly matches: number;
+  readonly mismatches: number;
+}
+
 export interface HealthResponse {
   readonly status: string;
 }
