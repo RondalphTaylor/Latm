@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pytest import MonkeyPatch
 
-from app.api.nfl_pilot import router
+from app.api.nfl_pilot import _audit_export_fingerprint, router
 from app.core.config import Settings, get_settings
 from app.db.session import get_session
 from app.models.nfl_pilot import NflPilotEntryRecord
@@ -238,6 +238,9 @@ def test_recommendation_audit_summary_and_export_are_bounded_reads(
         export = client.get(
             f"/nfl-pilot-monitor/audit/export?scenario_id={UUID(int=2)}&format=csv&recommendation=reduce&limit=100"
         )
+        json_export = client.get(
+            f"/nfl-pilot-monitor/audit/export?scenario_id={UUID(int=2)}&format=json&recommendation=reduce&limit=100"
+        )
 
     assert summary.status_code == 200
     assert summary.json() == {
@@ -250,6 +253,8 @@ def test_recommendation_audit_summary_and_export_are_bounded_reads(
     assert export.status_code == 200
     assert export.headers["content-type"].startswith("text/csv")
     assert export.text.startswith("generated_at,scenario_id,recommendation_filter")
+    assert json_export.status_code == 200
+    assert len(json_export.json()["metadata"]["export_fingerprint"]) == 64
     assert captured == {
         "summary_scenario_id": UUID(int=2),
         "export_scenario_id": UUID(int=2),
@@ -257,6 +262,23 @@ def test_recommendation_audit_summary_and_export_are_bounded_reads(
         "limit": 100,
         "offset": 0,
     }
+
+
+def test_audit_export_fingerprint_is_stable_across_generation_times() -> None:
+    metadata = {
+        "generated_at": datetime(2026, 9, 14, tzinfo=UTC),
+        "scenario_id": UUID(int=2),
+        "recommendation_filter": "reduce",
+        "limit": 100,
+        "offset": 0,
+        "row_count": 0,
+        "scenario_policy_version": "nfl-paper-pilot-v1",
+        "scenario_policy_fingerprint": "a" * 64,
+        "retention_policy_version": "nfl-pilot-audit-append-only-no-auto-delete-v1",
+    }
+    later_metadata = {**metadata, "generated_at": datetime(2026, 9, 15, tzinfo=UTC)}
+
+    assert _audit_export_fingerprint(metadata, []) == _audit_export_fingerprint(later_metadata, [])
 
 
 def test_pilot_disposition_rejects_nonpaper_mode() -> None:

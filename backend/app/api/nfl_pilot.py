@@ -1,4 +1,5 @@
 import csv
+import hashlib
 import io
 import json
 from datetime import datetime
@@ -204,6 +205,27 @@ class NflPilotRecommendationAuditExportMetadataResponse(BaseModel):
     scenario_policy_version: str
     scenario_policy_fingerprint: str
     retention_policy_version: str
+    export_fingerprint: str
+
+
+def _audit_export_fingerprint(
+    metadata: dict[str, object], payload: list[NflPilotRecommendationAuditResponse]
+) -> str:
+    """Hash the export's semantic slice, deliberately excluding wall-clock generation time."""
+    canonical = {
+        "schema_version": "nfl-pilot-audit-export-v1",
+        "scenario_id": str(metadata["scenario_id"]),
+        "recommendation_filter": metadata["recommendation_filter"],
+        "limit": metadata["limit"],
+        "offset": metadata["offset"],
+        "row_count": metadata["row_count"],
+        "scenario_policy_version": metadata["scenario_policy_version"],
+        "scenario_policy_fingerprint": metadata["scenario_policy_fingerprint"],
+        "retention_policy_version": metadata["retention_policy_version"],
+        "records": [item.model_dump(mode="json") for item in payload],
+    }
+    encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode()).hexdigest()
 
 
 class NflPilotAlertResponse(BaseModel):
@@ -389,10 +411,14 @@ async def export_nfl_pilot_recommendation_audit(
     )
     payload = [NflPilotRecommendationAuditResponse.model_validate(record) for record in records]
     try:
+        metadata_values = await NflPilotLifecycleService(
+            session
+        ).recommendation_audit_export_metadata(
+            scenario_id, recommendation, limit, offset, len(payload)
+        )
         metadata = NflPilotRecommendationAuditExportMetadataResponse.model_validate(
-            await NflPilotLifecycleService(session).recommendation_audit_export_metadata(
-                scenario_id, recommendation, limit, offset, len(payload)
-            )
+            metadata_values
+            | {"export_fingerprint": _audit_export_fingerprint(metadata_values, payload)}
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
