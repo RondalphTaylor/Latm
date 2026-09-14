@@ -208,6 +208,17 @@ class NflPilotRecommendationAuditExportMetadataResponse(BaseModel):
     export_fingerprint: str
 
 
+class NflPilotRecommendationAuditVerificationResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    provided_fingerprint: str
+    current_fingerprint: str
+    matches: bool
+    row_count: int
+    scenario_policy_version: str
+    scenario_policy_fingerprint: str
+    retention_policy_version: str
+
+
 def _audit_export_fingerprint(
     metadata: dict[str, object], payload: list[NflPilotRecommendationAuditResponse]
 ) -> str:
@@ -226,6 +237,28 @@ def _audit_export_fingerprint(
     }
     encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(encoded.encode()).hexdigest()
+
+
+async def _audit_export_slice(
+    session: AsyncSession,
+    scenario_id: UUID,
+    recommendation: str | None,
+    limit: int,
+    offset: int,
+) -> tuple[
+    NflPilotRecommendationAuditExportMetadataResponse, list[NflPilotRecommendationAuditResponse]
+]:
+    service = NflPilotLifecycleService(session)
+    records = await service.recommendation_audit(scenario_id, recommendation, limit, offset)
+    payload = [NflPilotRecommendationAuditResponse.model_validate(record) for record in records]
+    metadata_values = await service.recommendation_audit_export_metadata(
+        scenario_id, recommendation, limit, offset, len(payload)
+    )
+    metadata = NflPilotRecommendationAuditExportMetadataResponse.model_validate(
+        metadata_values
+        | {"export_fingerprint": _audit_export_fingerprint(metadata_values, payload)}
+    )
+    return metadata, payload
 
 
 class NflPilotAlertResponse(BaseModel):
@@ -406,19 +439,9 @@ async def export_nfl_pilot_recommendation_audit(
     offset: Annotated[int, Query(ge=0, le=10_000)] = 0,
 ) -> Response:
     """Download a bounded immutable audit slice; this endpoint never performs a disposition."""
-    records = await NflPilotLifecycleService(session).recommendation_audit(
-        scenario_id, recommendation, limit, offset
-    )
-    payload = [NflPilotRecommendationAuditResponse.model_validate(record) for record in records]
     try:
-        metadata_values = await NflPilotLifecycleService(
-            session
-        ).recommendation_audit_export_metadata(
-            scenario_id, recommendation, limit, offset, len(payload)
-        )
-        metadata = NflPilotRecommendationAuditExportMetadataResponse.model_validate(
-            metadata_values
-            | {"export_fingerprint": _audit_export_fingerprint(metadata_values, payload)}
+        metadata, payload = await _audit_export_slice(
+            session, scenario_id, recommendation, limit, offset
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -444,6 +467,34 @@ async def export_nfl_pilot_recommendation_audit(
     metadata_values = metadata.model_dump(mode="json")
     writer.writerows(metadata_values | item.model_dump(mode="json") for item in payload)
     return Response(content=buffer.getvalue(), media_type="text/csv", headers=headers)
+
+
+@router.get(
+    "/nfl-pilot-monitor/audit/verify",
+    response_model=NflPilotRecommendationAuditVerificationResponse,
+)
+async def verify_nfl_pilot_recommendation_audit_export(
+    scenario_id: UUID,
+    fingerprint: Annotated[str, Query(pattern="^[0-9a-fA-F]{64}$")],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    recommendation: Annotated[Literal["hold", "reduce", "close"] | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+    offset: Annotated[int, Query(ge=0, le=10_000)] = 0,
+) -> NflPilotRecommendationAuditVerificationResponse:
+    """Compare a pasted export fingerprint with the current bounded immutable audit slice."""
+    try:
+        metadata, _ = await _audit_export_slice(session, scenario_id, recommendation, limit, offset)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return NflPilotRecommendationAuditVerificationResponse(
+        provided_fingerprint=fingerprint.lower(),
+        current_fingerprint=metadata.export_fingerprint,
+        matches=fingerprint.lower() == metadata.export_fingerprint,
+        row_count=metadata.row_count,
+        scenario_policy_version=metadata.scenario_policy_version,
+        scenario_policy_fingerprint=metadata.scenario_policy_fingerprint,
+        retention_policy_version=metadata.retention_policy_version,
+    )
 
 
 @router.get(

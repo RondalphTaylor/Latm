@@ -241,6 +241,10 @@ def test_recommendation_audit_summary_and_export_are_bounded_reads(
         json_export = client.get(
             f"/nfl-pilot-monitor/audit/export?scenario_id={UUID(int=2)}&format=json&recommendation=reduce&limit=100"
         )
+        fingerprint = json_export.json()["metadata"]["export_fingerprint"]
+        verification = client.get(
+            f"/nfl-pilot-monitor/audit/verify?scenario_id={UUID(int=2)}&recommendation=reduce&limit=100&fingerprint={fingerprint}"
+        )
 
     assert summary.status_code == 200
     assert summary.json() == {
@@ -255,6 +259,8 @@ def test_recommendation_audit_summary_and_export_are_bounded_reads(
     assert export.text.startswith("generated_at,scenario_id,recommendation_filter")
     assert json_export.status_code == 200
     assert len(json_export.json()["metadata"]["export_fingerprint"]) == 64
+    assert verification.status_code == 200
+    assert verification.json()["matches"] is True
     assert captured == {
         "summary_scenario_id": UUID(int=2),
         "export_scenario_id": UUID(int=2),

@@ -89,6 +89,16 @@ export interface NflPilotRecommendationAuditSummaryResponse {
   readonly attention_required: number;
 }
 
+export interface NflPilotRecommendationAuditVerificationResponse {
+  readonly provided_fingerprint: string;
+  readonly current_fingerprint: string;
+  readonly matches: boolean;
+  readonly row_count: number;
+  readonly scenario_policy_version: string;
+  readonly scenario_policy_fingerprint: string;
+  readonly retention_policy_version: string;
+}
+
 export interface HealthResponse {
   readonly status: string;
 }

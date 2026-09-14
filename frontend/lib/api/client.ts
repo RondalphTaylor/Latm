@@ -11,6 +11,7 @@ import type {
   NflPilotLedgerResponse,
   NflPilotRecommendationAuditResponse,
   NflPilotRecommendationAuditSummaryResponse,
+  NflPilotRecommendationAuditVerificationResponse,
   MlbApprovedDatasetReadinessResponse,
   MlbBackfillBatchResponse,
   MlbBackfillCheckpointResponse,
@@ -124,6 +125,22 @@ export async function fetchNflPilotRecommendationAuditDetail(
     `/nfl-pilot-monitor/audit/${encodeURIComponent(decisionId)}?scenario_id=${encodeURIComponent(scenarioId)}`,
     null,
     (value: unknown): value is NflPilotRecommendationAuditResponse => isObject(value),
+    fetcher,
+    true,
+  );
+}
+
+export async function verifyNflPilotRecommendationAuditExport(
+  config: Readonly<AppConfig>,
+  scenarioId: string,
+  fingerprint: string,
+  fetcher: Fetcher = fetch,
+): Promise<LoadState<NflPilotRecommendationAuditVerificationResponse | null>> {
+  return load<NflPilotRecommendationAuditVerificationResponse | null>(
+    config.backendApiUrl,
+    `/nfl-pilot-monitor/audit/verify?scenario_id=${encodeURIComponent(scenarioId)}&fingerprint=${encodeURIComponent(fingerprint)}&limit=100&offset=0`,
+    null,
+    (value: unknown): value is NflPilotRecommendationAuditVerificationResponse => isObject(value),
     fetcher,
     true,
   );

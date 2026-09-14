@@ -881,6 +881,50 @@ td small {
   color: #ffadad;
 }
 
+.audit-verification-form {
+  display: grid;
+  gap: 0.6rem;
+  max-width: 42rem;
+  margin-top: 1.75rem;
+}
+
+.audit-verification-form label {
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.audit-verification-form input:not([type="hidden"]) {
+  width: 100%;
+  padding: 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+}
+
+.audit-verification-form button {
+  width: fit-content;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--foreground);
+  color: var(--background);
+  font: inherit;
+  font-weight: 750;
+}
+
+.audit-verification-match,
+.audit-verification-mismatch {
+  margin-top: 1.75rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+}
+
+.audit-verification-match { border-color: rgb(103 232 188 / 45%); }
+.audit-verification-mismatch { border-color: rgb(255 173 173 / 45%); }
+
 .mlb-result-list {
   margin-top: 0.8rem;
 }
