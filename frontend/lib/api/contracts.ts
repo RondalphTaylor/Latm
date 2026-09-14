@@ -63,6 +63,24 @@ export interface NflPilotLedgerResponse {
   readonly available_bankroll: DecimalValue;
 }
 
+export interface NflPilotRecommendationAuditResponse {
+  readonly decision_id: string;
+  readonly position_id: string;
+  readonly recommendation: "hold" | "reduce" | "close";
+  readonly reason: string;
+  readonly requires_attention: boolean;
+  readonly remaining_edge: DecimalValue | null;
+  readonly evaluated_at: string;
+  readonly quote_status: "fresh" | "stale" | "unusable" | null;
+  readonly quote_age_seconds: number | null;
+  readonly quote_retrieved_at: string | null;
+  readonly forecast_id: string | null;
+  readonly forecast_valid_until: string | null;
+  readonly forecast_valid_at_decision: boolean | null;
+  readonly disposition_action: "reduce" | "close" | null;
+  readonly disposition_recorded_at: string | null;
+}
+
 export interface HealthResponse {
   readonly status: string;
 }

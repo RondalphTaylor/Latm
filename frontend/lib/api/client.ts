@@ -9,6 +9,7 @@ import type {
   NflPilotDispositionEventResponse,
   NflPilotPositionResponse,
   NflPilotLedgerResponse,
+  NflPilotRecommendationAuditResponse,
   MlbApprovedDatasetReadinessResponse,
   MlbBackfillBatchResponse,
   MlbBackfillCheckpointResponse,
@@ -48,6 +49,7 @@ export interface DashboardData {
   readonly nflDispositions: LoadState<readonly NflPilotDispositionEventResponse[]>;
   readonly nflPilotPositions: LoadState<readonly NflPilotPositionResponse[]>;
   readonly nflPilotLedger: LoadState<NflPilotLedgerResponse | null>;
+  readonly nflRecommendationAudit: LoadState<readonly NflPilotRecommendationAuditResponse[]>;
 }
 
 type Validator<T> = (value: unknown) => value is T;
@@ -229,6 +231,7 @@ export async function fetchDashboardData(
   let positionEvents: LoadState<readonly PositionEventResponse[]> = availableEmpty([]);
   let tradingPerformance: LoadState<TradingPerformanceResponse | null> = availableEmpty(null);
   let nflPilotLedger: LoadState<NflPilotLedgerResponse | null> = availableEmpty(null);
+  let nflRecommendationAudit: LoadState<readonly NflPilotRecommendationAuditResponse[]> = availableEmpty([]);
 
   if (primaryPortfolio !== undefined) {
     const portfolioId = encodeURIComponent(primaryPortfolio.id);
@@ -266,13 +269,23 @@ export async function fetchDashboardData(
 
   const pilotScenarioId = nflPilotPositions.data[0]?.scenario_id;
   if (pilotScenarioId !== undefined) {
-    nflPilotLedger = await load<NflPilotLedgerResponse | null>(
-      config.backendApiUrl,
-      `/nfl-pilot-scenarios/${encodeURIComponent(pilotScenarioId)}/ledger`,
-      null,
-      (value: unknown): value is NflPilotLedgerResponse => isObject(value),
-      fetcher,
-    );
+    const scenarioId = encodeURIComponent(pilotScenarioId);
+    [nflPilotLedger, nflRecommendationAudit] = await Promise.all([
+      load<NflPilotLedgerResponse | null>(
+        config.backendApiUrl,
+        `/nfl-pilot-scenarios/${scenarioId}/ledger`,
+        null,
+        (value: unknown): value is NflPilotLedgerResponse => isObject(value),
+        fetcher,
+      ),
+      load<NflPilotRecommendationAuditResponse[]>(
+        config.backendApiUrl,
+        `/nfl-pilot-monitor/audit?scenario_id=${scenarioId}&limit=8&offset=0`,
+        [],
+        isArray<NflPilotRecommendationAuditResponse>,
+        fetcher,
+      ),
+    ]);
   }
 
   return {
@@ -296,5 +309,6 @@ export async function fetchDashboardData(
     nflDispositions,
     nflPilotPositions,
     nflPilotLedger,
+    nflRecommendationAudit,
   };
 }

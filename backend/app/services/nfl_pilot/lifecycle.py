@@ -626,6 +626,62 @@ class NflPilotLifecycleService:
             )
         )
 
+    async def recommendation_audit(
+        self, scenario_id: UUID, limit: int, offset: int
+    ) -> list[dict[str, object]]:
+        """Assemble bounded immutable monitoring lineage for observational audit use."""
+        decisions = await self.decisions(scenario_id, False, limit, offset)
+        rows: list[dict[str, object]] = []
+        for decision in decisions:
+            price_id = decision.audit.get("market_price_id")
+            forecast_id = decision.audit.get("forecast_id")
+            quote = None
+            forecast = None
+            if isinstance(price_id, str):
+                try:
+                    quote = await self._session.scalar(
+                        select(NflPilotQuoteCheckRecord).where(
+                            NflPilotQuoteCheckRecord.position_id == decision.position_id,
+                            NflPilotQuoteCheckRecord.market_price_id == UUID(price_id),
+                        )
+                    )
+                except ValueError:
+                    quote = None
+            if isinstance(forecast_id, str):
+                try:
+                    forecast = await self._session.get(NflPayoutForecastRecord, UUID(forecast_id))
+                except ValueError:
+                    forecast = None
+            disposition = await self._session.scalar(
+                select(NflPilotDispositionEventRecord).where(
+                    NflPilotDispositionEventRecord.decision_id == decision.id
+                )
+            )
+            rows.append(
+                {
+                    "decision_id": decision.id,
+                    "position_id": decision.position_id,
+                    "recommendation": decision.recommendation,
+                    "reason": decision.reason,
+                    "requires_attention": decision.requires_attention,
+                    "remaining_edge": decision.remaining_edge,
+                    "evaluated_at": decision.evaluated_at,
+                    "quote_status": quote.quote_status if quote else None,
+                    "quote_age_seconds": quote.quote_age_seconds if quote else None,
+                    "quote_retrieved_at": quote.quote_retrieved_at if quote else None,
+                    "forecast_id": forecast.id if forecast else None,
+                    "forecast_valid_until": forecast.valid_until if forecast else None,
+                    "forecast_valid_at_decision": (
+                        forecast.generated_at <= decision.evaluated_at < forecast.valid_until
+                        if forecast
+                        else None
+                    ),
+                    "disposition_action": disposition.action if disposition else None,
+                    "disposition_recorded_at": disposition.recorded_at if disposition else None,
+                }
+            )
+        return rows
+
     async def attention(self, limit: int) -> list[NflPilotMonitoringDecisionRecord]:
         return list(
             await self._session.scalars(

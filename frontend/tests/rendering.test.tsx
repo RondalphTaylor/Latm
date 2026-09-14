@@ -50,6 +50,7 @@ function dashboardData(portfolios: readonly PortfolioResponse[] = []): Dashboard
     nflDispositions: ok([]),
     nflPilotPositions: ok([]),
     nflPilotLedger: ok(null),
+    nflRecommendationAudit: ok([]),
   };
 }
 
@@ -69,6 +70,7 @@ test("dashboard renders all read-only monitoring sections and a permanent paper 
     "Paper disposition history",
     "Paper pilot position detail",
     "Paper pilot ledger",
+    "Recommendation audit",
     "Performance &amp; calibration",
   ]) {
     assert.ok(html.includes(heading));
@@ -131,6 +133,25 @@ test("dashboard renders immutable NFL pilot disposition facts without controls",
       current_bankroll: "99.92",
       available_bankroll: "99.02",
     }),
+    nflRecommendationAudit: ok([
+      {
+        decision_id: "decision-1",
+        position_id: "position-12345678",
+        recommendation: "reduce",
+        reason: "remaining_edge_below_3_percent",
+        requires_attention: true,
+        remaining_edge: "0.020000",
+        evaluated_at: "2026-09-13T19:59:00Z",
+        quote_status: "fresh",
+        quote_age_seconds: 30,
+        quote_retrieved_at: "2026-09-13T19:58:30Z",
+        forecast_id: "forecast-1",
+        forecast_valid_until: "2026-09-13T20:15:00Z",
+        forecast_valid_at_decision: true,
+        disposition_action: "reduce",
+        disposition_recorded_at: "2026-09-13T20:00:00Z",
+      },
+    ]),
   };
   const html = renderToStaticMarkup(
     <Dashboard data={data} mode="paper" viewModel={buildDashboardViewModel(data)} />,
@@ -141,6 +162,7 @@ test("dashboard renders immutable NFL pilot disposition facts without controls",
   assert.ok(html.includes("−$0.08"));
   assert.ok(html.includes("1 linked exit"));
   assert.ok(html.includes("$99.02"));
+  assert.ok(html.includes("30s old"));
   assert.ok(!html.includes("<button"));
   assert.ok(!html.includes("<form"));
 });

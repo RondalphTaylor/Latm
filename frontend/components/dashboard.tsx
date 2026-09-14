@@ -148,6 +148,7 @@ export function Dashboard({ data, mode, viewModel }: DashboardProps) {
           <a href="#pilot-history">Pilot history</a>
           <a href="#pilot-positions">Pilot exposure</a>
           <a href="#pilot-ledger">Pilot ledger</a>
+          <a href="#pilot-audit">Pilot audit</a>
           <a href="#forecasts">Forecasts</a>
           <a href="#opportunities">Edges</a>
           <a href="#markets">Markets</a>
@@ -265,6 +266,44 @@ export function Dashboard({ data, mode, viewModel }: DashboardProps) {
               <Metric label="Realized P&amp;L" value={formatSignedMoney(data.nflPilotLedger.data.realized_pnl)} detail="Recorded simulated exits and settlements" tone={decimalSign(data.nflPilotLedger.data.realized_pnl)} />
               <Metric label="Position status" value={`${data.nflPilotLedger.data.open_positions} open`} detail={`${data.nflPilotLedger.data.settled_positions} completed`} />
             </div>
+          )}
+        </Section>
+
+        <Section
+          id="pilot-audit"
+          eyebrow="NFL pilot"
+          title="Recommendation audit"
+          description="Immutable monitoring recommendations with the exact quote and forecast lineage used at evaluation. A linked disposition is a recorded paper outcome, never a live order."
+          note="Latest 8 decisions"
+        >
+          {!data.nflRecommendationAudit.ok ? (
+            <EmptyState title="Recommendation audit is unavailable">{data.nflRecommendationAudit.error}</EmptyState>
+          ) : data.nflRecommendationAudit.data.length === 0 ? (
+            <EmptyState title="No pilot recommendations">Monitoring decisions will appear here once a pilot position is evaluated.</EmptyState>
+          ) : (
+            <TableRegion label="NFL pilot recommendation audit">
+              <table>
+                <caption>Latest immutable pilot recommendation evidence</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Decision</th><th scope="col">Position</th><th scope="col">Quote</th>
+                    <th scope="col">Forecast</th><th scope="col" className="numeric">Edge</th><th scope="col">Disposition</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.nflRecommendationAudit.data.map((item) => (
+                    <tr key={item.decision_id}>
+                      <td><StatusPill value={item.recommendation} /><small>{humanize(item.reason)} · {formatTimestamp(item.evaluated_at)}</small></td>
+                      <td><strong>{item.position_id.slice(0, 8)}</strong><small>{item.requires_attention ? "Attention required" : "Routine monitoring"}</small></td>
+                      <td><StatusPill value={item.quote_status ?? "missing"} /><small>{item.quote_age_seconds === null ? "No quote audit" : `${item.quote_age_seconds}s old`}</small></td>
+                      <td><StatusPill value={item.forecast_valid_at_decision === true ? "valid" : item.forecast_valid_at_decision === false ? "stale" : "missing"} /><small>{item.forecast_valid_until === null ? "No forecast" : `Valid until ${formatTimestamp(item.forecast_valid_until)}`}</small></td>
+                      <td className={`numeric tone-${decimalSign(item.remaining_edge)}`}>{formatSignedPercent(item.remaining_edge)}</td>
+                      <td>{item.disposition_action === null ? "Not disposed" : `${humanize(item.disposition_action)} · ${formatTimestamp(item.disposition_recorded_at)}`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableRegion>
           )}
         </Section>
 

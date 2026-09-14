@@ -162,6 +162,25 @@ class NflPilotMonitoringDecisionResponse(BaseModel):
     evaluated_at: datetime
 
 
+class NflPilotRecommendationAuditResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    decision_id: UUID
+    position_id: UUID
+    recommendation: str
+    reason: str
+    requires_attention: bool
+    remaining_edge: Decimal | None
+    evaluated_at: datetime
+    quote_status: str | None
+    quote_age_seconds: int | None
+    quote_retrieved_at: datetime | None
+    forecast_id: UUID | None
+    forecast_valid_until: datetime | None
+    forecast_valid_at_decision: bool | None
+    disposition_action: str | None
+    disposition_recorded_at: datetime | None
+
+
 class NflPilotAlertResponse(BaseModel):
     model_config = ConfigDict(frozen=True, from_attributes=True)
     id: UUID
@@ -300,6 +319,20 @@ async def list_nfl_pilot_monitoring_decisions(
         scenario_id, attention_only, limit, offset
     )
     return [NflPilotMonitoringDecisionResponse.model_validate(record) for record in records]
+
+
+@router.get("/nfl-pilot-monitor/audit", response_model=list[NflPilotRecommendationAuditResponse])
+async def list_nfl_pilot_recommendation_audit(
+    scenario_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    limit: Annotated[int, Query(ge=1, le=25)] = 8,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[NflPilotRecommendationAuditResponse]:
+    """Read immutable recommendation evidence and any linked paper disposition."""
+    records = await NflPilotLifecycleService(session).recommendation_audit(
+        scenario_id, limit, offset
+    )
+    return [NflPilotRecommendationAuditResponse.model_validate(record) for record in records]
 
 
 @router.get("/nfl-pilot-monitor/attention", response_model=list[NflPilotMonitoringDecisionResponse])
