@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 from decimal import Decimal
+from types import SimpleNamespace
 from uuid import UUID
 
 from fastapi import FastAPI
@@ -181,6 +182,52 @@ def test_recommendation_audit_detail_is_scenario_scoped_and_read_only(
 
     assert response.status_code == 404
     assert captured == {"scenario_id": UUID(int=2), "decision_id": UUID(int=3)}
+
+
+def test_audit_verification_detail_is_scenario_scoped_and_read_only(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    captured: dict[str, UUID] = {}
+
+    async def detail_stub(
+        self: NflPilotLifecycleService, scenario_id: UUID, verification_id: UUID
+    ) -> SimpleNamespace:
+        captured.update(scenario_id=scenario_id, verification_id=verification_id)
+        return SimpleNamespace(
+            id=verification_id,
+            scenario_id=scenario_id,
+            provided_fingerprint="a" * 64,
+            current_fingerprint="b" * 64,
+            matches=False,
+            row_count=2,
+            verified_at=datetime(2026, 9, 14, tzinfo=UTC),
+            audit={
+                "scenario_policy_version": "nfl-paper-pilot-v1",
+                "scenario_policy_fingerprint": "c" * 64,
+                "retention_policy_version": "nfl-pilot-audit-append-only-no-auto-delete-v1",
+            },
+        )
+
+    monkeypatch.setattr(NflPilotLifecycleService, "audit_verification", detail_stub)
+    with TestClient(application()) as client:
+        response = client.get(
+            f"/nfl-pilot-monitor/audit/verification-history/{UUID(int=3)}?scenario_id={UUID(int=2)}"
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": str(UUID(int=3)),
+        "scenario_id": str(UUID(int=2)),
+        "provided_fingerprint": "a" * 64,
+        "current_fingerprint": "b" * 64,
+        "matches": False,
+        "row_count": 2,
+        "verified_at": "2026-09-14T00:00:00Z",
+        "scenario_policy_version": "nfl-paper-pilot-v1",
+        "scenario_policy_fingerprint": "c" * 64,
+        "retention_policy_version": "nfl-pilot-audit-append-only-no-auto-delete-v1",
+    }
+    assert captured == {"scenario_id": UUID(int=2), "verification_id": UUID(int=3)}
 
 
 def test_recommendation_audit_summary_and_export_are_bounded_reads(

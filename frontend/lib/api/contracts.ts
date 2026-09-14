@@ -109,6 +109,12 @@ export interface NflPilotAuditVerificationHistoryResponse {
   readonly verified_at: string;
 }
 
+export interface NflPilotAuditVerificationDetailResponse extends NflPilotAuditVerificationHistoryResponse {
+  readonly scenario_policy_version: string;
+  readonly scenario_policy_fingerprint: string;
+  readonly retention_policy_version: string;
+}
+
 export interface HealthResponse {
   readonly status: string;
 }

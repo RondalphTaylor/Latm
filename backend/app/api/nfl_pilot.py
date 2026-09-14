@@ -230,6 +230,13 @@ class NflPilotAuditVerificationHistoryResponse(BaseModel):
     verified_at: datetime
 
 
+class NflPilotAuditVerificationDetailResponse(NflPilotAuditVerificationHistoryResponse):
+    model_config = ConfigDict(frozen=True)
+    scenario_policy_version: str
+    scenario_policy_fingerprint: str
+    retention_policy_version: str
+
+
 def _audit_export_fingerprint(
     metadata: dict[str, object], payload: list[NflPilotRecommendationAuditResponse]
 ) -> str:
@@ -560,6 +567,35 @@ async def list_nfl_pilot_recommendation_audit_verifications(
         scenario_id, limit, offset
     )
     return [NflPilotAuditVerificationHistoryResponse.model_validate(record) for record in records]
+
+
+@router.get(
+    "/nfl-pilot-monitor/audit/verification-history/{verification_id}",
+    response_model=NflPilotAuditVerificationDetailResponse,
+)
+async def get_nfl_pilot_recommendation_audit_verification(
+    verification_id: UUID,
+    scenario_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> NflPilotAuditVerificationDetailResponse:
+    """Read one immutable verification fact, scoped to its paper scenario."""
+    record = await NflPilotLifecycleService(session).audit_verification(
+        scenario_id, verification_id
+    )
+    if record is None:
+        raise HTTPException(status_code=404, detail="NFL pilot audit verification not found in scenario")
+    return NflPilotAuditVerificationDetailResponse(
+        id=record.id,
+        scenario_id=record.scenario_id,
+        provided_fingerprint=record.provided_fingerprint,
+        current_fingerprint=record.current_fingerprint,
+        matches=record.matches,
+        row_count=record.row_count,
+        verified_at=record.verified_at,
+        scenario_policy_version=str(record.audit["scenario_policy_version"]),
+        scenario_policy_fingerprint=str(record.audit["scenario_policy_fingerprint"]),
+        retention_policy_version=str(record.audit["retention_policy_version"]),
+    )
 
 
 @router.get(

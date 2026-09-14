@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   fetchDashboardData,
+  fetchNflPilotAuditVerificationDetail,
   fetchNflPilotRecommendationAuditDetail,
   fetchNflPilotAuditVerificationHistory,
   verifyNflPilotRecommendationAuditExport,
@@ -207,4 +208,25 @@ test("audit verification history adapter reads a bounded page of the immutable j
   assert.ok(calls[0]?.includes("/nfl-pilot-monitor/audit/verification-history?"));
   assert.ok(calls[0]?.includes("limit=9&offset=8"));
   assert.ok(calls.every((url) => !url.includes("paper-execution")));
+});
+
+test("audit verification detail adapter makes one scenario-scoped read", async () => {
+  const calls: string[] = [];
+  const fetcher = (async (input: string | URL | Request) => {
+    calls.push(String(input));
+    return new Response(JSON.stringify({ detail: "not found" }), { status: 404 });
+  }) as typeof fetch;
+
+  const result = await fetchNflPilotAuditVerificationDetail(
+    { tradingMode: "paper", backendApiUrl: "http://backend.test" },
+    "c8eb0233-8d80-46e3-8ce1-05b0687cf1e1",
+    "b8eb0233-8d80-46e3-8ce1-05b0687cf1e1",
+    fetcher,
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.data, null);
+  assert.deepEqual(calls, [
+    "http://backend.test/nfl-pilot-monitor/audit/verification-history/b8eb0233-8d80-46e3-8ce1-05b0687cf1e1?scenario_id=c8eb0233-8d80-46e3-8ce1-05b0687cf1e1",
+  ]);
 });

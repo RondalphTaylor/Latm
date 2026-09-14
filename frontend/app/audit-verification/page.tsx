@@ -30,6 +30,22 @@ function historyHref(scenarioId: string, fingerprint: string | null, offset: num
   return `/audit-verification?${params.toString()}`;
 }
 
+function historyDetailHref(
+  scenarioId: string,
+  verificationId: string,
+  fingerprint: string | null,
+  offset: number,
+): string {
+  const params = new URLSearchParams({ scenario: scenarioId });
+  if (fingerprint !== null) {
+    params.set("fingerprint", fingerprint);
+  }
+  if (offset > 0) {
+    params.set("history_offset", String(offset));
+  }
+  return `/audit-verification/${encodeURIComponent(verificationId)}?${params.toString()}`;
+}
+
 export default async function AuditVerificationPage({ searchParams }: AuditVerificationPageProps) {
   const query = await searchParams;
   const scenarioId = typeof query.scenario === "string" ? query.scenario : null;
@@ -99,7 +115,7 @@ export default async function AuditVerificationPage({ searchParams }: AuditVerif
           <ul>
             {historyRows.map((item) => <li key={item.id}>
               <strong>{item.matches ? "Match" : "No match"}</strong> · {formatTimestamp(item.verified_at)} · {item.row_count} rows<br />
-              <small>Provided {item.provided_fingerprint.slice(0, 12)}… · Current {item.current_fingerprint.slice(0, 12)}…</small>
+              <small>Provided {item.provided_fingerprint.slice(0, 12)}… · Current {item.current_fingerprint.slice(0, 12)}… · <Link href={historyDetailHref(scenarioId, item.id, fingerprint, historyOffset)}>View detail</Link></small>
             </li>)}
           </ul>
         )}
