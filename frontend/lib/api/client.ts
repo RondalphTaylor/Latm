@@ -8,6 +8,7 @@ import type {
   NflPilotAlertResponse,
   NflPilotDispositionEventResponse,
   NflPilotPositionResponse,
+  NflPilotLedgerResponse,
   MlbApprovedDatasetReadinessResponse,
   MlbBackfillBatchResponse,
   MlbBackfillCheckpointResponse,
@@ -46,6 +47,7 @@ export interface DashboardData {
   readonly nflAlerts: LoadState<readonly NflPilotAlertResponse[]>;
   readonly nflDispositions: LoadState<readonly NflPilotDispositionEventResponse[]>;
   readonly nflPilotPositions: LoadState<readonly NflPilotPositionResponse[]>;
+  readonly nflPilotLedger: LoadState<NflPilotLedgerResponse | null>;
 }
 
 type Validator<T> = (value: unknown) => value is T;
@@ -226,6 +228,7 @@ export async function fetchDashboardData(
   let trades: LoadState<readonly PaperTradeResponse[]> = availableEmpty([]);
   let positionEvents: LoadState<readonly PositionEventResponse[]> = availableEmpty([]);
   let tradingPerformance: LoadState<TradingPerformanceResponse | null> = availableEmpty(null);
+  let nflPilotLedger: LoadState<NflPilotLedgerResponse | null> = availableEmpty(null);
 
   if (primaryPortfolio !== undefined) {
     const portfolioId = encodeURIComponent(primaryPortfolio.id);
@@ -261,6 +264,17 @@ export async function fetchDashboardData(
     ]);
   }
 
+  const pilotScenarioId = nflPilotPositions.data[0]?.scenario_id;
+  if (pilotScenarioId !== undefined) {
+    nflPilotLedger = await load<NflPilotLedgerResponse | null>(
+      config.backendApiUrl,
+      `/nfl-pilot-scenarios/${encodeURIComponent(pilotScenarioId)}/ledger`,
+      null,
+      (value: unknown): value is NflPilotLedgerResponse => isObject(value),
+      fetcher,
+    );
+  }
+
   return {
     loadedAt: new Date().toISOString(),
     health,
@@ -281,5 +295,6 @@ export async function fetchDashboardData(
     nflAlerts,
     nflDispositions,
     nflPilotPositions,
+    nflPilotLedger,
   };
 }

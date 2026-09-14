@@ -49,6 +49,7 @@ function dashboardData(portfolios: readonly PortfolioResponse[] = []): Dashboard
     nflAlerts: ok([]),
     nflDispositions: ok([]),
     nflPilotPositions: ok([]),
+    nflPilotLedger: ok(null),
   };
 }
 
@@ -67,6 +68,7 @@ test("dashboard renders all read-only monitoring sections and a permanent paper 
     "Recent paper activity",
     "Paper disposition history",
     "Paper pilot position detail",
+    "Paper pilot ledger",
     "Performance &amp; calibration",
   ]) {
     assert.ok(html.includes(heading));
@@ -121,6 +123,14 @@ test("dashboard renders immutable NFL pilot disposition facts without controls",
         live_trading_enabled: false,
       },
     ]),
+    nflPilotLedger: ok({
+      open_positions: 1,
+      settled_positions: 0,
+      committed_capital: "0.90",
+      realized_pnl: "-0.08",
+      current_bankroll: "99.92",
+      available_bankroll: "99.02",
+    }),
   };
   const html = renderToStaticMarkup(
     <Dashboard data={data} mode="paper" viewModel={buildDashboardViewModel(data)} />,
@@ -130,6 +140,7 @@ test("dashboard renders immutable NFL pilot disposition facts without controls",
   assert.ok(html.includes("position"));
   assert.ok(html.includes("−$0.08"));
   assert.ok(html.includes("1 linked exit"));
+  assert.ok(html.includes("$99.02"));
   assert.ok(!html.includes("<button"));
   assert.ok(!html.includes("<form"));
 });

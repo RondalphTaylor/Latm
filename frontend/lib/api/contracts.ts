@@ -54,6 +54,15 @@ export interface NflPilotPositionResponse {
   readonly live_trading_enabled: false;
 }
 
+export interface NflPilotLedgerResponse {
+  readonly open_positions: number;
+  readonly settled_positions: number;
+  readonly committed_capital: DecimalValue;
+  readonly realized_pnl: DecimalValue;
+  readonly current_bankroll: DecimalValue;
+  readonly available_bankroll: DecimalValue;
+}
+
 export interface HealthResponse {
   readonly status: string;
 }

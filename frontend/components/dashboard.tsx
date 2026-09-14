@@ -147,6 +147,7 @@ export function Dashboard({ data, mode, viewModel }: DashboardProps) {
           <a href="#attention">Attention</a>
           <a href="#pilot-history">Pilot history</a>
           <a href="#pilot-positions">Pilot exposure</a>
+          <a href="#pilot-ledger">Pilot ledger</a>
           <a href="#forecasts">Forecasts</a>
           <a href="#opportunities">Edges</a>
           <a href="#markets">Markets</a>
@@ -245,6 +246,27 @@ export function Dashboard({ data, mode, viewModel }: DashboardProps) {
             />
           </div>
         )}
+
+        <Section
+          id="pilot-ledger"
+          eyebrow="NFL pilot"
+          title="Paper pilot ledger"
+          description="Scenario-level simulated balances derived from the isolated pilot ledger. These figures are not a provider account balance."
+          note="Read-only scenario summary"
+        >
+          {!data.nflPilotLedger.ok ? (
+            <EmptyState title="Pilot ledger is unavailable">{data.nflPilotLedger.error}</EmptyState>
+          ) : data.nflPilotLedger.data === null ? (
+            <EmptyState title="No pilot ledger yet">A pilot ledger appears once an isolated pilot position is available.</EmptyState>
+          ) : (
+            <div className="metric-grid overview-metrics" aria-label="NFL pilot paper ledger">
+              <Metric label="Current bankroll" value={formatMoney(data.nflPilotLedger.data.current_bankroll)} detail="Starting bankroll plus realized P&amp;L" />
+              <Metric label="Available bankroll" value={formatMoney(data.nflPilotLedger.data.available_bankroll)} detail={`${formatMoney(data.nflPilotLedger.data.committed_capital)} committed`} />
+              <Metric label="Realized P&amp;L" value={formatSignedMoney(data.nflPilotLedger.data.realized_pnl)} detail="Recorded simulated exits and settlements" tone={decimalSign(data.nflPilotLedger.data.realized_pnl)} />
+              <Metric label="Position status" value={`${data.nflPilotLedger.data.open_positions} open`} detail={`${data.nflPilotLedger.data.settled_positions} completed`} />
+            </div>
+          )}
+        </Section>
 
         <Section
           id="attention"
