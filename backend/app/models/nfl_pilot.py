@@ -366,3 +366,35 @@ class NflPilotDispositionEventRecord(Base):
     execution_mode: Mapped[str] = mapped_column(String(10), nullable=False)
     live_trading_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
     audit: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+
+
+class NflPilotAuditVerificationRecord(Base):
+    """Append-only human-requested check of an immutable NFL pilot audit export."""
+
+    __tablename__ = "nfl_pilot_audit_verifications"
+    __table_args__ = (
+        CheckConstraint(
+            "length(provided_fingerprint) = 64 AND length(current_fingerprint) = 64",
+            name="ck_nfl_pilot_audit_verifications_fingerprints",
+        ),
+        CheckConstraint(
+            "execution_mode = 'paper' AND NOT live_trading_enabled",
+            name="ck_nfl_pilot_audit_verifications_paper",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(audit) = 'object'", name="ck_nfl_pilot_audit_verifications_audit"
+        ),
+        Index("ix_nfl_pilot_audit_verifications_scenario_verified", "scenario_id", "verified_at"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    scenario_id: Mapped[UUID] = mapped_column(
+        ForeignKey("nfl_pilot_scenarios.id", ondelete="RESTRICT"), nullable=False
+    )
+    provided_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    current_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    matches: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    row_count: Mapped[int] = mapped_column(nullable=False)
+    verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    execution_mode: Mapped[str] = mapped_column(String(10), nullable=False)
+    live_trading_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    audit: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)

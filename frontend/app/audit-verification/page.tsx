@@ -60,6 +60,11 @@ export default async function AuditVerificationPage({ searchParams }: AuditVerif
             <dt>Scenario policy</dt><dd>{verification.data.scenario_policy_version}</dd>
             <dt>Retention policy</dt><dd>{verification.data.retention_policy_version}</dd>
           </dl>
+          <form action="/audit-verification/record" method="post">
+            <input name="scenario" type="hidden" value={scenarioId} />
+            <input name="fingerprint" type="hidden" value={fingerprint ?? ""} />
+            <button type="submit">Record this verification</button>
+          </form>
         </section>
       )}
     </main>

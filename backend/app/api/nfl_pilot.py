@@ -219,6 +219,17 @@ class NflPilotRecommendationAuditVerificationResponse(BaseModel):
     retention_policy_version: str
 
 
+class NflPilotAuditVerificationHistoryResponse(BaseModel):
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+    id: UUID
+    scenario_id: UUID
+    provided_fingerprint: str
+    current_fingerprint: str
+    matches: bool
+    row_count: int
+    verified_at: datetime
+
+
 def _audit_export_fingerprint(
     metadata: dict[str, object], payload: list[NflPilotRecommendationAuditResponse]
 ) -> str:
@@ -495,6 +506,60 @@ async def verify_nfl_pilot_recommendation_audit_export(
         scenario_policy_fingerprint=metadata.scenario_policy_fingerprint,
         retention_policy_version=metadata.retention_policy_version,
     )
+
+
+@router.post(
+    "/nfl-pilot-monitor/audit/verify/journal",
+    response_model=NflPilotAuditVerificationHistoryResponse,
+)
+async def record_nfl_pilot_recommendation_audit_verification(
+    scenario_id: UUID,
+    fingerprint: Annotated[str, Query(pattern="^[0-9a-fA-F]{64}$")],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    recommendation: Annotated[Literal["hold", "reduce", "close"] | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+    offset: Annotated[int, Query(ge=0, le=10_000)] = 0,
+) -> NflPilotAuditVerificationHistoryResponse:
+    """Append a user-requested verification fact; it never affects paper positions or orders."""
+    if settings.trading_mode is not TradingMode.PAPER:
+        raise HTTPException(
+            status_code=409, detail="audit verification journal requires paper mode"
+        )
+    try:
+        metadata, _ = await _audit_export_slice(session, scenario_id, recommendation, limit, offset)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    verification = {
+        "provided_fingerprint": fingerprint.lower(),
+        "current_fingerprint": metadata.export_fingerprint,
+        "matches": fingerprint.lower() == metadata.export_fingerprint,
+        "row_count": metadata.row_count,
+        "scenario_policy_version": metadata.scenario_policy_version,
+        "scenario_policy_fingerprint": metadata.scenario_policy_fingerprint,
+        "retention_policy_version": metadata.retention_policy_version,
+    }
+    record = await NflPilotLifecycleService(session).record_audit_verification(
+        scenario_id, verification
+    )
+    return NflPilotAuditVerificationHistoryResponse.model_validate(record)
+
+
+@router.get(
+    "/nfl-pilot-monitor/audit/verification-history",
+    response_model=list[NflPilotAuditVerificationHistoryResponse],
+)
+async def list_nfl_pilot_recommendation_audit_verifications(
+    scenario_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    limit: Annotated[int, Query(ge=1, le=25)] = 8,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[NflPilotAuditVerificationHistoryResponse]:
+    """List append-only user-requested verification facts for one paper scenario."""
+    records = await NflPilotLifecycleService(session).audit_verifications(
+        scenario_id, limit, offset
+    )
+    return [NflPilotAuditVerificationHistoryResponse.model_validate(record) for record in records]
 
 
 @router.get(

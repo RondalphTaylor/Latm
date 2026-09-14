@@ -15,6 +15,7 @@ from app.models.markets import MarketPriceRecord, MarketResolutionRecord
 from app.models.nfl_forecasting import NflPayoutForecastRecord
 from app.models.nfl_pilot import (
     NflPilotAlertRecord,
+    NflPilotAuditVerificationRecord,
     NflPilotDispositionEventRecord,
     NflPilotEntryRecord,
     NflPilotMonitoringDecisionRecord,
@@ -711,6 +712,43 @@ class NflPilotLifecycleService:
             "scenario_policy_fingerprint": scenario.policy_fingerprint,
             "retention_policy_version": _AUDIT_RETENTION_POLICY_VERSION,
         }
+
+    async def record_audit_verification(
+        self, scenario_id: UUID, verification: dict[str, object]
+    ) -> NflPilotAuditVerificationRecord:
+        """Append an explicitly requested paper-only export verification fact."""
+        record = NflPilotAuditVerificationRecord(
+            id=uuid4(),
+            scenario_id=scenario_id,
+            provided_fingerprint=str(verification["provided_fingerprint"]),
+            current_fingerprint=str(verification["current_fingerprint"]),
+            matches=bool(verification["matches"]),
+            row_count=int(str(verification["row_count"])),
+            verified_at=datetime.now(UTC),
+            execution_mode="paper",
+            live_trading_enabled=False,
+            audit={
+                "scenario_policy_version": verification["scenario_policy_version"],
+                "scenario_policy_fingerprint": verification["scenario_policy_fingerprint"],
+                "retention_policy_version": verification["retention_policy_version"],
+            },
+        )
+        self._session.add(record)
+        await self._session.commit()
+        return record
+
+    async def audit_verifications(
+        self, scenario_id: UUID, limit: int, offset: int
+    ) -> list[NflPilotAuditVerificationRecord]:
+        return list(
+            await self._session.scalars(
+                select(NflPilotAuditVerificationRecord)
+                .where(NflPilotAuditVerificationRecord.scenario_id == scenario_id)
+                .order_by(NflPilotAuditVerificationRecord.verified_at.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+        )
 
     async def _recommendation_audit_row(
         self, decision: NflPilotMonitoringDecisionRecord
