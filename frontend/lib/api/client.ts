@@ -150,11 +150,12 @@ export async function verifyNflPilotRecommendationAuditExport(
 export async function fetchNflPilotAuditVerificationHistory(
   config: Readonly<AppConfig>,
   scenarioId: string,
+  offset = 0,
   fetcher: Fetcher = fetch,
 ): Promise<LoadState<readonly NflPilotAuditVerificationHistoryResponse[]>> {
   return load<NflPilotAuditVerificationHistoryResponse[]>(
     config.backendApiUrl,
-    `/nfl-pilot-monitor/audit/verification-history?scenario_id=${encodeURIComponent(scenarioId)}&limit=8&offset=0`,
+    `/nfl-pilot-monitor/audit/verification-history?scenario_id=${encodeURIComponent(scenarioId)}&limit=9&offset=${offset}`,
     [],
     isArray<NflPilotAuditVerificationHistoryResponse>,
     fetcher,

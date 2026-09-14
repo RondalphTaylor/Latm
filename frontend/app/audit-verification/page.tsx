@@ -17,6 +17,19 @@ const isUuid = (value: string): boolean =>
 
 const isFingerprint = (value: string): boolean => /^[0-9a-f]{64}$/i.test(value);
 
+const historyPageSize = 8;
+
+function historyHref(scenarioId: string, fingerprint: string | null, offset: number): string {
+  const params = new URLSearchParams({ scenario: scenarioId });
+  if (fingerprint !== null) {
+    params.set("fingerprint", fingerprint);
+  }
+  if (offset > 0) {
+    params.set("history_offset", String(offset));
+  }
+  return `/audit-verification?${params.toString()}`;
+}
+
 export default async function AuditVerificationPage({ searchParams }: AuditVerificationPageProps) {
   const query = await searchParams;
   const scenarioId = typeof query.scenario === "string" ? query.scenario : null;
@@ -26,10 +39,18 @@ export default async function AuditVerificationPage({ searchParams }: AuditVerif
   const fingerprint = typeof query.fingerprint === "string" && isFingerprint(query.fingerprint)
     ? query.fingerprint
     : null;
+  const requestedHistoryOffset = typeof query.history_offset === "string" && /^\d+$/.test(query.history_offset)
+    ? Number(query.history_offset)
+    : 0;
+  const historyOffset = Number.isSafeInteger(requestedHistoryOffset) && requestedHistoryOffset <= 10_000
+    ? requestedHistoryOffset
+    : 0;
   const verification = fingerprint === null
     ? null
     : await verifyNflPilotRecommendationAuditExport(getAppConfig(), scenarioId, fingerprint);
-  const history = await fetchNflPilotAuditVerificationHistory(getAppConfig(), scenarioId);
+  const history = await fetchNflPilotAuditVerificationHistory(getAppConfig(), scenarioId, historyOffset);
+  const historyRows = history.data.slice(0, historyPageSize);
+  const historyHasNext = history.data.length > historyPageSize;
 
   return (
     <main className="audit-detail-page">
@@ -74,13 +95,20 @@ export default async function AuditVerificationPage({ searchParams }: AuditVerif
       )}
       <section className="audit-verification-history" aria-labelledby="verification-history-title">
         <h2 id="verification-history-title">Recorded verification history</h2>
-        {!history.ok ? <p className="audit-detail-error">History is unavailable: {history.error}</p> : history.data.length === 0 ? <p>No verification checks have been explicitly recorded yet.</p> : (
+        {!history.ok ? <p className="audit-detail-error">History is unavailable: {history.error}</p> : historyRows.length === 0 ? <p>No verification checks have been explicitly recorded yet.</p> : (
           <ul>
-            {history.data.map((item) => <li key={item.id}>
+            {historyRows.map((item) => <li key={item.id}>
               <strong>{item.matches ? "Match" : "No match"}</strong> · {formatTimestamp(item.verified_at)} · {item.row_count} rows<br />
               <small>Provided {item.provided_fingerprint.slice(0, 12)}… · Current {item.current_fingerprint.slice(0, 12)}…</small>
             </li>)}
           </ul>
+        )}
+        {!history.ok ? null : (
+          <nav className="audit-pagination" aria-label="Verification history pages">
+            {historyOffset === 0 ? <span>Previous</span> : <Link href={historyHref(scenarioId, fingerprint, Math.max(0, historyOffset - historyPageSize))}>Previous</Link>}
+            <span>{historyRows.length === 0 ? "No rows" : `Rows ${historyOffset + 1}–${historyOffset + historyRows.length}`}</span>
+            {historyHasNext ? <Link href={historyHref(scenarioId, fingerprint, historyOffset + historyPageSize)}>Next</Link> : <span>Next</span>}
+          </nav>
         )}
       </section>
     </main>

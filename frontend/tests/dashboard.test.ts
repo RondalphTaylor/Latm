@@ -181,7 +181,7 @@ test("audit verification adapter uses a bounded GET without execution routes", a
   assert.ok(calls.every((url) => !url.includes("paper-execution")));
 });
 
-test("audit verification history adapter reads the bounded immutable journal", async () => {
+test("audit verification history adapter reads a bounded page of the immutable journal", async () => {
   const calls: string[] = [];
   const fetcher = (async (input: string | URL | Request) => {
     calls.push(String(input));
@@ -199,11 +199,12 @@ test("audit verification history adapter reads the bounded immutable journal", a
   const result = await fetchNflPilotAuditVerificationHistory(
     { tradingMode: "paper", backendApiUrl: "http://backend.test" },
     "c8eb0233-8d80-46e3-8ce1-05b0687cf1e1",
+    8,
     fetcher,
   );
 
   assert.equal(result.data?.[0]?.matches, false);
   assert.ok(calls[0]?.includes("/nfl-pilot-monitor/audit/verification-history?"));
-  assert.ok(calls[0]?.includes("limit=8&offset=0"));
+  assert.ok(calls[0]?.includes("limit=9&offset=8"));
   assert.ok(calls.every((url) => !url.includes("paper-execution")));
 });
