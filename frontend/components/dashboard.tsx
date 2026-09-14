@@ -343,7 +343,7 @@ export function Dashboard({ data, mode, viewModel }: DashboardProps) {
                 </Link>
               ))}</p>}
               {!data.nflRecommendationAuditSummary.ok || data.nflRecommendationAuditSummary.data === null ? null : <p>Scenario totals: {data.nflRecommendationAuditSummary.data.total} decisions · {data.nflRecommendationAuditSummary.data.hold} hold · {data.nflRecommendationAuditSummary.data.reduce} reduce · {data.nflRecommendationAuditSummary.data.close} close · {data.nflRecommendationAuditSummary.data.attention_required} attention</p>}
-              <p>Export first 100 matching immutable rows: <a className="filter-link" href={auditExportHref(selectedAuditScenarioId, data.pilotAuditRecommendation, "csv")}>CSV</a><a className="filter-link" href={auditExportHref(selectedAuditScenarioId, data.pilotAuditRecommendation, "json")}>JSON</a></p>
+              <p>Export first 100 matching immutable rows: <a className="filter-link" href={auditExportHref(selectedAuditScenarioId, data.pilotAuditRecommendation, "csv")}>CSV</a><a className="filter-link" href={auditExportHref(selectedAuditScenarioId, data.pilotAuditRecommendation, "json")}>JSON</a> · each export records its generated time, filters, row count, scenario policy, and append-only retention policy.</p>
             </div>
           )}
           {!data.nflRecommendationAudit.ok ? (

@@ -207,8 +207,32 @@ def test_recommendation_audit_summary_and_export_are_bounded_reads(
         )
         return []
 
+    async def export_metadata_stub(
+        self: NflPilotLifecycleService,
+        scenario_id: UUID,
+        recommendation: str | None,
+        limit: int,
+        offset: int,
+        row_count: int,
+    ) -> dict[str, object]:
+        assert row_count == 0
+        return {
+            "generated_at": datetime(2026, 9, 14, tzinfo=UTC),
+            "scenario_id": scenario_id,
+            "recommendation_filter": recommendation,
+            "limit": limit,
+            "offset": offset,
+            "row_count": row_count,
+            "scenario_policy_version": "nfl-paper-pilot-v1",
+            "scenario_policy_fingerprint": "a" * 64,
+            "retention_policy_version": "nfl-pilot-audit-append-only-no-auto-delete-v1",
+        }
+
     monkeypatch.setattr(NflPilotLifecycleService, "recommendation_audit_summary", summary_stub)
     monkeypatch.setattr(NflPilotLifecycleService, "recommendation_audit", export_stub)
+    monkeypatch.setattr(
+        NflPilotLifecycleService, "recommendation_audit_export_metadata", export_metadata_stub
+    )
     with TestClient(application()) as client:
         summary = client.get(f"/nfl-pilot-monitor/audit/summary?scenario_id={UUID(int=2)}")
         export = client.get(
@@ -225,7 +249,7 @@ def test_recommendation_audit_summary_and_export_are_bounded_reads(
     }
     assert export.status_code == 200
     assert export.headers["content-type"].startswith("text/csv")
-    assert export.text.startswith("decision_id,position_id,recommendation")
+    assert export.text.startswith("generated_at,scenario_id,recommendation_filter")
     assert captured == {
         "summary_scenario_id": UUID(int=2),
         "export_scenario_id": UUID(int=2),

@@ -193,6 +193,19 @@ class NflPilotRecommendationAuditSummaryResponse(BaseModel):
     attention_required: int
 
 
+class NflPilotRecommendationAuditExportMetadataResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    generated_at: datetime
+    scenario_id: UUID
+    recommendation_filter: str | None
+    limit: int
+    offset: int
+    row_count: int
+    scenario_policy_version: str
+    scenario_policy_fingerprint: str
+    retention_policy_version: str
+
+
 class NflPilotAlertResponse(BaseModel):
     model_config = ConfigDict(frozen=True, from_attributes=True)
     id: UUID
@@ -375,19 +388,35 @@ async def export_nfl_pilot_recommendation_audit(
         scenario_id, recommendation, limit, offset
     )
     payload = [NflPilotRecommendationAuditResponse.model_validate(record) for record in records]
+    try:
+        metadata = NflPilotRecommendationAuditExportMetadataResponse.model_validate(
+            await NflPilotLifecycleService(session).recommendation_audit_export_metadata(
+                scenario_id, recommendation, limit, offset, len(payload)
+            )
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     filename = f"nfl-pilot-audit-{scenario_id}-{offset}.{format}"
     headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
     if format == "json":
         return Response(
-            content=json.dumps([item.model_dump(mode="json") for item in payload]),
+            content=json.dumps(
+                {
+                    "metadata": metadata.model_dump(mode="json"),
+                    "records": [item.model_dump(mode="json") for item in payload],
+                }
+            ),
             media_type="application/json",
             headers=headers,
         )
     buffer = io.StringIO(newline="")
-    fields = tuple(NflPilotRecommendationAuditResponse.model_fields)
+    fields = tuple(NflPilotRecommendationAuditExportMetadataResponse.model_fields) + tuple(
+        NflPilotRecommendationAuditResponse.model_fields
+    )
     writer = csv.DictWriter(buffer, fieldnames=fields)
     writer.writeheader()
-    writer.writerows(item.model_dump(mode="json") for item in payload)
+    metadata_values = metadata.model_dump(mode="json")
+    writer.writerows(metadata_values | item.model_dump(mode="json") for item in payload)
     return Response(content=buffer.getvalue(), media_type="text/csv", headers=headers)
 
 

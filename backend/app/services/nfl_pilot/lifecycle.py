@@ -4,7 +4,7 @@ import hashlib
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import ROUND_DOWN, ROUND_UP, Decimal
 from uuid import UUID, uuid4
 
@@ -23,6 +23,8 @@ from app.models.nfl_pilot import (
     NflPilotQuoteCheckRecord,
     NflPilotScenarioRecord,
 )
+
+_AUDIT_RETENTION_POLICY_VERSION = "nfl-pilot-audit-append-only-no-auto-delete-v1"
 
 
 def _floor_cent(value: Decimal) -> Decimal:
@@ -684,6 +686,30 @@ class NflPilotLifecycleService:
             "reduce": counts.get("reduce", 0),
             "close": counts.get("close", 0),
             "attention_required": attention_required or 0,
+        }
+
+    async def recommendation_audit_export_metadata(
+        self,
+        scenario_id: UUID,
+        recommendation: str | None,
+        limit: int,
+        offset: int,
+        row_count: int,
+    ) -> dict[str, object]:
+        """Describe one bounded export without changing the append-only audit history."""
+        scenario = await self._session.get(NflPilotScenarioRecord, scenario_id)
+        if scenario is None:
+            raise LookupError("NFL pilot scenario not found")
+        return {
+            "generated_at": datetime.now(UTC),
+            "scenario_id": scenario_id,
+            "recommendation_filter": recommendation,
+            "limit": limit,
+            "offset": offset,
+            "row_count": row_count,
+            "scenario_policy_version": scenario.policy_version,
+            "scenario_policy_fingerprint": scenario.policy_fingerprint,
+            "retention_policy_version": _AUDIT_RETENTION_POLICY_VERSION,
         }
 
     async def _recommendation_audit_row(
