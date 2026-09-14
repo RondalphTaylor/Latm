@@ -81,6 +81,14 @@ export interface NflPilotRecommendationAuditResponse {
   readonly disposition_recorded_at: string | null;
 }
 
+export interface NflPilotRecommendationAuditSummaryResponse {
+  readonly total: number;
+  readonly hold: number;
+  readonly reduce: number;
+  readonly close: number;
+  readonly attention_required: number;
+}
+
 export interface HealthResponse {
   readonly status: string;
 }

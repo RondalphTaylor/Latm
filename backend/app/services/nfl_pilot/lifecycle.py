@@ -658,6 +658,34 @@ class NflPilotLifecycleService:
         )
         return None if decision is None else await self._recommendation_audit_row(decision)
 
+    async def recommendation_audit_summary(self, scenario_id: UUID) -> dict[str, int]:
+        """Count immutable recommendations for one scenario without changing any audit state."""
+        rows = await self._session.execute(
+            select(
+                NflPilotMonitoringDecisionRecord.recommendation,
+                func.count(NflPilotMonitoringDecisionRecord.id),
+            )
+            .join(NflPilotPositionRecord)
+            .where(NflPilotPositionRecord.scenario_id == scenario_id)
+            .group_by(NflPilotMonitoringDecisionRecord.recommendation)
+        )
+        counts = {recommendation: count for recommendation, count in rows}
+        attention_required = await self._session.scalar(
+            select(func.count(NflPilotMonitoringDecisionRecord.id))
+            .join(NflPilotPositionRecord)
+            .where(
+                NflPilotPositionRecord.scenario_id == scenario_id,
+                NflPilotMonitoringDecisionRecord.requires_attention,
+            )
+        )
+        return {
+            "total": sum(counts.values()),
+            "hold": counts.get("hold", 0),
+            "reduce": counts.get("reduce", 0),
+            "close": counts.get("close", 0),
+            "attention_required": attention_required or 0,
+        }
+
     async def _recommendation_audit_row(
         self, decision: NflPilotMonitoringDecisionRecord
     ) -> dict[str, object]:

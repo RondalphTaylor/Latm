@@ -1,9 +1,12 @@
+import csv
+import io
+import json
 from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -181,6 +184,15 @@ class NflPilotRecommendationAuditResponse(BaseModel):
     disposition_recorded_at: datetime | None
 
 
+class NflPilotRecommendationAuditSummaryResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    total: int
+    hold: int
+    reduce: int
+    close: int
+    attention_required: int
+
+
 class NflPilotAlertResponse(BaseModel):
     model_config = ConfigDict(frozen=True, from_attributes=True)
     id: UUID
@@ -334,6 +346,49 @@ async def list_nfl_pilot_recommendation_audit(
         scenario_id, recommendation, limit, offset
     )
     return [NflPilotRecommendationAuditResponse.model_validate(record) for record in records]
+
+
+@router.get(
+    "/nfl-pilot-monitor/audit/summary",
+    response_model=NflPilotRecommendationAuditSummaryResponse,
+)
+async def get_nfl_pilot_recommendation_audit_summary(
+    scenario_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> NflPilotRecommendationAuditSummaryResponse:
+    """Read scenario-level immutable recommendation counts for audit review."""
+    summary = await NflPilotLifecycleService(session).recommendation_audit_summary(scenario_id)
+    return NflPilotRecommendationAuditSummaryResponse.model_validate(summary)
+
+
+@router.get("/nfl-pilot-monitor/audit/export")
+async def export_nfl_pilot_recommendation_audit(
+    scenario_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    format: Annotated[Literal["csv", "json"], Query()] = "csv",
+    recommendation: Annotated[Literal["hold", "reduce", "close"] | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+    offset: Annotated[int, Query(ge=0, le=10_000)] = 0,
+) -> Response:
+    """Download a bounded immutable audit slice; this endpoint never performs a disposition."""
+    records = await NflPilotLifecycleService(session).recommendation_audit(
+        scenario_id, recommendation, limit, offset
+    )
+    payload = [NflPilotRecommendationAuditResponse.model_validate(record) for record in records]
+    filename = f"nfl-pilot-audit-{scenario_id}-{offset}.{format}"
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    if format == "json":
+        return Response(
+            content=json.dumps([item.model_dump(mode="json") for item in payload]),
+            media_type="application/json",
+            headers=headers,
+        )
+    buffer = io.StringIO(newline="")
+    fields = tuple(NflPilotRecommendationAuditResponse.model_fields)
+    writer = csv.DictWriter(buffer, fieldnames=fields)
+    writer.writeheader()
+    writer.writerows(item.model_dump(mode="json") for item in payload)
+    return Response(content=buffer.getvalue(), media_type="text/csv", headers=headers)
 
 
 @router.get(

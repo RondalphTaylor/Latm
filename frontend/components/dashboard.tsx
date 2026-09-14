@@ -107,6 +107,18 @@ function auditDetailHref(
   return `/audit/${encodeURIComponent(decisionId)}?${params.toString()}`;
 }
 
+function auditExportHref(
+  scenarioId: string,
+  recommendation: string | null,
+  format: "csv" | "json",
+): string {
+  const params = new URLSearchParams({ scenario: scenarioId, format });
+  if (recommendation !== null) {
+    params.set("recommendation", recommendation);
+  }
+  return `/audit-export?${params.toString()}`;
+}
+
 function TableRegion({ label, children }: { readonly label: string; readonly children: ReactNode }) {
   return (
     <div className="table-region" role="region" aria-label={label} tabIndex={0}>
@@ -330,6 +342,8 @@ export function Dashboard({ data, mode, viewModel }: DashboardProps) {
                   {scenarioId.slice(0, 8)}
                 </Link>
               ))}</p>}
+              {!data.nflRecommendationAuditSummary.ok || data.nflRecommendationAuditSummary.data === null ? null : <p>Scenario totals: {data.nflRecommendationAuditSummary.data.total} decisions · {data.nflRecommendationAuditSummary.data.hold} hold · {data.nflRecommendationAuditSummary.data.reduce} reduce · {data.nflRecommendationAuditSummary.data.close} close · {data.nflRecommendationAuditSummary.data.attention_required} attention</p>}
+              <p>Export first 100 matching immutable rows: <a className="filter-link" href={auditExportHref(selectedAuditScenarioId, data.pilotAuditRecommendation, "csv")}>CSV</a><a className="filter-link" href={auditExportHref(selectedAuditScenarioId, data.pilotAuditRecommendation, "json")}>JSON</a></p>
             </div>
           )}
           {!data.nflRecommendationAudit.ok ? (

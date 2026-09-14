@@ -183,6 +183,58 @@ def test_recommendation_audit_detail_is_scenario_scoped_and_read_only(
     assert captured == {"scenario_id": UUID(int=2), "decision_id": UUID(int=3)}
 
 
+def test_recommendation_audit_summary_and_export_are_bounded_reads(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    async def summary_stub(self: NflPilotLifecycleService, scenario_id: UUID) -> dict[str, int]:
+        captured["summary_scenario_id"] = scenario_id
+        return {"total": 4, "hold": 1, "reduce": 2, "close": 1, "attention_required": 3}
+
+    async def export_stub(
+        self: NflPilotLifecycleService,
+        scenario_id: UUID,
+        recommendation: str | None,
+        limit: int,
+        offset: int,
+    ) -> list[dict[str, object]]:
+        captured.update(
+            export_scenario_id=scenario_id,
+            recommendation=recommendation,
+            limit=limit,
+            offset=offset,
+        )
+        return []
+
+    monkeypatch.setattr(NflPilotLifecycleService, "recommendation_audit_summary", summary_stub)
+    monkeypatch.setattr(NflPilotLifecycleService, "recommendation_audit", export_stub)
+    with TestClient(application()) as client:
+        summary = client.get(f"/nfl-pilot-monitor/audit/summary?scenario_id={UUID(int=2)}")
+        export = client.get(
+            f"/nfl-pilot-monitor/audit/export?scenario_id={UUID(int=2)}&format=csv&recommendation=reduce&limit=100"
+        )
+
+    assert summary.status_code == 200
+    assert summary.json() == {
+        "total": 4,
+        "hold": 1,
+        "reduce": 2,
+        "close": 1,
+        "attention_required": 3,
+    }
+    assert export.status_code == 200
+    assert export.headers["content-type"].startswith("text/csv")
+    assert export.text.startswith("decision_id,position_id,recommendation")
+    assert captured == {
+        "summary_scenario_id": UUID(int=2),
+        "export_scenario_id": UUID(int=2),
+        "recommendation": "reduce",
+        "limit": 100,
+        "offset": 0,
+    }
+
+
 def test_pilot_disposition_rejects_nonpaper_mode() -> None:
     app = application()
     app.dependency_overrides[get_settings] = lambda: Settings(

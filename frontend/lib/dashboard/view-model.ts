@@ -167,6 +167,7 @@ export function buildDashboardViewModel(data: DashboardData): DashboardViewModel
   markFailure(data.nflPilotPositions, "NFL pilot positions", failures);
   markFailure(data.nflPilotLedger, "NFL pilot ledger", failures);
   markFailure(data.nflRecommendationAudit, "NFL recommendation audit", failures);
+  markFailure(data.nflRecommendationAuditSummary, "NFL recommendation audit summary", failures);
 
   const markets = new Map(
     data.markets.data.map((market: MarketResponse): readonly [string, MarketResponse] => [

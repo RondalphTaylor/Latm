@@ -10,6 +10,7 @@ import type {
   NflPilotPositionResponse,
   NflPilotLedgerResponse,
   NflPilotRecommendationAuditResponse,
+  NflPilotRecommendationAuditSummaryResponse,
   MlbApprovedDatasetReadinessResponse,
   MlbBackfillBatchResponse,
   MlbBackfillCheckpointResponse,
@@ -50,6 +51,7 @@ export interface DashboardData {
   readonly nflPilotPositions: LoadState<readonly NflPilotPositionResponse[]>;
   readonly nflPilotLedger: LoadState<NflPilotLedgerResponse | null>;
   readonly nflRecommendationAudit: LoadState<readonly NflPilotRecommendationAuditResponse[]>;
+  readonly nflRecommendationAuditSummary: LoadState<NflPilotRecommendationAuditSummaryResponse | null>;
   readonly pilotAuditScenarioId: string | null;
   readonly pilotAuditRecommendation: NflPilotRecommendationAuditResponse["recommendation"] | null;
   readonly pilotAuditOffset: number;
@@ -260,6 +262,7 @@ export async function fetchDashboardData(
   let tradingPerformance: LoadState<TradingPerformanceResponse | null> = availableEmpty(null);
   let nflPilotLedger: LoadState<NflPilotLedgerResponse | null> = availableEmpty(null);
   let nflRecommendationAudit: LoadState<readonly NflPilotRecommendationAuditResponse[]> = availableEmpty([]);
+  let nflRecommendationAuditSummary: LoadState<NflPilotRecommendationAuditSummaryResponse | null> = availableEmpty(null);
   let pilotAuditHasNext = false;
   const pilotAuditOffset = filters.pilotAuditOffset ?? 0;
 
@@ -303,7 +306,7 @@ export async function fetchDashboardData(
     const recommendationQuery = filters.pilotAuditRecommendation === undefined
       ? ""
       : `&recommendation=${encodeURIComponent(filters.pilotAuditRecommendation)}`;
-    const [ledger, audit] = await Promise.all([
+    const [ledger, audit, summary] = await Promise.all([
       load<NflPilotLedgerResponse | null>(
         config.backendApiUrl,
         `/nfl-pilot-scenarios/${scenarioId}/ledger`,
@@ -318,8 +321,16 @@ export async function fetchDashboardData(
         isArray<NflPilotRecommendationAuditResponse>,
         fetcher,
       ),
+      load<NflPilotRecommendationAuditSummaryResponse | null>(
+        config.backendApiUrl,
+        `/nfl-pilot-monitor/audit/summary?scenario_id=${scenarioId}`,
+        null,
+        (value: unknown): value is NflPilotRecommendationAuditSummaryResponse => isObject(value),
+        fetcher,
+      ),
     ]);
     nflPilotLedger = ledger;
+    nflRecommendationAuditSummary = summary;
     pilotAuditHasNext = audit.ok && audit.data.length > auditPageSize;
     nflRecommendationAudit = { ...audit, data: audit.data.slice(0, auditPageSize) };
   }
@@ -346,6 +357,7 @@ export async function fetchDashboardData(
     nflPilotPositions,
     nflPilotLedger,
     nflRecommendationAudit,
+    nflRecommendationAuditSummary,
     pilotAuditScenarioId: pilotScenarioId ?? null,
     pilotAuditRecommendation: filters.pilotAuditRecommendation ?? null,
     pilotAuditOffset,
