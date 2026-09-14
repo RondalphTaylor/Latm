@@ -103,6 +103,28 @@ class NflPilotDispositionRunResponse(BaseModel):
     disposition: NflPilotDispositionEventResponse
 
 
+class NflPilotPositionResponse(BaseModel):
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+    id: UUID
+    entry_id: UUID
+    scenario_id: UUID
+    market_id: UUID
+    direction: str
+    quantity: int
+    remaining_quantity: int
+    disposed_quantity: int
+    total_cost_basis: Decimal
+    remaining_cost_basis: Decimal
+    status: str
+    mark_price: Decimal | None
+    market_value: Decimal
+    unrealized_pnl: Decimal
+    realized_pnl: Decimal
+    updated_at: datetime
+    execution_mode: str
+    live_trading_enabled: bool
+
+
 class NflPilotLedgerResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
     open_positions: int
@@ -307,6 +329,17 @@ async def list_nfl_pilot_dispositions(
     """Expose immutable simulated exits for observational dashboard use only."""
     records = await NflPilotLifecycleService(session).dispositions(limit, offset)
     return [NflPilotDispositionEventResponse.model_validate(record) for record in records]
+
+
+@router.get("/nfl-pilot-positions", response_model=list[NflPilotPositionResponse])
+async def list_nfl_pilot_positions(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    limit: Annotated[int, Query(ge=1, le=25)] = 8,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[NflPilotPositionResponse]:
+    """Expose the isolated paper-pilot projection without an execution capability."""
+    records = await NflPilotLifecycleService(session).positions(limit, offset)
+    return [NflPilotPositionResponse.model_validate(record) for record in records]
 
 
 @router.post("/nfl-pilot-monitor/run", response_model=NflPilotMonitorResponse)

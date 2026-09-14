@@ -146,6 +146,7 @@ export function Dashboard({ data, mode, viewModel }: DashboardProps) {
           <a href="#positions">Positions</a>
           <a href="#attention">Attention</a>
           <a href="#pilot-history">Pilot history</a>
+          <a href="#pilot-positions">Pilot exposure</a>
           <a href="#forecasts">Forecasts</a>
           <a href="#opportunities">Edges</a>
           <a href="#markets">Markets</a>
@@ -266,6 +267,54 @@ export function Dashboard({ data, mode, viewModel }: DashboardProps) {
                 </article>
               ))}
             </div>{data.nflAlerts.ok && data.nflAlerts.data.length > 0 ? <p className="workflow-copy">Alert journal: {data.nflAlerts.data.map((alert) => alert.message).join(" · ")}</p> : null}</>
+          )}
+        </Section>
+
+        <Section
+          id="pilot-positions"
+          eyebrow="NFL pilot"
+          title="Paper pilot position detail"
+          description="Current paper-ledger exposure with original, remaining, and disposed contracts. Linked exits are immutable history, not executable instructions."
+          note="Latest 8 isolated pilot positions"
+        >
+          {!data.nflPilotPositions.ok ? (
+            <EmptyState title="Pilot positions are unavailable">{data.nflPilotPositions.error}</EmptyState>
+          ) : data.nflPilotPositions.data.length === 0 ? (
+            <EmptyState title="No NFL pilot positions">A simulated entry becomes visible here once it has a pilot-ledger projection.</EmptyState>
+          ) : (
+            <TableRegion label="NFL pilot paper position detail">
+              <table>
+                <caption>Current isolated NFL pilot ledger projections</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Position</th><th scope="col">Side</th><th scope="col">Status</th>
+                    <th scope="col" className="numeric">Original</th><th scope="col" className="numeric">Remaining</th>
+                    <th scope="col" className="numeric">Disposed</th><th scope="col" className="numeric">Cost left</th>
+                    <th scope="col" className="numeric">Realized</th><th scope="col">History</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.nflPilotPositions.data.map((position) => {
+                    const linked = data.nflDispositions.data.filter(
+                      (disposition) => disposition.position_id === position.id,
+                    );
+                    return (
+                      <tr key={position.id}>
+                        <td><strong>{position.id.slice(0, 8)}</strong><small>Updated {formatTimestamp(position.updated_at)}</small></td>
+                        <td className="uppercase">{position.direction}</td>
+                        <td><StatusPill value={position.status} /></td>
+                        <td className="numeric">{position.quantity}</td>
+                        <td className="numeric">{position.remaining_quantity}</td>
+                        <td className="numeric">{position.disposed_quantity}</td>
+                        <td className="numeric">{formatMoney(position.remaining_cost_basis)}</td>
+                        <td className={`numeric tone-${decimalSign(position.realized_pnl)}`}>{formatSignedMoney(position.realized_pnl)}</td>
+                        <td>{linked.length === 0 ? "No visible exits" : `${linked.length} linked exit${linked.length === 1 ? "" : "s"}`}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </TableRegion>
           )}
         </Section>
 

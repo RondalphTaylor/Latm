@@ -33,6 +33,27 @@ export interface NflPilotDispositionEventResponse {
   readonly live_trading_enabled: false;
 }
 
+export interface NflPilotPositionResponse {
+  readonly id: string;
+  readonly entry_id: string;
+  readonly scenario_id: string;
+  readonly market_id: string;
+  readonly direction: "yes" | "no";
+  readonly quantity: number;
+  readonly remaining_quantity: number;
+  readonly disposed_quantity: number;
+  readonly total_cost_basis: DecimalValue;
+  readonly remaining_cost_basis: DecimalValue;
+  readonly status: "open" | "closed" | "settled";
+  readonly mark_price: DecimalValue | null;
+  readonly market_value: DecimalValue;
+  readonly unrealized_pnl: DecimalValue;
+  readonly realized_pnl: DecimalValue;
+  readonly updated_at: string;
+  readonly execution_mode: "paper";
+  readonly live_trading_enabled: false;
+}
+
 export interface HealthResponse {
   readonly status: string;
 }

@@ -656,6 +656,19 @@ class NflPilotLifecycleService:
             )
         )
 
+    async def positions(self, limit: int, offset: int) -> list[NflPilotPositionRecord]:
+        """Return bounded current projections for the isolated paper-only pilot ledger."""
+        return list(
+            await self._session.scalars(
+                select(NflPilotPositionRecord)
+                .order_by(
+                    NflPilotPositionRecord.updated_at.desc(), NflPilotPositionRecord.id.desc()
+                )
+                .limit(limit)
+                .offset(offset)
+            )
+        )
+
     async def monitor(
         self, scenario_id: UUID
     ) -> tuple[int, int, int, int, int, int, int, int, int, int, int, int]:
