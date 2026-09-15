@@ -6,7 +6,12 @@ from uuid import UUID
 
 import pytest
 
-from app.domain.matching import MarketMatchInput, MatchingPolicy, SportsEventMatchInput
+from app.domain.matching import (
+    MarketEventMatchStatus,
+    MarketMatchInput,
+    MatchingPolicy,
+    SportsEventMatchInput,
+)
 from app.domain.sports import SportsLeague
 from app.services.matching.matcher import MATCHER_VERSION, MarketEventMatcher
 from tests.test_matching_aliases import team
@@ -80,6 +85,23 @@ def test_nfl_match_records_rules_but_never_trading_authority() -> None:
     assert result.evidence["yes_team_id"] == str(SEA.id)
     assert result.evidence["tie_yes_payout"] == "0.50"
     assert result.evidence["execution_supported"] is False
+
+
+def test_nfl_paper_eligibility_requires_explicit_execution_support() -> None:
+    decision = matcher()._decision(
+        market=nfl_market(),
+        status=MarketEventMatchStatus.MATCHED,
+        confidence=Decimal("1"),
+        method="reviewed_contract",
+        reason="test-only execution-supported contract",
+        fingerprint="a" * 64,
+        signals=(),
+        candidates=(),
+        evidence={"execution_supported": True},
+        evaluated_at=KICKOFF,
+        sports_event_id=nfl_event().id,
+    )
+    assert decision.automatic_trading_eligible is True
 
 
 @pytest.mark.parametrize(

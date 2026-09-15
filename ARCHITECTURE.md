@@ -189,6 +189,8 @@ The dashboard is observational only. It contains no execution, monitoring-run, i
 
 The verification page displays eight journal entries at a time for its selected scenario and uses a ninth bounded row only to determine whether a next page exists. Its bounded outcome filter can limit the page to matching or nonmatching checks while the integrity summary remains a scenario-wide count of all recorded checks, matches, and mismatches. Its links preserve the optional fingerprint being compared and selected outcome, and each entry links to a scenario-scoped read-only detail page that exposes its recorded result and policy provenance. This is a bounded read-only view of already-recorded facts; recording still requires the explicit confirmation action and no dashboard control can alter or remove history.
 
+NFL market-event matching may mark a matched contract paper-entry eligible only when its evidence explicitly records `execution_supported=true`. Research eligibility alone is insufficient. Fair-price, postponement-exception, cancellation-exception, unknown, and otherwise non-deterministic contracts remain paper-entry ineligible.
+
 ---
 
 ## Database

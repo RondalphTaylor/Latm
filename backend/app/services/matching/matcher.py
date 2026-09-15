@@ -496,7 +496,13 @@ class MarketEventMatcher:
         evaluated_at: datetime,
         sports_event_id: UUID | None = None,
     ) -> MarketEventMatchDecision:
-        eligible = status is MarketEventMatchStatus.MATCHED and market.league is SportsLeague.NBA
+        eligible = status is MarketEventMatchStatus.MATCHED and (
+            market.league is SportsLeague.NBA
+            or (
+                market.league is SportsLeague.NFL
+                and evidence.get("execution_supported") is True
+            )
+        )
         return MarketEventMatchDecision(
             market_id=market.id,
             league=market.league,

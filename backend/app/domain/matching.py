@@ -173,7 +173,10 @@ class MarketEventMatchDecision(BaseModel):
                 raise ValueError("matched decisions require a sports_event_id")
             if self.confidence < self.min_confidence:
                 raise ValueError("matched decisions must meet min_confidence")
-            expected_eligibility = self.league is SportsLeague.NBA
+            expected_eligibility = self.league is SportsLeague.NBA or (
+                self.league is SportsLeague.NFL
+                and self.evidence.get("execution_supported") is True
+            )
             if self.automatic_trading_eligible is not expected_eligibility:
                 raise ValueError("matched decision eligibility must follow the league safety gate")
         else:
