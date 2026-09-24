@@ -235,9 +235,7 @@ def test_audit_verification_summary_is_scenario_scoped_and_read_only(
 ) -> None:
     captured: dict[str, UUID] = {}
 
-    async def summary_stub(
-        self: NflPilotLifecycleService, scenario_id: UUID
-    ) -> dict[str, int]:
+    async def summary_stub(self: NflPilotLifecycleService, scenario_id: UUID) -> dict[str, int]:
         captured["scenario_id"] = scenario_id
         return {"total": 3, "matches": 2, "mismatches": 1}
 
@@ -264,9 +262,7 @@ def test_audit_verification_history_accepts_a_bounded_outcome_filter(
         offset: int,
         matches: bool | None = None,
     ) -> list[object]:
-        captured.update(
-            scenario_id=scenario_id, limit=limit, offset=offset, matches=matches
-        )
+        captured.update(scenario_id=scenario_id, limit=limit, offset=offset, matches=matches)
         return []
 
     monkeypatch.setattr(NflPilotLifecycleService, "audit_verifications", history_stub)

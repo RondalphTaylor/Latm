@@ -17,7 +17,9 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     """Allow NFL eligibility only when the matcher explicitly sets it."""
-    op.drop_constraint("ck_market_event_matches_safety_state", "market_event_matches", type_="check")
+    op.drop_constraint(
+        "ck_market_event_matches_safety_state", "market_event_matches", type_="check"
+    )
     op.create_check_constraint(
         "ck_market_event_matches_safety_state",
         "market_event_matches",
@@ -40,7 +42,9 @@ def downgrade() -> None:
         "WHERE league = 'nfl' AND automatic_trading_eligible) THEN "
         "RAISE EXCEPTION 'NFL paper-eligible matches exist; downgrade refused'; END IF; END $$"
     )
-    op.drop_constraint("ck_market_event_matches_safety_state", "market_event_matches", type_="check")
+    op.drop_constraint(
+        "ck_market_event_matches_safety_state", "market_event_matches", type_="check"
+    )
     op.create_check_constraint(
         "ck_market_event_matches_safety_state",
         "(status = 'matched' AND sports_event_id IS NOT NULL "

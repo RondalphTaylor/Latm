@@ -757,12 +757,13 @@ class NflPilotLifecycleService:
         self, scenario_id: UUID, verification_id: UUID
     ) -> NflPilotAuditVerificationRecord | None:
         """Read one immutable verification fact only when it belongs to the scenario."""
-        return await self._session.scalar(
+        record: NflPilotAuditVerificationRecord | None = await self._session.scalar(
             select(NflPilotAuditVerificationRecord).where(
                 NflPilotAuditVerificationRecord.scenario_id == scenario_id,
                 NflPilotAuditVerificationRecord.id == verification_id,
             )
         )
+        return record
 
     async def audit_verification_summary(self, scenario_id: UUID) -> dict[str, int]:
         """Count immutable verification outcomes without changing the journal."""

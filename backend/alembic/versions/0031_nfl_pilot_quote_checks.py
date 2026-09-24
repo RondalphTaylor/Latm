@@ -31,11 +31,21 @@ def upgrade() -> None:
         sa.Column("audit", postgresql.JSONB(), nullable=False),
         sa.ForeignKeyConstraint(["position_id"], ["nfl_pilot_positions.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["market_price_id"], ["market_prices.id"], ondelete="RESTRICT"),
-        sa.UniqueConstraint("position_id", "market_price_id", name="uq_nfl_pilot_quote_checks_snapshot"),
-        sa.CheckConstraint("quote_status IN ('fresh', 'stale', 'unusable')", name="ck_nfl_pilot_quote_checks_status"),
-        sa.CheckConstraint("execution_mode = 'paper' AND NOT live_trading_enabled", name="ck_nfl_pilot_quote_checks_paper"),
+        sa.UniqueConstraint(
+            "position_id", "market_price_id", name="uq_nfl_pilot_quote_checks_snapshot"
+        ),
+        sa.CheckConstraint(
+            "quote_status IN ('fresh', 'stale', 'unusable')",
+            name="ck_nfl_pilot_quote_checks_status",
+        ),
+        sa.CheckConstraint(
+            "execution_mode = 'paper' AND NOT live_trading_enabled",
+            name="ck_nfl_pilot_quote_checks_paper",
+        ),
         sa.CheckConstraint("quote_age_seconds >= 0", name="ck_nfl_pilot_quote_checks_age"),
-        sa.CheckConstraint("jsonb_typeof(audit) = 'object'", name="ck_nfl_pilot_quote_checks_audit"),
+        sa.CheckConstraint(
+            "jsonb_typeof(audit) = 'object'", name="ck_nfl_pilot_quote_checks_audit"
+        ),
     )
     op.create_index(
         "ix_nfl_pilot_quote_checks_position_checked",

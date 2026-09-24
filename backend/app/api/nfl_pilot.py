@@ -604,7 +604,9 @@ async def get_nfl_pilot_recommendation_audit_verification(
         scenario_id, verification_id
     )
     if record is None:
-        raise HTTPException(status_code=404, detail="NFL pilot audit verification not found in scenario")
+        raise HTTPException(
+            status_code=404, detail="NFL pilot audit verification not found in scenario"
+        )
     return NflPilotAuditVerificationDetailResponse(
         id=record.id,
         scenario_id=record.scenario_id,

@@ -25,11 +25,23 @@ def upgrade() -> None:
         sa.Column("live_trading_enabled", sa.Boolean(), nullable=False),
         sa.Column("audit", postgresql.JSONB(), nullable=False),
         sa.ForeignKeyConstraint(["scenario_id"], ["nfl_pilot_scenarios.id"], ondelete="RESTRICT"),
-        sa.CheckConstraint("length(provided_fingerprint) = 64 AND length(current_fingerprint) = 64", name="ck_nfl_pilot_audit_verifications_fingerprints"),
-        sa.CheckConstraint("execution_mode = 'paper' AND NOT live_trading_enabled", name="ck_nfl_pilot_audit_verifications_paper"),
-        sa.CheckConstraint("jsonb_typeof(audit) = 'object'", name="ck_nfl_pilot_audit_verifications_audit"),
+        sa.CheckConstraint(
+            "length(provided_fingerprint) = 64 AND length(current_fingerprint) = 64",
+            name="ck_nfl_pilot_audit_verifications_fingerprints",
+        ),
+        sa.CheckConstraint(
+            "execution_mode = 'paper' AND NOT live_trading_enabled",
+            name="ck_nfl_pilot_audit_verifications_paper",
+        ),
+        sa.CheckConstraint(
+            "jsonb_typeof(audit) = 'object'", name="ck_nfl_pilot_audit_verifications_audit"
+        ),
     )
-    op.create_index("ix_nfl_pilot_audit_verifications_scenario_verified", "nfl_pilot_audit_verifications", ["scenario_id", "verified_at"])
+    op.create_index(
+        "ix_nfl_pilot_audit_verifications_scenario_verified",
+        "nfl_pilot_audit_verifications",
+        ["scenario_id", "verified_at"],
+    )
 
 
 def downgrade() -> None:

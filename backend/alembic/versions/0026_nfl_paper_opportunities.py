@@ -1,8 +1,10 @@
 """Add immutable NFL paper direct-ask comparisons."""
 
 from collections.abc import Sequence
+
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+
 from alembic import op
 
 revision: str = "0026_nfl_paper_opportunities"

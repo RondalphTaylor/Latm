@@ -498,10 +498,7 @@ class MarketEventMatcher:
     ) -> MarketEventMatchDecision:
         eligible = status is MarketEventMatchStatus.MATCHED and (
             market.league is SportsLeague.NBA
-            or (
-                market.league is SportsLeague.NFL
-                and evidence.get("execution_supported") is True
-            )
+            or (market.league is SportsLeague.NFL and evidence.get("execution_supported") is True)
         )
         return MarketEventMatchDecision(
             market_id=market.id,

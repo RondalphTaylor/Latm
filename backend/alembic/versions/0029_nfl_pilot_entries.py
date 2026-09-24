@@ -40,17 +40,37 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["scenario_id"], ["nfl_pilot_scenarios.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["portfolio_id"], ["portfolios.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["preflight_id"], ["nfl_paper_preflights.id"], ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["opportunity_id"], ["nfl_paper_opportunities.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(
+            ["opportunity_id"], ["nfl_paper_opportunities.id"], ondelete="RESTRICT"
+        ),
         sa.ForeignKeyConstraint(["market_id"], ["markets.id"], ondelete="RESTRICT"),
         sa.UniqueConstraint("idempotency_key", name="uq_nfl_pilot_entries_idempotency"),
-        sa.UniqueConstraint("scenario_id", "preflight_id", name="uq_nfl_pilot_entries_scenario_preflight"),
-        sa.CheckConstraint("execution_mode = 'paper' AND NOT live_trading_enabled AND status = 'filled'", name="ck_nfl_pilot_entries_paper_only"),
-        sa.CheckConstraint("direction IN ('yes', 'no') AND quantity > 0", name="ck_nfl_pilot_entries_side"),
-        sa.CheckConstraint("total_cost > 0 AND gross_cost > 0 AND estimated_fee >= 0 AND total_cost = gross_cost + estimated_fee", name="ck_nfl_pilot_entries_costs"),
-        sa.CheckConstraint("entry_cap > 0 AND aggregate_cap > 0 AND total_cost <= entry_cap AND total_cost <= aggregate_cap", name="ck_nfl_pilot_entries_caps"),
-        sa.CheckConstraint("adjusted_edge >= minimum_adjusted_edge AND length(policy_fingerprint) = 64 AND jsonb_typeof(audit) = 'object'", name="ck_nfl_pilot_entries_policy"),
+        sa.UniqueConstraint(
+            "scenario_id", "preflight_id", name="uq_nfl_pilot_entries_scenario_preflight"
+        ),
+        sa.CheckConstraint(
+            "execution_mode = 'paper' AND NOT live_trading_enabled AND status = 'filled'",
+            name="ck_nfl_pilot_entries_paper_only",
+        ),
+        sa.CheckConstraint(
+            "direction IN ('yes', 'no') AND quantity > 0", name="ck_nfl_pilot_entries_side"
+        ),
+        sa.CheckConstraint(
+            "total_cost > 0 AND gross_cost > 0 AND estimated_fee >= 0 AND total_cost = gross_cost + estimated_fee",
+            name="ck_nfl_pilot_entries_costs",
+        ),
+        sa.CheckConstraint(
+            "entry_cap > 0 AND aggregate_cap > 0 AND total_cost <= entry_cap AND total_cost <= aggregate_cap",
+            name="ck_nfl_pilot_entries_caps",
+        ),
+        sa.CheckConstraint(
+            "adjusted_edge >= minimum_adjusted_edge AND length(policy_fingerprint) = 64 AND jsonb_typeof(audit) = 'object'",
+            name="ck_nfl_pilot_entries_policy",
+        ),
     )
-    op.create_index("ix_nfl_pilot_entries_scenario_entered", "nfl_pilot_entries", ["scenario_id", "entered_at"])
+    op.create_index(
+        "ix_nfl_pilot_entries_scenario_entered", "nfl_pilot_entries", ["scenario_id", "entered_at"]
+    )
 
 
 def downgrade() -> None:
