@@ -89,5 +89,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Create local environment file for Compose validation
+        run: touch .env
       - name: Validate Docker Compose configuration
         run: docker compose -f infra/compose.yaml config --quiet
